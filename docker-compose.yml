@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: lisquiz_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=True
+      - DATABASE_URL=postgresql+asyncpg://lisquiz:lisquiz_password@db:5432/lisquiz_db
+      - REDIS_URL=redis://redis:6379/0
+      - LLM_PROVIDER=${LLM_PROVIDER:-mock}
+      - GIGACHAT_CREDENTIALS=${GIGACHAT_CREDENTIALS:-}
+      - YANDEX_GPT_API_KEY=${YANDEX_GPT_API_KEY:-}
+      - YANDEX_FOLDER_ID=${YANDEX_FOLDER_ID:-}
+      - MAX_BOT_TOKEN=${MAX_BOT_TOKEN:-}
+      - MAX_APP_ID=${MAX_APP_ID:-}
+      - MAX_APP_SECRET=${MAX_APP_SECRET:-}
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://dev.max.ru
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+    networks:
+      - lisquiz_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: lisquiz_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - lisquiz_network
+
+  db:
+    image: postgres:16-alpine
+    container_name: lisquiz_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lisquiz
+      POSTGRES_PASSWORD: lisquiz_password
+      POSTGRES_DB: lisquiz_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lisquiz -d lisquiz_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lisquiz_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: lisquiz_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - lisquiz_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  lisquiz_network:
+    driver: bridge
