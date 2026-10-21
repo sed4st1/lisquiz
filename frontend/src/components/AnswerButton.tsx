@@ -14,55 +14,22 @@ export interface AnswerButtonProps {
   isSelected?: boolean;
 }
 
-interface ColorPalette {
-  front: string;
-  edge: string;
-  highlight: string;
-  glow: string;
-  shadow: string;
-}
-
-const PALETTES: Record<'red' | 'blue' | 'yellow' | 'green', ColorPalette> = {
-  red: {
-    front: '#EF4444',
-    edge: '#B91C1C',
-    highlight: 'rgba(254, 202, 202, 0.45)',
-    glow: 'rgba(239, 68, 68, 0.7)',
-    shadow: 'rgba(185, 28, 28, 0.5)',
-  },
-  blue: {
-    front: '#3B82F6',
-    edge: '#1D4ED8',
-    highlight: 'rgba(191, 219, 254, 0.45)',
-    glow: 'rgba(59, 130, 246, 0.7)',
-    shadow: 'rgba(29, 78, 216, 0.5)',
-  },
-  yellow: {
-    front: '#F59E0B',
-    edge: '#B45309',
-    highlight: 'rgba(254, 243, 199, 0.5)',
-    glow: 'rgba(245, 158, 11, 0.7)',
-    shadow: 'rgba(180, 83, 9, 0.5)',
-  },
-  green: {
-    front: '#10B981',
-    edge: '#047857',
-    highlight: 'rgba(209, 250, 229, 0.5)',
-    glow: 'rgba(16, 185, 129, 0.7)',
-    shadow: 'rgba(4, 120, 87, 0.5)',
-  },
+const CARD_ASSETS: Record<'red' | 'blue' | 'yellow' | 'green', string> = {
+  red: '/assets/ui/btn_red_clean.png',
+  blue: '/assets/ui/btn_blue_clean.png',
+  yellow: '/assets/ui/btn_yellow_clean.png',
+  green: '/assets/ui/btn_green_clean.png',
 };
 
-const SHAPES: Record<'triangle' | 'diamond' | 'circle' | 'square', string> = {
-  triangle: '▲',
-  diamond: '◆',
-  circle: '●',
-  square: '■',
+const GLOW_COLORS: Record<'red' | 'blue' | 'yellow' | 'green', string> = {
+  red: 'rgba(239, 68, 68, 0.85)',
+  blue: 'rgba(59, 130, 246, 0.85)',
+  yellow: 'rgba(245, 158, 11, 0.85)',
+  green: 'rgba(16, 185, 129, 0.85)',
 };
 
 export default function AnswerButton({
   color,
-  shape,
   text,
   latex,
   onClick,
@@ -70,8 +37,6 @@ export default function AnswerButton({
   isCorrect = null,
   isSelected = false,
 }: AnswerButtonProps) {
-  const palette = PALETTES[color];
-
   const mathHtml = useMemo(() => {
     if (!latex) return null;
     try {
@@ -87,9 +52,9 @@ export default function AnswerButton({
     onClick?.();
   };
 
-  // Wrong answer shake animation
   const isWrong = isCorrect === false && isSelected;
   const isWinner = isCorrect === true;
+  const hasTextOrMath = Boolean(text || mathHtml);
 
   return (
     <motion.div
@@ -97,22 +62,21 @@ export default function AnswerButton({
         isWrong
           ? { x: [-8, 8, -6, 6, -3, 3, 0] }
           : isWinner
-          ? { scale: [1, 1.03, 1] }
+          ? { scale: [1, 1.04, 1] }
           : {}
       }
       transition={
         isWrong
           ? { duration: 0.45, ease: 'easeOut' }
           : isWinner
-          ? { repeat: Infinity, duration: 1.6, ease: 'easeInOut' }
+          ? { repeat: Infinity, duration: 1.4, ease: 'easeInOut' }
           : undefined
       }
       style={{
         position: 'relative',
         width: '100%',
-        minHeight: 88,
+        aspectRatio: '1.34 / 1',
         display: 'flex',
-        boxSizing: 'border-box',
       }}
     >
       <button
@@ -122,7 +86,7 @@ export default function AnswerButton({
         style={{
           position: 'relative',
           width: '100%',
-          minHeight: 88,
+          height: '100%',
           border: 'none',
           background: 'transparent',
           padding: 0,
@@ -135,31 +99,20 @@ export default function AnswerButton({
         }}
         className="tactile-btn-root"
       >
-        {/* Слой 1: Размытая рассеянная контактная тень */}
+        {/* Contact Shadow */}
         <span
           style={{
             position: 'absolute',
-            inset: 0,
+            inset: 2,
             transform: 'translateY(6px)',
-            borderRadius: 18,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
-            filter: 'blur(2px)',
+            borderRadius: 24,
+            backgroundColor: 'rgba(0, 0, 0, 0.45)',
+            filter: 'blur(3px)',
+            pointerEvents: 'none',
           }}
         />
 
-        {/* Слой 2: Жесткое 3D-ребро (Beveled Edge) */}
-        <span
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            inset: 0,
-            transform: 'translateY(5px)',
-            borderRadius: 18,
-            backgroundColor: palette.edge,
-          }}
-        />
-
-        {/* Слой 3: Лицевая тактильная поверхность с продавливанием */}
+        {/* Card Face */}
         <span
           style={{
             position: 'relative',
@@ -169,57 +122,86 @@ export default function AnswerButton({
             justifyContent: 'center',
             width: '100%',
             height: '100%',
-            minHeight: 88,
-            padding: '14px 16px',
-            borderRadius: 18,
-            backgroundColor: palette.front,
-            borderTop: `2px solid ${palette.highlight}`,
+            borderRadius: 24,
+            backgroundImage: `url(${CARD_ASSETS[color]})`,
+            backgroundSize: '100% 100%',
+            backgroundPosition: 'center center',
+            backgroundRepeat: 'no-repeat',
             boxShadow: isWinner
-              ? `0 0 20px ${palette.glow}, inset 0 0 12px rgba(255, 255, 255, 0.4)`
+              ? `0 0 24px ${GLOW_COLORS[color]}, inset 0 0 12px rgba(255, 255, 255, 0.6)`
               : isSelected
-              ? `0 0 14px rgba(255, 255, 255, 0.8), inset 0 0 8px rgba(255, 255, 255, 0.3)`
+              ? `0 0 16px rgba(255, 255, 255, 0.9), inset 0 0 10px rgba(255, 255, 255, 0.4)`
               : 'none',
-            outline: isSelected ? '3px solid #FFFFFF' : 'none',
-            outlineOffset: 1,
-            boxSizing: 'border-box',
-            transition: 'transform 0.06s ease-out, filter 0.06s ease-out, box-shadow 0.2s ease',
+            outline: isSelected ? '3.5px solid #FFFFFF' : 'none',
+            outlineOffset: 2,
+            transition: 'transform 0.08s ease-out, filter 0.08s ease-out, box-shadow 0.2s ease',
           }}
           className="tactile-btn-front"
         >
-          {/* Символ фигуры в верхнем левом углу */}
-          <span
-            style={{
-              position: 'absolute',
-              top: 8,
-              left: 12,
-              fontSize: 20,
-              lineHeight: 1,
-              color: 'rgba(255, 255, 255, 0.35)',
-              userSelect: 'none',
-              pointerEvents: 'none',
-            }}
-          >
-            {SHAPES[shape]}
-          </span>
+          {/* If there is text or LaTeX, display it in the center */}
+          {hasTextOrMath && (
+            <div
+              style={{
+                position: 'relative',
+                zIndex: 2,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '100%',
+                padding: '4px 12px',
+                pointerEvents: 'none',
+              }}
+            >
+              {text && (
+                <span
+                  style={{
+                    color: '#FFFFFF',
+                    fontWeight: 900,
+                    fontSize: 22,
+                    textAlign: 'center',
+                    lineHeight: 1.25,
+                    textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {text}
+                </span>
+              )}
+              {mathHtml && (
+                <span
+                  style={{
+                    color: '#FFFFFF',
+                    fontSize: 24,
+                    fontWeight: 900,
+                    textAlign: 'center',
+                    textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
+                  }}
+                  dangerouslySetInnerHTML={{ __html: mathHtml }}
+                />
+              )}
+            </div>
+          )}
 
-          {/* Индикатор победы / ошибки в верхнем правом углу */}
+          {/* Reveal Status Badge */}
           {isWinner && (
             <span
               style={{
                 position: 'absolute',
                 top: 8,
-                right: 12,
-                width: 22,
-                height: 22,
+                right: 8,
+                width: 24,
+                height: 24,
                 borderRadius: '50%',
-                backgroundColor: '#FFFFFF',
-                color: '#10B981',
+                backgroundColor: '#10B981',
+                color: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 14,
                 fontWeight: 900,
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.35)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+                border: '2px solid #FFFFFF',
               }}
             >
               ✓
@@ -231,63 +213,24 @@ export default function AnswerButton({
               style={{
                 position: 'absolute',
                 top: 8,
-                right: 12,
-                width: 22,
-                height: 22,
+                right: 8,
+                width: 24,
+                height: 24,
                 borderRadius: '50%',
-                backgroundColor: '#FFFFFF',
-                color: '#EF4444',
+                backgroundColor: '#EF4444',
+                color: '#FFFFFF',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 14,
                 fontWeight: 900,
-                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.35)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+                border: '2px solid #FFFFFF',
               }}
             >
               ✕
             </span>
           )}
-
-          {/* Текст или KaTeX формула */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '100%',
-              pointerEvents: 'none',
-              zIndex: 1,
-            }}
-          >
-            {text && (
-              <span
-                style={{
-                  color: '#FFFFFF',
-                  fontWeight: 800,
-                  fontSize: 16,
-                  textAlign: 'center',
-                  lineHeight: 1.3,
-                  textShadow: '0 1px 3px rgba(0, 0, 0, 0.35)',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {text}
-              </span>
-            )}
-            {mathHtml && (
-              <span
-                style={{
-                  color: '#FFFFFF',
-                  fontSize: 18,
-                  textAlign: 'center',
-                  display: 'inline-block',
-                }}
-                dangerouslySetInnerHTML={{ __html: mathHtml }}
-              />
-            )}
-          </div>
         </span>
       </button>
     </motion.div>

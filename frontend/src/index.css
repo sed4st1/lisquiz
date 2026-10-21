@@ -41,7 +41,7 @@ html {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  background: #080D1A url('/assets/backgrounds/forest_night.png') center center / cover no-repeat fixed;
+  background: #060B18 url('/assets/backgrounds/forest_night.png') center center / cover no-repeat fixed;
   color: var(--text-primary);
   min-height: 100vh;
   min-height: 100dvh;
@@ -57,7 +57,8 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 20px 0;
+  padding: 16px 0;
+  margin: 0 auto;
 }
 
 @media (max-width: 640px) {
@@ -67,19 +68,18 @@ body {
   }
 }
 
-/* ===== App Container (Mobile Frame on Desktop, Fullscreen on Mobile) ===== */
+/* ===== App Container (Mobile Phone Bezel on Desktop, Fullscreen on Mobile) ===== */
 .app-container {
   width: 100%;
-  max-width: 440px;
+  max-width: 420px;
   min-height: 680px;
   height: 92vh;
-  max-height: 890px;
-  background: rgba(13, 20, 36, 0.94);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  max-height: 880px;
+  margin: 0 auto !important;
+  background: #0B132B;
+  border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 40px;
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  box-shadow: 0 30px 90px -10px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
   position: relative;

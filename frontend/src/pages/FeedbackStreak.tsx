@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { ArrowRight, Check, X } from 'lucide-react';
-import { shadows } from '../theme/tokens';
+import { Check, ChevronRight } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { JuicyScoreCounter } from '../components/JuicyScoreCounter';
 import { TactileButton } from '../components/TactileButton';
@@ -11,33 +10,36 @@ export interface FeedbackStreakProps {
   isCorrect: boolean;
   points: number;
   streak: number;
+  questionNumber?: number;
+  totalQuestions?: number;
   correctAnswer?: string;
   onContinue: () => void;
 }
 
 export default function FeedbackStreak({
   isCorrect,
-  points,
-  streak,
+  points = 750,
+  streak = 3,
+  questionNumber = 2,
+  totalQuestions = 10,
   correctAnswer,
   onContinue,
 }: FeedbackStreakProps) {
   const [progress, setProgress] = useState(100);
 
-  // Trigger Juicy confetti and haptics on mount
   useEffect(() => {
     if (isCorrect) {
       haptics.notification('success');
       if (streak > 1) {
-        setTimeout(() => haptics.streak(), 220);
+        setTimeout(() => haptics.streak(), 200);
       }
 
       try {
         confetti({
-          particleCount: 160,
-          spread: 80,
-          origin: { y: 0.52 },
-          colors: ['#FF7A00', '#10B981', '#FFD700', '#3B82F6', '#FFFFFF'],
+          particleCount: 180,
+          spread: 85,
+          origin: { y: 0.45 },
+          colors: ['#FF7A00', '#10B981', '#FFD700', '#3B82F6', '#FF3366'],
           disableForReducedMotion: true,
         });
       } catch {}
@@ -45,7 +47,7 @@ export default function FeedbackStreak({
       haptics.notification('error');
     }
 
-    const duration = 2800;
+    const duration = 3000;
     const intervalTime = 40;
     const step = (intervalTime / duration) * 100;
 
@@ -63,150 +65,122 @@ export default function FeedbackStreak({
     };
   }, [isCorrect, streak, onContinue]);
 
-  const mascotSrc = isCorrect
-    ? '/assets/mascot/celebrate.png'
-    : '/assets/mascot/thinking.png';
-
-  const overlayBg = isCorrect
-    ? 'radial-gradient(circle at 50% 35%, rgba(16, 185, 129, 0.28) 0%, rgba(13, 19, 34, 0.96) 70%)'
-    : 'radial-gradient(circle at 50% 35%, rgba(239, 68, 68, 0.24) 0%, rgba(13, 19, 34, 0.96) 70%)';
-
   return (
-    <div
-      style={{
-        ...styles.overlay,
-        background: overlayBg,
-      }}
-      onClick={onContinue}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          onContinue();
-        }
-      }}
-    >
-      <div style={styles.contentContainer} onClick={(e) => e.stopPropagation()}>
-        {/* Animated Mascot Spring */}
+    <div style={styles.container}>
+      {/* Background with Falling Confetti / Golden Ribbons */}
+      <div style={styles.backgroundLayer} />
+
+      {/* Main Content Area */}
+      <div style={styles.content}>
+        {/* Top Glow Checkmark / Error Icon */}
         <motion.div
-          initial={{ y: 90, scale: 0.6, opacity: 0 }}
-          animate={{ y: 0, scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 480, damping: 17, mass: 0.5 }}
-          style={styles.mascotWrapper}
+          initial={{ scale: 0, rotate: -45 }}
+          animate={{ scale: 1, rotate: 0 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 22 }}
+          style={styles.iconCircle}
         >
-          <img
-            src={mascotSrc}
-            alt={isCorrect ? 'Спринт празднует' : 'Спринт размышляет'}
-            style={{
-              ...styles.mascotImage,
-              filter: isCorrect
-                ? 'drop-shadow(0 0 24px rgba(16, 185, 129, 0.6))'
-                : 'drop-shadow(0 0 20px rgba(239, 68, 68, 0.5))',
-            }}
-          />
+          {isCorrect ? (
+            <Check size={36} color="#FFFFFF" strokeWidth={3.5} />
+          ) : (
+            <span style={{ fontSize: 32, color: '#FFFFFF', fontWeight: 900 }}>✕</span>
+          )}
         </motion.div>
 
-        {/* Status Title with icon badge */}
-        <motion.div
-          initial={{ scale: 0.4, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.06 }}
-          style={styles.titleWrapper}
+        {/* Title */}
+        <motion.h1
+          initial={{ y: 15, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          style={styles.title}
         >
-          <div
-            style={{
-              ...styles.iconPill,
-              backgroundColor: isCorrect ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-              borderColor: isCorrect ? '#10B981' : '#EF4444',
-            }}
-          >
-            {isCorrect ? (
-              <Check size={22} color="#10B981" strokeWidth={3} />
-            ) : (
-              <X size={22} color="#EF4444" strokeWidth={3} />
-            )}
-          </div>
+          {isCorrect ? 'Верно!' : 'Неверно'}
+        </motion.h1>
 
-          <h1
-            style={{
-              ...styles.titleText,
-              color: isCorrect ? '#10B981' : '#EF4444',
-            }}
-          >
-            {isCorrect ? 'Верно!' : 'Неверно'}
-          </h1>
-        </motion.div>
-
-        {/* Score & Points Display */}
+        {/* Points Display */}
         {isCorrect ? (
           <motion.div
-            initial={{ opacity: 0, scale: 0.7 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', stiffness: 650, damping: 16, mass: 0.35, delay: 0.12 }}
-            style={styles.pointsWrapper}
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.15 }}
+            style={styles.pointsRow}
           >
-            <span style={{ fontSize: 24, fontWeight: 800, color: '#FF7A00' }}>+</span>
-            <JuicyScoreCounter value={points} />
-            <span style={{ fontSize: 18, fontWeight: 700, color: '#F3F4F6' }}>очков</span>
+            <span style={styles.pointsPlus}>+</span>
+            <JuicyScoreCounter value={points} size="lg" />
+            <span style={styles.pointsWord}>очков 🔥</span>
           </motion.div>
         ) : (
-          <div style={styles.pointsWrapper}>
-            <span style={{ fontSize: 18, color: '#9CA3AF', fontWeight: 600 }}>0 очков</span>
+          <div style={styles.pointsRow}>
+            <span style={{ fontSize: 18, color: '#9CA3AF', fontWeight: 700 }}>0 очков</span>
           </div>
         )}
 
-        {/* Streak & Medals Row */}
+        {/* Streak Pill */}
         <AnimatePresence>
           {isCorrect && streak > 0 && (
             <motion.div
-              initial={{ scale: 0, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.18 }}
-              style={styles.streakBadge}
+              initial={{ scale: 0, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.2 }}
+              style={styles.streakPill}
             >
-              <img src="/assets/icons/flame.png" alt="Серия" style={{ width: 22, height: 22 }} />
-              <span>Серия x{streak}!</span>
-              {streak >= 3 && (
-                <img src="/assets/icons/star_medal.png" alt="Медаль" style={{ width: 22, height: 22 }} />
-              )}
+              <span style={{ fontSize: 18 }}>🔥</span>
+              <span style={styles.streakText}>Серия x{streak}!</span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Incorrect Answer Explanation */}
+        {/* Jumping Mascot Sprint in Center */}
+        <motion.div
+          initial={{ y: 60, scale: 0.6, opacity: 0 }}
+          animate={{ y: 0, scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.12 }}
+          style={styles.mascotArea}
+        >
+          <img
+            src={isCorrect ? '/assets/mascot/celebrate.png' : '/assets/mascot/thinking.png'}
+            alt="Спринт"
+            style={styles.mascotImg}
+          />
+        </motion.div>
+
+        {/* Incorrect Answer Card */}
         {!isCorrect && (
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            style={styles.incorrectCard}
-          >
-            <div style={styles.incorrectHeader}>Правильный ответ:</div>
-            <div style={styles.correctAnswerText}>
+          <div style={styles.incorrectCard}>
+            <span style={{ fontSize: 12, color: '#9CA3AF' }}>Правильный ответ:</span>
+            <span style={{ fontSize: 16, color: '#10B981', fontWeight: 800 }}>
               {correctAnswer || 'Ознакомьтесь с материалом урока'}
-            </div>
-          </motion.div>
+            </span>
+          </div>
         )}
 
-        {/* Continue Button */}
+        {/* Bottom Next Question Card */}
+        <div style={styles.nextQuestionCard} onClick={onContinue}>
+          <div style={styles.nextQuestionInfo}>
+            <span style={styles.nextQuestionLabel}>Следующий вопрос</span>
+            <span style={styles.nextQuestionNum}>
+              {questionNumber} из {totalQuestions}
+            </span>
+          </div>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </div>
+
+        {/* Green "Далее" Action Button */}
         <div style={{ width: '100%', marginTop: 8 }}>
           <TactileButton
             theme={isCorrect ? 'green' : 'secondary'}
             size="lg"
             fullWidth
             onClick={onContinue}
-            iconAfter={<ArrowRight size={18} />}
           >
-            Продолжить
+            Далее
           </TactileButton>
         </div>
 
-        {/* Auto-dismiss progress bar */}
+        {/* Countdown Progress Track */}
         <div style={styles.progressTrack}>
           <div
             style={{
-              ...styles.progressBar,
+              ...styles.progressFill,
               width: `${progress}%`,
               backgroundColor: isCorrect ? '#10B981' : '#9CA3AF',
             }}
@@ -218,116 +192,151 @@ export default function FeedbackStreak({
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  overlay: {
-    position: 'absolute',
-    inset: 0,
+  container: {
+    position: 'relative',
     width: '100%',
     height: '100%',
+    minHeight: '100%',
     display: 'flex',
-    alignItems: 'center',
+    flexDirection: 'column',
     justifyContent: 'center',
-    padding: 16,
-    zIndex: 100,
-    cursor: 'pointer',
-    userSelect: 'none',
+    alignItems: 'center',
+    background: "url('/assets/backgrounds/student_game_bg.png') center top / cover no-repeat",
+    padding: '20px 16px',
     boxSizing: 'border-box',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
+    overflow: 'hidden',
   },
-  contentContainer: {
+  backgroundLayer: {
+    position: 'absolute',
+    inset: 0,
+    background: 'radial-gradient(circle at 50% 35%, rgba(16, 185, 129, 0.25) 0%, rgba(11, 19, 43, 0.95) 75%)',
+    pointerEvents: 'none',
+  },
+  content: {
+    position: 'relative',
+    zIndex: 2,
     width: '100%',
     maxWidth: 360,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     textAlign: 'center',
-    cursor: 'default',
-  },
-  mascotWrapper: {
-    marginBottom: 12,
-  },
-  mascotImage: {
-    width: 140,
-    height: 140,
-    objectFit: 'contain',
-    display: 'block',
-  },
-  titleWrapper: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    marginBottom: 6,
   },
-  iconPill: {
-    width: 36,
-    height: 36,
+  iconCircle: {
+    width: 64,
+    height: 64,
     borderRadius: '50%',
+    backgroundColor: '#10B981',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    border: '2px solid',
+    boxShadow: '0 0 28px rgba(16, 185, 129, 0.8), 0 4px 12px rgba(0, 0, 0, 0.4)',
+    border: '3px solid #FFFFFF',
+    marginBottom: 4,
   },
-  titleText: {
-    fontSize: 28,
-    fontWeight: 900,
+  title: {
     margin: 0,
-    letterSpacing: '-0.02em',
+    fontSize: 32,
+    fontWeight: 900,
+    color: '#FFFFFF',
+    letterSpacing: '-0.5px',
+    textShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
   },
-  pointsWrapper: {
+  pointsRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginBottom: 12,
   },
-  streakBadge: {
+  pointsPlus: {
+    fontSize: 22,
+    fontWeight: 900,
+    color: '#FFB800',
+  },
+  pointsWord: {
+    fontSize: 18,
+    fontWeight: 800,
+    color: '#FFFFFF',
+  },
+  streakPill: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    padding: '6px 16px',
-    backgroundColor: 'rgba(255, 122, 0, 0.18)',
-    color: '#FF7A00',
+    padding: '6px 20px',
+    background: 'linear-gradient(90deg, #F59E0B 0%, #FF7A00 100%)',
     borderRadius: 999,
-    fontSize: 15,
-    fontWeight: 800,
-    border: '1.5px solid #FF7A00',
-    boxShadow: '0 0 16px rgba(255, 122, 0, 0.45)',
-    marginBottom: 16,
+    boxShadow: '0 0 20px rgba(255, 122, 0, 0.7), inset 0 1px 2px rgba(255, 255, 255, 0.5)',
+    border: '1.5px solid #FCD34D',
+    margin: '4px 0 8px',
+  },
+  streakText: {
+    fontSize: 16,
+    fontWeight: 900,
+    color: '#FFFFFF',
+    letterSpacing: '0.02em',
+  },
+  mascotArea: {
+    margin: '6px 0',
+  },
+  mascotImg: {
+    width: 155,
+    height: 155,
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 0 24px rgba(255, 215, 0, 0.5))',
   },
   incorrectCard: {
     width: '100%',
-    backgroundColor: 'rgba(22, 32, 53, 0.9)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 16,
-    textAlign: 'center',
-    boxShadow: shadows.card,
+    backgroundColor: 'rgba(22, 32, 53, 0.92)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 18,
+    padding: '10px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
   },
-  incorrectHeader: {
+  nextQuestionCard: {
+    width: '100%',
+    backgroundColor: 'rgba(14, 30, 58, 0.88)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    borderRadius: 20,
+    padding: '12px 18px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    cursor: 'pointer',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+    marginTop: 4,
+  },
+  nextQuestionInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 2,
+  },
+  nextQuestionLabel: {
     fontSize: 12,
     color: '#9CA3AF',
-    marginBottom: 4,
     fontWeight: 600,
   },
-  correctAnswerText: {
-    fontSize: 16,
-    color: '#10B981',
-    fontWeight: 700,
-    lineHeight: 1.4,
+  nextQuestionNum: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: '#FFFFFF',
   },
   progressTrack: {
-    width: '75%',
+    width: '60%',
     height: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 999,
     overflow: 'hidden',
-    marginTop: 14,
+    marginTop: 8,
   },
-  progressBar: {
+  progressFill: {
     height: '100%',
-    transition: 'width 0.04s linear',
     borderRadius: 999,
+    transition: 'width 0.04s linear',
   },
 };

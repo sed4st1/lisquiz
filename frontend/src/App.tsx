@@ -48,6 +48,7 @@ export default function App() {
       case 'student_game':
         return (
           <StudentGameQuestion
+            onBack={() => setScreen('class_grove')}
             onAnswer={(correct) => setScreen(correct ? 'feedback_correct' : 'feedback_wrong')}
           />
         );
@@ -66,14 +67,21 @@ export default function App() {
             isCorrect={false}
             points={0}
             streak={0}
-            correctAnswer="\\frac{5}{4}"
+            correctAnswer="5/6"
             onContinue={() => setScreen('teacher_report')}
           />
         );
       case 'teacher_report':
         return <TeacherGapReport onBack={() => setScreen('class_grove')} />;
       case 'class_grove':
-        return <ClassGrove onBack={() => setScreen('teacher_create')} />;
+        return (
+          <ClassGrove
+            onBack={() => setScreen('teacher_create')}
+            onStartQuiz={() => setScreen('student_game')}
+            onOpenLeaderboard={() => setScreen('teacher_report')}
+            onOpenStats={() => setScreen('teacher_report')}
+          />
+        );
       case 'sleep_screen':
         return (
           <SleepScreen
