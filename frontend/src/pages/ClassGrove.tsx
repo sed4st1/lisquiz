@@ -1,1015 +1,813 @@
-import React, { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Sparkles,
-  Lock,
-  Flame,
-  Target,
-  Trophy,
-  ChevronRight,
-} from 'lucide-react';
-import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
+import { Sparkles, ChevronRight, X, ArrowLeft } from 'lucide-react';
+import { shadows } from '../theme/tokens';
+import { CanvasParticleEngine } from '../services/particles';
+import { haptics } from '../services/haptics';
+import { JuicyScoreCounter } from '../components/JuicyScoreCounter';
+import { TactileButton } from '../components/TactileButton';
 
-export type TreeStage = 'seed' | 'sprout' | 'sapling' | 'young_tree' | 'mature_tree' | 'flowering';
+export type TreeStage = 1 | 2 | 3 | 4;
 
-export interface AchievementItem {
-  id: string;
+interface StageInfo {
+  stage: TreeStage;
   title: string;
+  image: string;
   description: string;
-  icon: string;
-  isUnlocked: boolean;
-  unlockedDate?: string;
-}
-
-export interface ClassGroveProps {
-  classNameTitle?: string;
-  currentPoints?: number;
-  targetPoints?: number;
-  initialStage?: TreeStage;
-  weeklyQuizzes?: number;
-  streakDays?: number;
-  onBack?: () => void;
-}
-
-interface StageConfig {
-  id: TreeStage;
-  label: string;
+  acornsRequired: number;
   level: number;
-  trunkHeight: number;
-  trunkWidth: number;
-  trunkY: number;
-  trunkX: number;
-  canopyRx: number;
-  canopyRy: number;
-  canopyCy: number;
-  canopyCx: number;
-  canopyColor: string;
-  description: string;
 }
 
-const STAGE_CONFIGS: Record<TreeStage, StageConfig> = {
-  seed: {
-    id: 'seed',
-    label: 'Семя',
+const STAGES: Record<TreeStage, StageInfo> = {
+  1: {
+    stage: 1,
+    title: 'Росток из золотого жёлудя',
+    image: '/assets/grove/tree_stage_1.png',
+    description: 'Первые ростки знаний пробились сквозь мох священной рощи!',
+    acornsRequired: 6,
     level: 1,
-    trunkHeight: 0,
-    trunkWidth: 0,
-    trunkY: 235,
-    trunkX: 150,
-    canopyRx: 0,
-    canopyRy: 0,
-    canopyCy: 235,
-    canopyCx: 150,
-    canopyColor: '#10B981',
-    description: 'Зерно знаний бережно посажено в священной роще',
   },
-  sprout: {
-    id: 'sprout',
-    label: 'Росток',
+  2: {
+    stage: 2,
+    title: 'Молодой дубок познания',
+    image: '/assets/grove/tree_stage_2.png',
+    description: 'Крепкие изумрудные ветви тянутся к лучам школьных открытий.',
+    acornsRequired: 6,
     level: 2,
-    trunkHeight: 38,
-    trunkWidth: 8,
-    trunkY: 202,
-    trunkX: 146,
-    canopyRx: 22,
-    canopyRy: 14,
-    canopyCy: 198,
-    canopyCx: 150,
-    canopyColor: '#34D399',
-    description: 'Первые нежные листочки тянутся к лучам познания',
   },
-  sapling: {
-    id: 'sapling',
-    label: 'Саженец',
+  3: {
+    stage: 3,
+    title: 'Солнечный дуб класса',
+    image: '/assets/grove/tree_stage_3.png',
+    description: 'Широкая густая крона дарит мудрость и силу всей параллели.',
+    acornsRequired: 6,
     level: 3,
-    trunkHeight: 76,
-    trunkWidth: 14,
-    trunkY: 164,
-    trunkX: 143,
-    canopyRx: 52,
-    canopyRy: 42,
-    canopyCy: 135,
-    canopyCx: 150,
-    canopyColor: '#10B981',
-    description: 'Ствол окреп, густая листва дарит первую тень',
   },
-  young_tree: {
-    id: 'young_tree',
-    label: 'Молодое деревце',
+  4: {
+    stage: 4,
+    title: 'Вековое древо святилища',
+    image: '/assets/grove/tree_stage_4.png',
+    description: 'Древний хранитель школьных тайн, украшенный светящимися рунами!',
+    acornsRequired: 6,
     level: 4,
-    trunkHeight: 110,
-    trunkWidth: 22,
-    trunkY: 130,
-    trunkX: 139,
-    canopyRx: 72,
-    canopyRy: 56,
-    canopyCy: 98,
-    canopyCx: 150,
-    canopyColor: '#059669',
-    description: 'Широкие ветви защищают рощу от непогоды',
-  },
-  mature_tree: {
-    id: 'mature_tree',
-    label: 'Могучий дуб',
-    level: 5,
-    trunkHeight: 138,
-    trunkWidth: 32,
-    trunkY: 102,
-    trunkX: 134,
-    canopyRx: 94,
-    canopyRy: 72,
-    canopyCy: 76,
-    canopyCx: 150,
-    canopyColor: '#047857',
-    description: 'Величественное дерево мудрости всего класса',
-  },
-  flowering: {
-    id: 'flowering',
-    label: 'Цветущее древо',
-    level: 6,
-    trunkHeight: 152,
-    trunkWidth: 36,
-    trunkY: 88,
-    trunkX: 132,
-    canopyRx: 105,
-    canopyRy: 80,
-    canopyCy: 65,
-    canopyCx: 150,
-    canopyColor: '#065F46',
-    description: 'Дерево усыпано волшебными цветами и плодами побед',
   },
 };
 
-const DEFAULT_ACHIEVEMENTS: AchievementItem[] = [
-  {
-    id: 'first_quiz',
-    title: 'Первая викторина',
-    description: 'Сыграна первая командная игра',
-    icon: '🏆',
-    isUnlocked: true,
-    unlockedDate: '12 окт',
-  },
-  {
-    id: 'streak_5',
-    title: 'Серия из 5',
-    description: '5 правильных ответов подряд',
-    icon: '🔥',
-    isUnlocked: true,
-    unlockedDate: '16 окт',
-  },
-  {
-    id: 'math_expert',
-    title: 'Знаток дробей',
-    description: '85%+ верных ответов в контроле',
-    icon: '📐',
-    isUnlocked: true,
-    unlockedDate: 'Вчера',
-  },
-  {
-    id: 'perfect_score',
-    title: '100% правильных',
-    description: 'Викторина без единой ошибки',
-    icon: '⭐',
-    isUnlocked: false,
-  },
-  {
-    id: 'grove_guardian',
-    title: 'Хранитель рощи',
-    description: 'Вырастить дерево до 5 уровня',
-    icon: '🌳',
-    isUnlocked: false,
-  },
-  {
-    id: 'team_speed',
-    title: 'Спринт-мастер',
-    description: 'Среднее время ответа менее 5 секунд',
-    icon: '⚡',
-    isUnlocked: false,
-  },
-];
+interface ClassGroveProps {
+  classNameTitle?: string;
+  onBack?: () => void;
+}
 
 export default function ClassGrove({
   classNameTitle = '5А класс',
-  currentPoints = 2450,
-  targetPoints = 5000,
-  initialStage = 'sapling',
-  weeklyQuizzes = 3,
-  streakDays = 5,
+  onBack,
 }: ClassGroveProps) {
-  const [stage, setStage] = useState<TreeStage>(initialStage);
-  const [selectedAchievement, setSelectedAchievement] = useState<AchievementItem | null>(null);
+  const [currentStage, setCurrentStage] = useState<TreeStage>(3);
+  const [points, setPoints] = useState(2450);
+  const [acornsCollected, setAcornsCollected] = useState(4);
+  const [isChestOpen, setIsChestOpen] = useState(false);
+  const [showRewardModal, setShowRewardModal] = useState(false);
 
-  const stageConfig = STAGE_CONFIGS[stage];
-  const progressPercent = Math.min(100, Math.round((currentPoints / targetPoints) * 100));
+  // Canvas Particle Engine ref
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const particleEngineRef = useRef<CanvasParticleEngine | null>(null);
 
-  const stagesList: TreeStage[] = [
-    'seed',
-    'sprout',
-    'sapling',
-    'young_tree',
-    'mature_tree',
-    'flowering',
-  ];
+  // Initialize Canvas particles (golden fireflies)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Set canvas dimensions
+    const updateSize = () => {
+      canvas.width = canvas.parentElement?.clientWidth || 380;
+      canvas.height = canvas.parentElement?.clientHeight || 500;
+    };
+    updateSize();
+    window.addEventListener('resize', updateSize);
+
+    const engine = new CanvasParticleEngine(canvas);
+    particleEngineRef.current = engine;
+
+    // Spawn ambient golden fireflies every 700ms
+    const fireflyInterval = setInterval(() => {
+      engine.spawnAmbientFirefly(canvas.width, canvas.height);
+    }, 600);
+
+    return () => {
+      window.removeEventListener('resize', updateSize);
+      clearInterval(fireflyInterval);
+      engine.destroy();
+    };
+  }, []);
+
+  // Handle chest interaction
+  const handleChestClick = () => {
+    if (isChestOpen) {
+      setShowRewardModal(true);
+      return;
+    }
+
+    haptics.chestOpen();
+    setIsChestOpen(true);
+    setPoints((prev) => prev + 500);
+    setAcornsCollected((c) => Math.min(6, c + 1));
+
+    // Fire fireworks explosion from chest location
+    const canvas = canvasRef.current;
+    if (canvas && particleEngineRef.current) {
+      particleEngineRef.current.triggerExplosion(
+        canvas.width * 0.8,
+        canvas.height * 0.72,
+        45,
+        ['#FFD700', '#10B981', '#FF7A00', '#FFFFFF', '#6EE7B7']
+      );
+    }
+
+    setShowRewardModal(true);
+  };
+
+  // Change stage
+  const handleStageSelect = (stage: TreeStage) => {
+    haptics.selection();
+    setCurrentStage(stage);
+  };
+
+  const currentInfo = STAGES[currentStage];
 
   return (
     <div style={styles.container}>
-      <div style={styles.innerWrapper}>
-        {/* Top Header */}
-        <header style={styles.header}>
-          <div style={styles.headerTop}>
-            <div style={styles.groveBadge}>
-              <Sparkles size={14} color={colors.emeraldGreen} />
-              <span>Роща знаний Лисквиз</span>
-            </div>
-            <div style={styles.stageIndicator}>
-              Уровень {stageConfig.level} из 6
-            </div>
-          </div>
+      {/* Background Ambience Canvas for Fireflies */}
+      <canvas ref={canvasRef} style={styles.particleCanvas} />
 
-          <h1 style={styles.classNameTitle}>{classNameTitle}</h1>
-          <p style={styles.classSubtitle}>
-            Каждая викторина питает командное дерево вашего класса
-          </p>
-        </header>
-
-        {/* Tree Stage Navigator Pill Row */}
-        <div style={styles.stageNavRow}>
-          {stagesList.map((stg) => {
-            const isActive = stage === stg;
-            const cfg = STAGE_CONFIGS[stg];
-            return (
+      {/* Top Header / School & Class HUD */}
+      <header style={styles.hudHeader}>
+        <div style={styles.classTitleGroup}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {onBack && (
               <button
-                key={stg}
-                onClick={() => setStage(stg)}
+                onClick={onBack}
                 style={{
-                  ...styles.stageNavButton,
-                  backgroundColor: isActive ? colors.foxOrange : 'rgba(255, 255, 255, 0.05)',
-                  borderColor: isActive ? colors.foxOrange : 'rgba(255, 255, 255, 0.1)',
-                  color: isActive ? '#FFFFFF' : colors.textSecondary,
+                  background: 'none',
+                  border: 'none',
+                  color: '#9CA3AF',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 0,
                 }}
+                title="Назад"
               >
-                <span>{cfg.label}</span>
+                <ArrowLeft size={18} />
               </button>
-            );
-          })}
+            )}
+            <div style={styles.grovePill}>
+              <Sparkles size={13} color="#10B981" />
+              <span>Священная роща Лисквиз</span>
+            </div>
+          </div>
+          <h1 style={styles.classNameText}>{classNameTitle}</h1>
         </div>
 
-        {/* Centered Tree Visualization Canvas */}
-        <div style={styles.treeSection}>
-          <div style={styles.treeAtmosphereGlow} />
+        {/* Currency & Streaks Badges */}
+        <div style={styles.statsHudRow}>
+          {/* XP Crystals */}
+          <div style={styles.hudPill}>
+            <img src="/assets/icons/crystal.png" alt="Кристалл" style={styles.hudIcon} />
+            <JuicyScoreCounter value={points} />
+          </div>
 
-          {/* SVG Tree */}
-          <div style={styles.svgWrapper}>
-            <svg
-              viewBox="0 0 300 280"
-              style={styles.svgElement}
-              preserveAspectRatio="xMidYMid meet"
+          {/* Flame Streak */}
+          <div style={styles.hudPill}>
+            <img src="/assets/icons/flame.png" alt="Серия" style={styles.hudIcon} />
+            <span style={{ fontWeight: 800, color: '#FF7A00', fontSize: 15 }}>5 дн.</span>
+          </div>
+
+          {/* Trophy rank */}
+          <div style={styles.hudPill}>
+            <img src="/assets/icons/trophy.png" alt="Рейтинг" style={styles.hudIcon} />
+            <span style={{ fontWeight: 800, color: '#FCD34D', fontSize: 14 }}>#1</span>
+          </div>
+        </div>
+      </header>
+
+      {/* Stage Evolution Switcher Pills */}
+      <div style={styles.stageTabsWrapper}>
+        {([1, 2, 3, 4] as TreeStage[]).map((stg) => {
+          const isActive = currentStage === stg;
+          return (
+            <button
+              key={stg}
+              onClick={() => handleStageSelect(stg)}
+              style={{
+                ...styles.stageTabBtn,
+                backgroundColor: isActive ? '#FF7A00' : 'rgba(255, 255, 255, 0.08)',
+                color: isActive ? '#FFFFFF' : '#9CA3AF',
+                borderColor: isActive ? '#FF7A00' : 'rgba(255, 255, 255, 0.12)',
+              }}
             >
-              <defs>
-                <linearGradient id="trunkGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#78350F" />
-                  <stop offset="50%" stopColor="#92400E" />
-                  <stop offset="100%" stopColor="#5B21B6" stopOpacity="0.4" />
-                </linearGradient>
+              Ур. {stg}
+            </button>
+          );
+        })}
+      </div>
 
-                <linearGradient id="canopyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#34D399" />
-                  <stop offset="60%" stopColor={stageConfig.canopyColor} />
-                  <stop offset="100%" stopColor="#064E3B" />
-                </linearGradient>
+      {/* Central Sacred Tree Section */}
+      <div style={styles.treeStageArea}>
+        {/* Soft magical backdrop glow */}
+        <div style={styles.treeAuraGlow} />
 
-                <linearGradient id="canopyGradSub" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#6EE7B7" />
-                  <stop offset="100%" stopColor="#10B981" />
-                </linearGradient>
+        {/* Animated Evolutionary Tree Sprite */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentStage}
+            initial={{ scale: 0.85, opacity: 0, y: 15 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.85, opacity: 0, y: -15 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 24 }}
+            style={styles.treeContainer}
+          >
+            {/* Gentle breathing animation */}
+            <motion.img
+              src={currentInfo.image}
+              alt={currentInfo.title}
+              animate={{ y: [0, -6, 0] }}
+              transition={{ repeat: Infinity, duration: 4.2, ease: 'easeInOut' }}
+              style={styles.treeImage}
+            />
+          </motion.div>
+        </AnimatePresence>
 
-                <linearGradient id="groundGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#064E3B" />
-                  <stop offset="60%" stopColor="#0F1F1C" />
-                  <stop offset="100%" stopColor="#0B1514" />
-                </linearGradient>
-
-                <radialGradient id="magicFruit" cx="40%" cy="40%" r="60%">
-                  <stop offset="0%" stopColor="#FDE047" />
-                  <stop offset="80%" stopColor="#FF7A00" />
-                </radialGradient>
-              </defs>
-
-              {/* Ground Mound / Hill */}
-              <ellipse
-                cx="150"
-                cy="255"
-                rx="135"
-                ry="22"
-                fill="url(#groundGrad)"
-                stroke="rgba(16, 185, 129, 0.25)"
-                strokeWidth="1.5"
-              />
-
-              {/* Tree Roots Base */}
-              {stage !== 'seed' && (
-                <path
-                  d="M130 240 Q150 236 170 240 L176 250 Q150 246 124 250 Z"
-                  fill="#78350F"
-                  opacity="0.8"
-                />
-              )}
-
-              {/* Seed Visualization */}
-              {stage === 'seed' && (
-                <g>
-                  {/* Glowing seed halo */}
-                  <circle cx="150" cy="242" r="14" fill="rgba(255, 122, 0, 0.25)" />
-                  {/* Seed body */}
-                  <ellipse cx="150" cy="242" rx="9" ry="6" fill="#F59E0B" />
-                  <path
-                    d="M149 236 Q151 228 155 226"
-                    stroke="#10B981"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                  <circle cx="155" cy="226" r="3" fill="#34D399" />
-                </g>
-              )}
-
-              {/* Animated Tree Trunk */}
-              {stage !== 'seed' && (
-                <motion.rect
-                  x={stageConfig.trunkX}
-                  y={stageConfig.trunkY}
-                  width={stageConfig.trunkWidth}
-                  height={stageConfig.trunkHeight}
-                  rx={stageConfig.trunkWidth > 12 ? 6 : 3}
-                  fill="url(#trunkGrad)"
-                  initial={{ height: 0, y: 240 }}
-                  animate={{
-                    height: stageConfig.trunkHeight,
-                    y: stageConfig.trunkY,
-                    x: stageConfig.trunkX,
-                    width: stageConfig.trunkWidth,
-                  }}
-                  transition={{ type: 'spring', stiffness: 280, damping: 22 }}
-                />
-              )}
-
-              {/* Tree Branches for larger stages */}
-              {(stage === 'young_tree' || stage === 'mature_tree' || stage === 'flowering') && (
-                <motion.g
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.15 }}
-                >
-                  {/* Left branch */}
-                  <path
-                    d="M140 160 Q115 140 102 145"
-                    stroke="#78350F"
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                  {/* Right branch */}
-                  <path
-                    d="M160 150 Q185 135 198 140"
-                    stroke="#78350F"
-                    strokeWidth="6"
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                </motion.g>
-              )}
-
-              {/* Animated Canopy */}
-              {stage !== 'seed' && (
-                <motion.g
-                  animate={{
-                    y: [0, -3, 0],
-                  }}
-                  transition={{
-                    repeat: Infinity,
-                    duration: 4,
-                    ease: 'easeInOut',
-                  }}
-                >
-                  {/* Main Canopy Ellipse */}
-                  <motion.ellipse
-                    cx={stageConfig.canopyCx}
-                    cy={stageConfig.canopyCy}
-                    rx={stageConfig.canopyRx}
-                    ry={stageConfig.canopyRy}
-                    fill="url(#canopyGrad)"
-                    initial={{ rx: 0, ry: 0, opacity: 0 }}
-                    animate={{
-                      rx: stageConfig.canopyRx,
-                      ry: stageConfig.canopyRy,
-                      cy: stageConfig.canopyCy,
-                      cx: stageConfig.canopyCx,
-                      opacity: 1,
-                    }}
-                    transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-                  />
-
-                  {/* Secondary lush top highlight */}
-                  {stageConfig.canopyRx > 30 && (
-                    <motion.ellipse
-                      cx={stageConfig.canopyCx - 8}
-                      cy={stageConfig.canopyCy - stageConfig.canopyRy * 0.25}
-                      rx={stageConfig.canopyRx * 0.65}
-                      ry={stageConfig.canopyRy * 0.55}
-                      fill="url(#canopyGradSub)"
-                      opacity="0.75"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.1 }}
-                    />
-                  )}
-
-                  {/* Flowering Magic Blossoms and Fruit */}
-                  {stage === 'flowering' && (
-                    <motion.g
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      transition={{ delay: 0.2 }}
-                    >
-                      <circle cx="110" cy="50" r="7" fill="url(#magicFruit)" />
-                      <circle cx="180" cy="55" r="8" fill="url(#magicFruit)" />
-                      <circle cx="145" cy="30" r="6" fill="url(#magicFruit)" />
-                      <circle cx="85" cy="80" r="6" fill="url(#magicFruit)" />
-                      <circle cx="215" cy="75" r="7" fill="url(#magicFruit)" />
-                      <circle cx="150" cy="85" r="6.5" fill="url(#magicFruit)" />
-
-                      {/* Small flower stars */}
-                      <circle cx="125" cy="70" r="3.5" fill="#FFFFFF" />
-                      <circle cx="170" cy="95" r="3" fill="#FFFFFF" />
-                      <circle cx="135" cy="110" r="3" fill="#FFFFFF" />
-                    </motion.g>
-                  )}
-                </motion.g>
-              )}
-
-              {/* Fireflies / Magic Dust */}
-              <circle cx="70" cy="120" r="2" fill="#FDE047" opacity="0.8" />
-              <circle cx="230" cy="110" r="2" fill="#FDE047" opacity="0.7" />
-              <circle cx="190" cy="180" r="1.5" fill="#6EE7B7" opacity="0.9" />
-              <circle cx="95" cy="200" r="1.5" fill="#6EE7B7" opacity="0.9" />
-            </svg>
+        {/* Interactive Treasure Chest on the Ground */}
+        <motion.div
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.94 }}
+          onClick={handleChestClick}
+          style={styles.chestWrapper}
+        >
+          <motion.img
+            src="/assets/icons/chest.png"
+            alt="Сундук сокровищ"
+            animate={
+              isChestOpen
+                ? { filter: 'drop-shadow(0 0 16px #10B981)' }
+                : { y: [0, -4, 0], filter: 'drop-shadow(0 0 12px #FFD700)' }
+            }
+            transition={
+              isChestOpen
+                ? {}
+                : { repeat: Infinity, duration: 2.2, ease: 'easeInOut' }
+            }
+            style={styles.chestImage}
+          />
+          <div style={styles.chestBadge}>
+            {isChestOpen ? 'Открыт ✓' : 'Сундук недели!'}
           </div>
+        </motion.div>
+      </div>
 
-          {/* Current Stage Title & Description */}
-          <div style={styles.stageDescriptionBox}>
-            <div style={styles.stageTitleRow}>
-              <span style={styles.stageNameText}>Стадия: {stageConfig.label}</span>
-              <span style={styles.stageLevelPill}>Ур. {stageConfig.level}</span>
-            </div>
-            <p style={styles.stageDescText}>{stageConfig.description}</p>
-          </div>
-
-          {/* Progress Bar Below Tree */}
-          <div style={styles.progressSection}>
-            <div style={styles.progressLabelRow}>
-              <span style={styles.progressPointsText}>
-                {currentPoints.toLocaleString('ru-RU')} / {targetPoints.toLocaleString('ru-RU')} очков до следующего уровня
-              </span>
-              <span style={styles.progressPctText}>{progressPercent}%</span>
-            </div>
-
-            <div style={styles.progressTrack}>
-              <motion.div
-                style={styles.progressBar}
-                initial={{ width: 0 }}
-                animate={{ width: `${progressPercent}%` }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-              />
-            </div>
-          </div>
+      {/* Tree Info & Description */}
+      <div style={styles.treeInfoCard}>
+        <div style={styles.treeTitleRow}>
+          <span style={styles.treeTitle}>{currentInfo.title}</span>
+          <span style={styles.levelBadge}>Уровень {currentInfo.level}</span>
         </div>
+        <p style={styles.treeDesc}>{currentInfo.description}</p>
 
-        {/* Stats Row */}
-        <div style={styles.statsRow}>
-          <div style={styles.statCard}>
-            <div style={styles.statIconBox}>
-              <Target size={20} color={colors.emeraldGreen} />
-            </div>
-            <div style={styles.statInfo}>
-              <span style={styles.statLabel}>Викторин за неделю</span>
-              <span style={styles.statValue}>🎯 {weeklyQuizzes}</span>
-            </div>
-          </div>
-
-          <div style={styles.statCard}>
-            <div style={styles.statIconBox}>
-              <Flame size={20} color={colors.foxOrange} />
-            </div>
-            <div style={styles.statInfo}>
-              <span style={styles.statLabel}>Дней подряд</span>
-              <span style={styles.statValue}>🔥 {streakDays}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Achievements Section */}
-        <section style={styles.achievementsCard}>
-          <div style={styles.achievementsHeader}>
-            <div style={styles.achievementsTitleGroup}>
-              <Trophy size={18} color={colors.foxOrange} />
-              <h2 style={styles.achievementsTitle}>Достижения класса</h2>
-            </div>
-            <span style={styles.achievementsCount}>
-              {DEFAULT_ACHIEVEMENTS.filter((a) => a.isUnlocked).length} из{' '}
-              {DEFAULT_ACHIEVEMENTS.length}
+        {/* 6-Acorn Evolutionary Progress Bar */}
+        <div style={styles.acornProgressSection}>
+          <div style={styles.acornProgressHeader}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#F3F4F6' }}>
+              Прогресс эволюции ({acornsCollected}/6 желудей)
+            </span>
+            <span style={{ fontSize: 12, color: '#10B981', fontWeight: 700 }}>
+              {Math.round((acornsCollected / 6) * 100)}%
             </span>
           </div>
 
-          {/* Horizontal Scrollable Row */}
-          <div style={styles.achievementsScrollRow}>
-            {DEFAULT_ACHIEVEMENTS.map((ach) => {
+          {/* Acorn Slots Row */}
+          <div style={styles.acornsRow}>
+            {[1, 2, 3, 4, 5, 6].map((idx) => {
+              const isFilled = idx <= acornsCollected;
               return (
-                <motion.div
-                  key={ach.id}
-                  onClick={() => setSelectedAchievement(ach)}
-                  style={{
-                    ...styles.achievementBadgeCard,
-                    border: ach.isUnlocked
-                      ? `1.5px solid ${colors.foxOrange}`
-                      : '1px solid rgba(255, 255, 255, 0.08)',
-                    opacity: ach.isUnlocked ? 1 : 0.45,
-                    filter: ach.isUnlocked ? 'none' : 'grayscale(100%)',
-                    boxShadow: ach.isUnlocked ? shadows.glow(colors.foxOrange) : 'none',
-                  }}
-                  whileHover={{ scale: 1.04 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <div style={styles.badgeIconWrapper}>
-                    <span style={styles.badgeEmoji}>{ach.icon}</span>
-                    {!ach.isUnlocked && (
-                      <div style={styles.lockOverlay}>
-                        <Lock size={16} color="#FFFFFF" />
-                      </div>
-                    )}
-                  </div>
-                  <div style={styles.badgeTitle}>{ach.title}</div>
-                  <div style={styles.badgeStatus}>
-                    {ach.isUnlocked ? (
-                      <span style={{ color: colors.foxOrange }}>Открыто</span>
-                    ) : (
-                      <span style={{ color: colors.textMuted }}>Заблокировано</span>
-                    )}
-                  </div>
-                </motion.div>
+                <div key={idx} style={styles.acornSlotWrapper}>
+                  {/* Base wooden socket */}
+                  <img
+                    src="/assets/icons/acorn_slot.png"
+                    alt="Гнездо"
+                    style={styles.acornSlotBase}
+                  />
+                  {/* Glowing golden acorn pop-in */}
+                  {isFilled && (
+                    <motion.img
+                      src="/assets/icons/acorn.png"
+                      alt="Золотой жёлудь"
+                      initial={{ scale: 0, opacity: 0, rotate: -25 }}
+                      animate={{ scale: 1, opacity: 1, rotate: 0 }}
+                      transition={{
+                        type: 'spring',
+                        stiffness: 450,
+                        damping: 18,
+                        delay: idx * 0.08,
+                      }}
+                      style={styles.acornItem}
+                    />
+                  )}
+                </div>
               );
             })}
           </div>
 
-          {/* Achievement Detail modal/sheet */}
-          <AnimatePresence>
-            {selectedAchievement && (
-              <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
-                style={styles.achievementDetailCard}
-              >
-                <div style={styles.achievementDetailContent}>
-                  <span style={styles.detailEmoji}>{selectedAchievement.icon}</span>
-                  <div>
-                    <h3 style={styles.detailTitle}>{selectedAchievement.title}</h3>
-                    <p style={styles.detailDesc}>{selectedAchievement.description}</p>
-                    {selectedAchievement.isUnlocked ? (
-                      <span style={styles.unlockedDate}>
-                        Получено: {selectedAchievement.unlockedDate}
-                      </span>
-                    ) : (
-                      <span style={styles.lockedHint}>
-                        Сыграйте викторину с классом для разблокировки
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedAchievement(null)}
-                  style={styles.closeDetailBtn}
-                >
-                  ✕
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </section>
-
-        {/* Mascot Mascot Card at bottom */}
-        <div style={styles.mascotGroveCard}>
-          <img
-            src="/assets/mascot/celebrate.png"
-            alt="Спринт"
-            style={styles.mascotGroveImg}
-          />
-          <div style={styles.mascotGroveText}>
-            <div style={styles.mascotGroveTitle}>Спринт заботится о роще!</div>
-            <div style={styles.mascotGroveDesc}>
-              Сыграйте еще одну викторину сегодня, чтобы добавить <strong>+500 капель росы</strong>{' '}
-              и приблизить переход на следующий уровень.
-            </div>
+          <div style={styles.acornTipText}>
+            💡 Еще <strong>2 победы в викторинах</strong> на этой неделе, и Дерево эволюционирует!
           </div>
-          <ChevronRight size={20} color={colors.textSecondary} />
         </div>
       </div>
+
+      {/* Active Classmates Watering Tree */}
+      <div style={styles.classmatesSection}>
+        <div style={styles.sectionTitleRow}>
+          <span style={styles.sectionTitle}>Одноклассники в роще:</span>
+          <span style={styles.onlineBadge}>● 5 онлайн</span>
+        </div>
+        <div style={styles.classmatesAvatarsRow}>
+          {[
+            { name: 'Маша', avatar: '/assets/avatars/students/bunny.png' },
+            { name: 'Артём', avatar: '/assets/avatars/students/hedgehog.png' },
+            { name: 'Соня', avatar: '/assets/avatars/students/owl.png' },
+            { name: 'Дима', avatar: '/assets/avatars/students/bear.png' },
+            { name: 'Алиса', avatar: '/assets/avatars/students/squirrel.png' },
+          ].map((mate, i) => (
+            <div key={i} style={styles.mateAvatarCard}>
+              <img src={mate.avatar} alt={mate.name} style={styles.mateAvatarImg} />
+              <span style={styles.mateName}>{mate.name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Mascot Sprint Tip Bubble */}
+      <div style={styles.sprintTipCard}>
+        <img
+          src="/assets/mascot/celebrate.png"
+          alt="Спринт"
+          style={styles.sprintImg}
+        />
+        <div style={styles.sprintTipContent}>
+          <div style={styles.sprintTipTitle}>Спринт в восторге! 🦊</div>
+          <div style={styles.sprintTipText}>
+            Ваш класс опережает 5Б на <strong>350 очков</strong>. Держите серию ответов, чтобы открыть сундук мудрости!
+          </div>
+        </div>
+        <ChevronRight size={20} color="#9CA3AF" />
+      </div>
+
+      {/* Chest Reward Modal */}
+      <AnimatePresence>
+        {showRewardModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={styles.modalBackdrop}
+            onClick={() => setShowRewardModal(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.8, y: 30 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.8, y: 30 }}
+              transition={{ type: 'spring', stiffness: 380, damping: 25 }}
+              style={styles.modalCard}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                onClick={() => setShowRewardModal(false)}
+                style={styles.modalCloseBtn}
+              >
+                <X size={18} color="#9CA3AF" />
+              </button>
+
+              <img
+                src="/assets/icons/chest.png"
+                alt="Сундук открыт"
+                style={{ width: 88, height: 88, marginBottom: 12 }}
+              />
+
+              <h2 style={styles.modalTitle}>Сундук недели открыт! 🎉</h2>
+              <p style={styles.modalSubtitle}>
+                Весь 5А класс получает сокровища за отличные результаты в викторинах:
+              </p>
+
+              <div style={styles.rewardBadgesRow}>
+                <div style={styles.rewardItem}>
+                  <img src="/assets/icons/crystal.png" alt="Кристаллы" style={{ width: 28, height: 28 }} />
+                  <span style={{ fontWeight: 800, color: '#10B981' }}>+500 💎</span>
+                </div>
+                <div style={styles.rewardItem}>
+                  <img src="/assets/icons/acorn.png" alt="Жёлудь" style={{ width: 28, height: 28 }} />
+                  <span style={{ fontWeight: 800, color: '#F59E0B' }}>+1 🌰</span>
+                </div>
+              </div>
+
+              <TactileButton
+                theme="green"
+                size="md"
+                fullWidth
+                onClick={() => setShowRewardModal(false)}
+              >
+                Отлично! Забрать в рощу
+              </TactileButton>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    backgroundColor: colors.bgPrimary,
-    background: 'linear-gradient(180deg, #0D1322 0%, #0F1B2E 50%, #0A2219 100%)',
-    minHeight: '100vh',
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'center',
-    padding: `${spacing.lg}px ${spacing.md}px ${spacing.xxxl}px`,
-    boxSizing: 'border-box',
-    color: colors.textPrimary,
-  },
-  innerWrapper: {
-    width: '100%',
-    maxWidth: 600,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.lg,
-  },
-  header: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    gap: spacing.xs,
-  },
-  headerTop: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  groveBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.emeraldGreenLight,
-    border: `1px solid rgba(16, 185, 129, 0.3)`,
-    padding: '4px 10px',
-    borderRadius: borderRadius.pill,
-    fontSize: 12,
-    color: colors.emeraldGreen,
-    fontWeight: 600,
-  },
-  stageIndicator: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    padding: '4px 8px',
-    borderRadius: borderRadius.pill,
-  },
-  classNameTitle: {
-    fontSize: 28,
-    fontWeight: 800,
-    margin: 0,
-    letterSpacing: '-0.02em',
-    color: colors.textPrimary,
-  },
-  classSubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    margin: 0,
-    maxWidth: 380,
-    lineHeight: 1.4,
-  },
-  stageNavRow: {
-    display: 'flex',
-    gap: 6,
-    overflowX: 'auto',
-    paddingBottom: 4,
-    justifyContent: 'center',
-    flexWrap: 'wrap',
-  },
-  stageNavButton: {
-    border: '1px solid',
-    borderRadius: borderRadius.pill,
-    padding: '4px 10px',
-    fontSize: 11,
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: transitions.fast,
-  },
-  treeSection: {
     position: 'relative',
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.xl,
-    padding: `${spacing.md}px ${spacing.md}px ${spacing.lg}px`,
+    width: '100%',
+    minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    boxShadow: shadows.card,
-    overflow: 'hidden',
-  },
-  treeAtmosphereGlow: {
-    position: 'absolute',
-    top: '20%',
-    left: '50%',
-    transform: 'translate(-50%, -50%)',
-    width: 260,
-    height: 180,
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(16, 185, 129, 0.18) 0%, rgba(13, 19, 34, 0) 70%)',
-    pointerEvents: 'none',
-  },
-  svgWrapper: {
-    width: '100%',
-    maxWidth: 340,
-    height: 250,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  svgElement: {
-    width: '100%',
-    height: '100%',
-    overflow: 'visible',
-  },
-  stageDescriptionBox: {
-    textAlign: 'center',
-    marginTop: spacing.xs,
-    marginBottom: spacing.md,
-    zIndex: 2,
-  },
-  stageTitleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  stageNameText: {
-    fontSize: 16,
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  stageLevelPill: {
-    fontSize: 11,
-    fontWeight: 600,
-    backgroundColor: colors.emeraldGreenLight,
-    color: colors.emeraldGreen,
-    padding: '2px 8px',
-    borderRadius: borderRadius.pill,
-  },
-  stageDescText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    margin: `${spacing.xs}px 0 0`,
-    lineHeight: 1.4,
-  },
-  progressSection: {
-    width: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-    padding: `0 ${spacing.sm}px`,
+    gap: 16,
+    padding: '12px 14px 28px',
     boxSizing: 'border-box',
-    zIndex: 2,
+    overflowY: 'auto',
+    overflowX: 'hidden',
   },
-  progressLabelRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    fontSize: 12,
-  },
-  progressPointsText: {
-    fontWeight: 600,
-    color: colors.textPrimary,
-  },
-  progressPctText: {
-    fontWeight: 700,
-    color: colors.emeraldGreen,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: borderRadius.pill,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    background: 'linear-gradient(90deg, #10B981 0%, #34D399 100%)',
-    borderRadius: borderRadius.pill,
-    boxShadow: shadows.glow(colors.emeraldGreen),
-  },
-  statsRow: {
-    display: 'flex',
-    gap: spacing.md,
-    width: '100%',
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.md,
-    boxShadow: shadows.card,
-  },
-  statIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: borderRadius.md,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  statInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  statValue: {
-    fontSize: 16,
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  achievementsCard: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    boxShadow: shadows.card,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.md,
-  },
-  achievementsHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  achievementsTitleGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  achievementsTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    margin: 0,
-    color: colors.textPrimary,
-  },
-  achievementsCount: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: colors.foxOrange,
-    backgroundColor: colors.foxOrangeLight,
-    padding: '3px 8px',
-    borderRadius: borderRadius.pill,
-  },
-  achievementsScrollRow: {
-    display: 'flex',
-    gap: spacing.md,
-    overflowX: 'auto',
-    paddingBottom: spacing.sm,
-    WebkitOverflowScrolling: 'touch',
-  },
-  achievementBadgeCard: {
-    flex: '0 0 115px',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    gap: spacing.xs,
-    cursor: 'pointer',
-    userSelect: 'none',
-  },
-  badgeIconWrapper: {
-    position: 'relative',
-    width: 44,
-    height: 44,
-    borderRadius: borderRadius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badgeEmoji: {
-    fontSize: 22,
-  },
-  lockOverlay: {
+  particleCanvas: {
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    borderRadius: borderRadius.pill,
+    width: '100%',
+    height: '100%',
+    pointerEvents: 'none',
+    zIndex: 1,
+  },
+  hudHeader: {
+    position: 'relative',
+    zIndex: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    backgroundColor: 'rgba(22, 32, 53, 0.75)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: '12px 14px',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+  },
+  classTitleGroup: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  grovePill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    border: '1px solid rgba(16, 185, 129, 0.3)',
+    borderRadius: 999,
+    padding: '3px 10px',
+    fontSize: 11,
+    color: '#10B981',
+    fontWeight: 700,
+  },
+  classNameText: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    letterSpacing: '-0.3px',
+  },
+  statsHudRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  hudPill: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(13, 20, 36, 0.65)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    padding: '6px 8px',
+  },
+  hudIcon: {
+    width: 20,
+    height: 20,
+    objectFit: 'contain',
+  },
+  stageTabsWrapper: {
+    position: 'relative',
+    zIndex: 2,
+    display: 'flex',
+    gap: 8,
+    justifyContent: 'center',
+  },
+  stageTabBtn: {
+    padding: '6px 14px',
+    borderRadius: 999,
+    border: '1px solid',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+    transition: 'all 0.15s ease',
+  },
+  treeStageArea: {
+    position: 'relative',
+    zIndex: 2,
+    minHeight: 280,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '10px 0 4px',
+  },
+  treeAuraGlow: {
+    position: 'absolute',
+    top: '45%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    width: 240,
+    height: 240,
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(16, 185, 129, 0.25) 0%, rgba(255, 215, 0, 0.12) 40%, transparent 70%)',
+    pointerEvents: 'none',
+  },
+  treeContainer: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    maxWidth: 290,
+    height: 280,
+  },
+  treeImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 14px 20px rgba(0, 0, 0, 0.45))',
+  },
+  chestWrapper: {
+    position: 'absolute',
+    bottom: -6,
+    right: 14,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+  },
+  chestImage: {
+    width: 68,
+    height: 68,
+    objectFit: 'contain',
+  },
+  chestBadge: {
+    backgroundColor: '#FF7A00',
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: 800,
+    padding: '2px 8px',
+    borderRadius: 999,
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.4)',
+    marginTop: -4,
+  },
+  treeInfoCard: {
+    position: 'relative',
+    zIndex: 2,
+    backgroundColor: 'rgba(22, 32, 53, 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 20,
+    padding: '16px',
+    boxShadow: shadows.card,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  treeTitleRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  treeTitle: {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#FFFFFF',
+  },
+  levelBadge: {
+    fontSize: 11,
+    fontWeight: 700,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    color: '#10B981',
+    border: '1px solid rgba(16, 185, 129, 0.4)',
+    padding: '2px 8px',
+    borderRadius: 999,
+  },
+  treeDesc: {
+    margin: 0,
+    fontSize: 13,
+    color: '#9CA3AF',
+    lineHeight: 1.4,
+  },
+  acornProgressSection: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  acornProgressHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  acornsRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  acornSlotWrapper: {
+    position: 'relative',
+    width: 44,
+    height: 44,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeTitle: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: colors.textPrimary,
-    lineHeight: 1.2,
-    height: 28,
-    display: 'flex',
-    alignItems: 'center',
-  },
-  badgeStatus: {
-    fontSize: 10,
-    fontWeight: 500,
-  },
-  achievementDetailCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  achievementDetailContent: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  detailEmoji: {
-    fontSize: 28,
-  },
-  detailTitle: {
-    fontSize: 14,
-    fontWeight: 700,
-    margin: 0,
-    color: colors.textPrimary,
-  },
-  detailDesc: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    margin: '3px 0',
-  },
-  unlockedDate: {
-    fontSize: 11,
-    color: colors.foxOrange,
-    fontWeight: 600,
-  },
-  lockedHint: {
-    fontSize: 11,
-    color: colors.textMuted,
-  },
-  closeDetailBtn: {
-    background: 'none',
-    border: 'none',
-    color: colors.textSecondary,
-    cursor: 'pointer',
-    padding: 4,
-    fontSize: 14,
-  },
-  mascotGroveCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    boxShadow: shadows.card,
-  },
-  mascotGroveImg: {
-    width: 54,
-    height: 54,
+  acornSlotBase: {
+    position: 'absolute',
+    width: 38,
+    height: 38,
     objectFit: 'contain',
-    flexShrink: 0,
+    opacity: 0.85,
   },
-  mascotGroveText: {
-    flex: 1,
+  acornItem: {
+    position: 'absolute',
+    width: 34,
+    height: 34,
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 2px 6px rgba(245, 158, 11, 0.8))',
+  },
+  acornTipText: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    padding: '8px 12px',
+    borderRadius: 12,
+  },
+  classmatesSection: {
+    position: 'relative',
+    zIndex: 2,
+    backgroundColor: 'rgba(22, 32, 53, 0.75)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 18,
+    padding: '12px 14px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 2,
+    gap: 8,
   },
-  mascotGroveTitle: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: colors.foxOrange,
+  sectionTitleRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  mascotGroveDesc: {
+  sectionTitle: {
     fontSize: 12,
-    color: colors.textSecondary,
+    fontWeight: 700,
+    color: '#9CA3AF',
+  },
+  onlineBadge: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#10B981',
+  },
+  classmatesAvatarsRow: {
+    display: 'flex',
+    gap: 10,
+    overflowX: 'auto',
+    paddingBottom: 4,
+  },
+  mateAvatarCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+  },
+  mateAvatarImg: {
+    width: 42,
+    height: 42,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    border: '1.5px solid rgba(16, 185, 129, 0.4)',
+    objectFit: 'contain',
+  },
+  mateName: {
+    fontSize: 11,
+    color: '#D1D5DB',
+    fontWeight: 600,
+  },
+  sprintTipCard: {
+    position: 'relative',
+    zIndex: 2,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255, 122, 0, 0.12)',
+    border: '1px solid rgba(255, 122, 0, 0.3)',
+    borderRadius: 18,
+    padding: '12px 14px',
+  },
+  sprintImg: {
+    width: 48,
+    height: 48,
+    objectFit: 'contain',
+  },
+  sprintTipContent: {
+    flex: 1,
+  },
+  sprintTipTitle: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: '#FF7A00',
+    marginBottom: 2,
+  },
+  sprintTipText: {
+    fontSize: 12,
+    color: '#E5E7EB',
+    lineHeight: 1.35,
+  },
+  modalBackdrop: {
+    position: 'fixed',
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+    zIndex: 100,
+  },
+  modalCard: {
+    position: 'relative',
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#162035',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: 24,
+    padding: '24px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
+  },
+  modalCloseBtn: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    background: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 4,
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+  modalSubtitle: {
+    margin: '0 0 16px',
+    fontSize: 13,
+    color: '#9CA3AF',
     lineHeight: 1.4,
+  },
+  rewardBadgesRow: {
+    display: 'flex',
+    gap: 12,
+    marginBottom: 20,
+  },
+  rewardItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
+    padding: '8px 14px',
   },
 };

@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Flame, ArrowRight, Check, X } from 'lucide-react';
-import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
+import { ArrowRight, Check, X } from 'lucide-react';
+import { shadows } from '../theme/tokens';
+import { haptics } from '../services/haptics';
+import { JuicyScoreCounter } from '../components/JuicyScoreCounter';
+import { TactileButton } from '../components/TactileButton';
 
 export interface FeedbackStreakProps {
   isCorrect: boolean;
@@ -21,24 +24,29 @@ export default function FeedbackStreak({
 }: FeedbackStreakProps) {
   const [progress, setProgress] = useState(100);
 
-  // Trigger confetti and auto-dismiss countdown
+  // Trigger Juicy confetti and haptics on mount
   useEffect(() => {
     if (isCorrect) {
+      haptics.notification('success');
+      if (streak > 1) {
+        setTimeout(() => haptics.streak(), 220);
+      }
+
       try {
         confetti({
-          particleCount: 150,
-          spread: 75,
-          origin: { y: 0.55 },
-          colors: [colors.foxOrange, colors.emeraldGreen, '#FFD166', '#FFFFFF', '#06D6A0'],
+          particleCount: 160,
+          spread: 80,
+          origin: { y: 0.52 },
+          colors: ['#FF7A00', '#10B981', '#FFD700', '#3B82F6', '#FFFFFF'],
           disableForReducedMotion: true,
         });
-      } catch {
-        // Fallback if canvas-confetti fails in headless environments
-      }
+      } catch {}
+    } else {
+      haptics.notification('error');
     }
 
-    const duration = 2500;
-    const intervalTime = 50;
+    const duration = 2800;
+    const intervalTime = 40;
     const step = (intervalTime / duration) * 100;
 
     const interval = window.setInterval(() => {
@@ -53,15 +61,15 @@ export default function FeedbackStreak({
       window.clearInterval(interval);
       window.clearTimeout(timer);
     };
-  }, [isCorrect, onContinue]);
+  }, [isCorrect, streak, onContinue]);
 
   const mascotSrc = isCorrect
     ? '/assets/mascot/celebrate.png'
     : '/assets/mascot/thinking.png';
 
   const overlayBg = isCorrect
-    ? `radial-gradient(circle at 50% 40%, rgba(16, 185, 129, 0.18) 0%, ${colors.bgPrimary} 75%)`
-    : `radial-gradient(circle at 50% 40%, rgba(239, 68, 68, 0.16) 0%, ${colors.bgPrimary} 75%)`;
+    ? 'radial-gradient(circle at 50% 35%, rgba(16, 185, 129, 0.28) 0%, rgba(13, 19, 34, 0.96) 70%)'
+    : 'radial-gradient(circle at 50% 35%, rgba(239, 68, 68, 0.24) 0%, rgba(13, 19, 34, 0.96) 70%)';
 
   return (
     <div
@@ -79,11 +87,11 @@ export default function FeedbackStreak({
       }}
     >
       <div style={styles.contentContainer} onClick={(e) => e.stopPropagation()}>
-        {/* Animated Mascot */}
+        {/* Animated Mascot Spring */}
         <motion.div
-          initial={{ y: 70, scale: 0.75, opacity: 0 }}
+          initial={{ y: 90, scale: 0.6, opacity: 0 }}
           animate={{ y: 0, scale: 1, opacity: 1 }}
-          transition={transitions.springBouncy}
+          transition={{ type: 'spring', stiffness: 480, damping: 17, mass: 0.5 }}
           style={styles.mascotWrapper}
         >
           <img
@@ -92,68 +100,76 @@ export default function FeedbackStreak({
             style={{
               ...styles.mascotImage,
               filter: isCorrect
-                ? shadows.glow(colors.emeraldGreen)
-                : shadows.glow(colors.answerRed),
+                ? 'drop-shadow(0 0 24px rgba(16, 185, 129, 0.6))'
+                : 'drop-shadow(0 0 20px rgba(239, 68, 68, 0.5))',
             }}
           />
         </motion.div>
 
-        {/* Status Text */}
+        {/* Status Title with icon badge */}
         <motion.div
-          initial={{ scale: 0.5, opacity: 0 }}
+          initial={{ scale: 0.4, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 350, damping: 20, delay: 0.08 }}
+          transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.06 }}
           style={styles.titleWrapper}
         >
           <div
             style={{
               ...styles.iconPill,
-              backgroundColor: isCorrect ? colors.emeraldGreenLight : 'rgba(239, 68, 68, 0.15)',
-              borderColor: isCorrect ? colors.emeraldGreen : colors.answerRed,
+              backgroundColor: isCorrect ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+              borderColor: isCorrect ? '#10B981' : '#EF4444',
             }}
           >
             {isCorrect ? (
-              <Check size={20} color={colors.emeraldGreen} strokeWidth={3} />
+              <Check size={22} color="#10B981" strokeWidth={3} />
             ) : (
-              <X size={20} color={colors.answerRed} strokeWidth={3} />
+              <X size={22} color="#EF4444" strokeWidth={3} />
             )}
           </div>
 
           <h1
             style={{
               ...styles.titleText,
-              color: isCorrect ? colors.emeraldGreen : colors.answerRed,
+              color: isCorrect ? '#10B981' : '#EF4444',
             }}
           >
             {isCorrect ? 'Верно!' : 'Неверно'}
           </h1>
         </motion.div>
 
-        {/* Points Display */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          style={{
-            ...styles.pointsText,
-            color: isCorrect ? colors.foxOrange : colors.textMuted,
-          }}
-        >
-          {isCorrect ? `+${points} очков` : '0 очков'}
-        </motion.div>
+        {/* Score & Points Display */}
+        {isCorrect ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.7 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 650, damping: 16, mass: 0.35, delay: 0.12 }}
+            style={styles.pointsWrapper}
+          >
+            <span style={{ fontSize: 24, fontWeight: 800, color: '#FF7A00' }}>+</span>
+            <JuicyScoreCounter value={points} />
+            <span style={{ fontSize: 18, fontWeight: 700, color: '#F3F4F6' }}>очков</span>
+          </motion.div>
+        ) : (
+          <div style={styles.pointsWrapper}>
+            <span style={{ fontSize: 18, color: '#9CA3AF', fontWeight: 600 }}>0 очков</span>
+          </div>
+        )}
 
-        {/* Streak Badge */}
+        {/* Streak & Medals Row */}
         <AnimatePresence>
           {isCorrect && streak > 0 && (
             <motion.div
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 450, damping: 22, delay: 0.22 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.18 }}
               style={styles.streakBadge}
             >
-              <Flame size={18} color={colors.foxOrange} style={{ fill: colors.foxOrange }} />
-              <span>Серия x{streak}</span>
+              <img src="/assets/icons/flame.png" alt="Серия" style={{ width: 22, height: 22 }} />
+              <span>Серия x{streak}!</span>
+              {streak >= 3 && (
+                <img src="/assets/icons/star_medal.png" alt="Медаль" style={{ width: 22, height: 22 }} />
+              )}
             </motion.div>
           )}
         </AnimatePresence>
@@ -161,9 +177,9 @@ export default function FeedbackStreak({
         {/* Incorrect Answer Explanation */}
         {!isCorrect && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
+            transition={{ delay: 0.15 }}
             style={styles.incorrectCard}
           >
             <div style={styles.incorrectHeader}>Правильный ответ:</div>
@@ -174,21 +190,17 @@ export default function FeedbackStreak({
         )}
 
         {/* Continue Button */}
-        <motion.button
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          onClick={onContinue}
-          style={{
-            ...styles.continueButton,
-            backgroundColor: isCorrect ? colors.emeraldGreen : colors.cardSurfaceHover,
-          }}
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-        >
-          <span>Продолжить</span>
-          <ArrowRight size={18} />
-        </motion.button>
+        <div style={{ width: '100%', marginTop: 8 }}>
+          <TactileButton
+            theme={isCorrect ? 'green' : 'secondary'}
+            size="lg"
+            fullWidth
+            onClick={onContinue}
+            iconAfter={<ArrowRight size={18} />}
+          >
+            Продолжить
+          </TactileButton>
+        </div>
 
         {/* Auto-dismiss progress bar */}
         <div style={styles.progressTrack}>
@@ -196,7 +208,7 @@ export default function FeedbackStreak({
             style={{
               ...styles.progressBar,
               width: `${progress}%`,
-              backgroundColor: isCorrect ? colors.emeraldGreen : colors.textMuted,
+              backgroundColor: isCorrect ? '#10B981' : '#9CA3AF',
             }}
           />
         </div>
@@ -207,25 +219,24 @@ export default function FeedbackStreak({
 
 const styles: Record<string, React.CSSProperties> = {
   overlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    position: 'absolute',
+    inset: 0,
     width: '100%',
     height: '100%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.lg,
-    zIndex: 1000,
+    padding: 16,
+    zIndex: 100,
     cursor: 'pointer',
     userSelect: 'none',
     boxSizing: 'border-box',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
   },
   contentContainer: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: 360,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -233,11 +244,11 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'default',
   },
   mascotWrapper: {
-    marginBottom: spacing.lg,
+    marginBottom: 12,
   },
   mascotImage: {
-    width: 150,
-    height: 150,
+    width: 140,
+    height: 140,
     objectFit: 'contain',
     display: 'block',
   },
@@ -245,13 +256,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
+    gap: 8,
+    marginBottom: 6,
   },
   iconPill: {
-    width: 34,
-    height: 34,
-    borderRadius: borderRadius.pill,
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -259,78 +270,64 @@ const styles: Record<string, React.CSSProperties> = {
   },
   titleText: {
     fontSize: 28,
-    fontWeight: 800,
+    fontWeight: 900,
     margin: 0,
     letterSpacing: '-0.02em',
   },
-  pointsText: {
-    fontSize: 22,
-    fontWeight: 700,
-    marginBottom: spacing.md,
+  pointsWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 12,
   },
   streakBadge: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: spacing.xs,
-    padding: `${spacing.xs}px ${spacing.lg}px`,
-    backgroundColor: colors.foxOrangeLight,
-    color: colors.foxOrange,
-    borderRadius: borderRadius.pill,
+    gap: 6,
+    padding: '6px 16px',
+    backgroundColor: 'rgba(255, 122, 0, 0.18)',
+    color: '#FF7A00',
+    borderRadius: 999,
     fontSize: 15,
-    fontWeight: 700,
-    border: `1px solid ${colors.foxOrange}`,
-    boxShadow: shadows.glow(colors.foxOrange),
-    marginBottom: spacing.lg,
+    fontWeight: 800,
+    border: '1.5px solid #FF7A00',
+    boxShadow: '0 0 16px rgba(255, 122, 0, 0.45)',
+    marginBottom: 16,
   },
   incorrectCard: {
     width: '100%',
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    textAlign: 'left',
+    backgroundColor: 'rgba(22, 32, 53, 0.9)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    textAlign: 'center',
     boxShadow: shadows.card,
   },
   incorrectHeader: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginBottom: spacing.xs,
-    fontWeight: 500,
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginBottom: 4,
+    fontWeight: 600,
   },
   correctAnswerText: {
     fontSize: 16,
-    color: colors.emeraldGreen,
-    fontWeight: 600,
+    color: '#10B981',
+    fontWeight: 700,
     lineHeight: 1.4,
   },
-  continueButton: {
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    padding: `${spacing.md}px ${spacing.xl}px`,
-    borderRadius: borderRadius.md,
-    border: 'none',
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: 600,
-    cursor: 'pointer',
-    marginBottom: spacing.md,
-    boxShadow: shadows.card,
-    transition: transitions.normal,
-  },
   progressTrack: {
-    width: '80%',
+    width: '75%',
     height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: borderRadius.pill,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 999,
     overflow: 'hidden',
+    marginTop: 14,
   },
   progressBar: {
     height: '100%',
-    transition: 'width 0.05s linear',
-    borderRadius: borderRadius.pill,
+    transition: 'width 0.04s linear',
+    borderRadius: 999,
   },
 };

@@ -1,12 +1,12 @@
-import React, { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { Flame, Trophy, CheckCircle } from 'lucide-react';
-import { colors, spacing, borderRadius, shadows } from '../theme/tokens';
+import { CheckCircle } from 'lucide-react';
+import { shadows } from '../theme/tokens';
 import AnswerButton from '../components/AnswerButton';
 import CountdownTimer from '../components/CountdownTimer';
-import { hapticImpact } from '../services/maxBridge';
+import { haptics } from '../services/haptics';
 import type { QuizOption } from '../types/quiz';
 
 export interface StudentGameQuestionProps {
@@ -55,113 +55,6 @@ const DEFAULT_OPTIONS: QuizOption[] = [
   },
 ];
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    width: '100%',
-    maxWidth: 600,
-    margin: '0 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    minHeight: '85vh',
-    padding: `${spacing.md}px 0`,
-    boxSizing: 'border-box',
-    color: colors.textPrimary,
-  },
-  topBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: `${spacing.sm + 2}px ${spacing.md}px`,
-    boxShadow: shadows.card,
-  },
-  questionProgress: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-  },
-  questionNumberText: {
-    fontSize: 16,
-    fontWeight: 800,
-    color: colors.textPrimary,
-    letterSpacing: '-0.3px',
-  },
-  statsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.sm,
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  streakBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 3,
-    color: colors.foxOrange,
-    fontWeight: 700,
-  },
-  scoreBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 3,
-    color: colors.textMuted,
-  },
-  questionArea: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: `${spacing.xl}px ${spacing.md}px`,
-    textAlign: 'center',
-    gap: spacing.md,
-  },
-  questionTitle: {
-    fontSize: 22,
-    fontWeight: 800,
-    lineHeight: 1.35,
-    color: '#FFFFFF',
-    margin: 0,
-    maxWidth: 520,
-    textShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
-  },
-  latexContainer: {
-    fontSize: 28,
-    color: '#FFFFFF',
-    padding: `${spacing.md}px ${spacing.lg}px`,
-    backgroundColor: 'rgba(22, 32, 53, 0.75)',
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
-    margin: '4px 0',
-  },
-  answersGrid: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: spacing.md,
-    width: '100%',
-    boxSizing: 'border-box',
-  },
-  statusNotice: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.md,
-    padding: `${spacing.sm + 2}px ${spacing.md}px`,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    fontSize: 13,
-    fontWeight: 600,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-  },
-};
-
 export default function StudentGameQuestion({
   questionNumber = 3,
   totalQuestions = 10,
@@ -198,7 +91,11 @@ export default function StudentGameQuestion({
     const isCorrect = optionId === correctOptionId;
 
     setSelectedOptionId(optionId);
-    hapticImpact(isCorrect ? 'medium' : 'heavy');
+    if (isCorrect) {
+      haptics.impact('medium');
+    } else {
+      haptics.notification('error');
+    }
 
     onAnswerSubmit?.(optionId, isCorrect, responseTimeMs);
     if (onAnswer) {
@@ -218,53 +115,67 @@ export default function StudentGameQuestion({
 
   return (
     <div style={styles.container}>
-      {/* Top Bar with Question Progress, Score, Streak, and Countdown */}
-      <div style={styles.topBar}>
-        <div style={styles.questionProgress}>
-          <span style={styles.questionNumberText}>
-            Вопрос {questionNumber} из {totalQuestions}
-          </span>
-          <div style={styles.statsRow}>
+      {/* Top HUD: Question index, Score, Streak, Countdown */}
+      <div style={styles.topHud}>
+        <div style={styles.hudLeft}>
+          <div style={styles.questionBadge}>
+            Вопрос {questionNumber} / {totalQuestions}
+          </div>
+          <div style={styles.statsBadgesRow}>
             {streak > 0 && (
-              <span style={styles.streakBadge} title="Текущая серия правильных ответов">
-                <Flame size={14} fill={colors.foxOrange} />
-                <span>{streak} подряд</span>
-              </span>
+              <div style={styles.statPillOrange}>
+                <img src="/assets/icons/flame.png" alt="Серия" style={{ width: 14, height: 14 }} />
+                <span>x{streak}</span>
+              </div>
             )}
-            <span style={styles.scoreBadge}>
-              <Trophy size={13} />
-              <span>{score} очков</span>
-            </span>
+            <div style={styles.statPillGreen}>
+              <img src="/assets/icons/crystal.png" alt="Очки" style={{ width: 14, height: 14 }} />
+              <span>{score}</span>
+            </div>
           </div>
         </div>
 
-        <CountdownTimer
-          totalSeconds={timeLimitSec}
-          onComplete={handleCountdownEnd}
-          isPaused={hasAnswered && !isRevealed}
-          size={52}
-        />
+        <div style={styles.hudRight}>
+          <CountdownTimer
+            totalSeconds={timeLimitSec}
+            onComplete={handleCountdownEnd}
+            isPaused={hasAnswered && !isRevealed}
+            size={50}
+          />
+        </div>
       </div>
 
-      {/* Center Question Area */}
+      {/* Main Question Board */}
       <motion.div
-        style={styles.questionArea}
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
+        initial={{ scale: 0.94, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+        style={styles.questionBoard}
       >
-        <h2 style={styles.questionTitle}>{questionText}</h2>
+        <h2 style={styles.questionText}>{questionText}</h2>
 
         {questionLatexHtml && (
           <div
-            style={styles.latexContainer}
+            style={styles.latexCard}
             dangerouslySetInnerHTML={{ __html: questionLatexHtml }}
           />
         )}
       </motion.div>
 
-      {/* Answer Buttons Section (2x2 Grid) */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.xs }}>
+      {/* Mascot Sprint encouraging the student */}
+      <div style={styles.mascotPeek}>
+        <img
+          src="/assets/mascot/wave.png"
+          alt="Спринт подсказывает"
+          style={styles.mascotImg}
+        />
+        <div style={styles.mascotSpeech}>
+          Думай и выбирай! Ты справишься 🦊💚
+        </div>
+      </div>
+
+      {/* Answer Buttons 2x2 Grid */}
+      <div style={styles.answersContainer}>
         <div style={styles.answersGrid}>
           {options.map((option) => {
             const isSelected = selectedOptionId === option.id;
@@ -290,40 +201,17 @@ export default function StudentGameQuestion({
           })}
         </div>
 
-        {/* Selected Confirmation Notice */}
+        {/* Answer Status Toast */}
         <AnimatePresence>
           {hasAnswered && !isRevealed && (
             <motion.div
-              initial={{ opacity: 0, y: 6 }}
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              style={styles.statusNotice}
+              style={styles.statusToast}
             >
-              <CheckCircle size={16} color={colors.emeraldGreen} />
-              <span>Ответ принят! Ждём остальных участников...</span>
-            </motion.div>
-          )}
-
-          {isRevealed && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              style={{
-                ...styles.statusNotice,
-                color: selectedOptionId === correctOptionId ? colors.emeraldGreen : colors.answerRed,
-              }}
-            >
-              {selectedOptionId === correctOptionId ? (
-                <>
-                  <CheckCircle size={16} color={colors.emeraldGreen} />
-                  <span>Верно! Отличная работа!</span>
-                </>
-              ) : (
-                <>
-                  <span>Правильный ответ выделен зелёным</span>
-                </>
-              )}
+              <CheckCircle size={16} color="#10B981" />
+              <span>Ответ зафиксирован! Ждём класс...</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -331,3 +219,148 @@ export default function StudentGameQuestion({
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    position: 'relative',
+    width: '100%',
+    minHeight: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    gap: 12,
+    padding: '12px 14px 20px',
+    boxSizing: 'border-box',
+  },
+  topHud: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(22, 32, 53, 0.8)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 18,
+    padding: '8px 14px',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    boxShadow: shadows.card,
+  },
+  hudLeft: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  questionBadge: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    letterSpacing: '-0.2px',
+  },
+  statsBadgesRow: {
+    display: 'flex',
+    gap: 6,
+  },
+  statPillOrange: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 122, 0, 0.15)',
+    border: '1px solid rgba(255, 122, 0, 0.35)',
+    borderRadius: 999,
+    padding: '2px 8px',
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#FF7A00',
+  },
+  statPillGreen: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    border: '1px solid rgba(16, 185, 129, 0.35)',
+    borderRadius: 999,
+    padding: '2px 8px',
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#10B981',
+  },
+  hudRight: {
+    display: 'flex',
+    alignItems: 'center',
+  },
+  questionBoard: {
+    flex: 1,
+    minHeight: 180,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(22, 32, 53, 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 24,
+    padding: '20px 16px',
+    textAlign: 'center',
+    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.4)',
+    gap: 12,
+  },
+  questionText: {
+    margin: 0,
+    fontSize: 20,
+    fontWeight: 800,
+    lineHeight: 1.35,
+    color: '#FFFFFF',
+    textShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+  },
+  latexCard: {
+    fontSize: 26,
+    color: '#FFFFFF',
+    padding: '10px 20px',
+    backgroundColor: 'rgba(13, 20, 36, 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 16,
+    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)',
+  },
+  mascotPeek: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '4px 6px',
+  },
+  mascotImg: {
+    width: 40,
+    height: 40,
+    objectFit: 'contain',
+  },
+  mascotSpeech: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 14,
+    padding: '6px 12px',
+    fontSize: 12,
+    color: '#E5E7EB',
+    fontWeight: 600,
+  },
+  answersContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  answersGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 12,
+    width: '100%',
+  },
+  statusToast: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(22, 32, 53, 0.95)',
+    border: '1px solid rgba(16, 185, 129, 0.3)',
+    borderRadius: 14,
+    padding: '8px 14px',
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#10B981',
+  },
+};
