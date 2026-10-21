@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, ChevronRight, Flame } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { JuicyScoreCounter } from '../components/JuicyScoreCounter';
 import { TactileButton } from '../components/TactileButton';
@@ -26,6 +26,7 @@ export default function FeedbackStreak({
   onContinue,
 }: FeedbackStreakProps) {
   const [progress, setProgress] = useState(100);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (isCorrect) {
@@ -34,12 +35,13 @@ export default function FeedbackStreak({
         setTimeout(() => haptics.streak(), 200);
       }
 
+      // Confetti burst
       try {
         confetti({
-          particleCount: 180,
-          spread: 85,
-          origin: { y: 0.45 },
-          colors: ['#FF7A00', '#10B981', '#FFD700', '#3B82F6', '#FF3366'],
+          particleCount: 140,
+          spread: 70,
+          origin: { y: 0.4 },
+          colors: ['#FF7A00', '#10B981', '#FFD700', '#3B82F6', '#EC4899'],
           disableForReducedMotion: true,
         });
       } catch {}
@@ -47,7 +49,7 @@ export default function FeedbackStreak({
       haptics.notification('error');
     }
 
-    const duration = 3000;
+    const duration = 3500;
     const intervalTime = 40;
     const step = (intervalTime / duration) * 100;
 
@@ -66,8 +68,8 @@ export default function FeedbackStreak({
   }, [isCorrect, streak, onContinue]);
 
   return (
-    <div style={styles.container}>
-      {/* Background with Falling Confetti / Golden Ribbons */}
+    <div ref={containerRef} style={styles.container}>
+      {/* Background Ambience Layer */}
       <div style={styles.backgroundLayer} />
 
       {/* Main Content Area */}
@@ -80,7 +82,7 @@ export default function FeedbackStreak({
           style={styles.iconCircle}
         >
           {isCorrect ? (
-            <Check size={36} color="#FFFFFF" strokeWidth={3.5} />
+            <Check size={38} color="#FFFFFF" strokeWidth={3.5} />
           ) : (
             <span style={{ fontSize: 32, color: '#FFFFFF', fontWeight: 900 }}>✕</span>
           )}
@@ -106,7 +108,7 @@ export default function FeedbackStreak({
           >
             <span style={styles.pointsPlus}>+</span>
             <JuicyScoreCounter value={points} size="lg" />
-            <span style={styles.pointsWord}>очков 🔥</span>
+            <span style={styles.pointsWord}>очков</span>
           </motion.div>
         ) : (
           <div style={styles.pointsRow}>
@@ -123,25 +125,28 @@ export default function FeedbackStreak({
               transition={{ type: 'spring', stiffness: 500, damping: 20, delay: 0.2 }}
               style={styles.streakPill}
             >
-              <span style={{ fontSize: 18 }}>🔥</span>
+              <Flame size={16} color="#FFFFFF" fill="#FFFFFF" />
               <span style={styles.streakText}>Серия x{streak}!</span>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Jumping Mascot Sprint in Center */}
-        <motion.div
-          initial={{ y: 60, scale: 0.6, opacity: 0 }}
-          animate={{ y: 0, scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.12 }}
-          style={styles.mascotArea}
-        >
-          <img
-            src={isCorrect ? '/assets/mascot/celebrate.png' : '/assets/mascot/thinking.png'}
-            alt="Спринт"
-            style={styles.mascotImg}
-          />
-        </motion.div>
+        {/* Jumping Mascot Sprint in Center with Golden Glow Aura */}
+        <div style={styles.mascotArea}>
+          {isCorrect && <div style={styles.sunburstGlow} />}
+          <motion.div
+            initial={{ y: 50, scale: 0.7, opacity: 0 }}
+            animate={{ y: 0, scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.12 }}
+            style={styles.mascotWrapper}
+          >
+            <img
+              src={isCorrect ? '/assets/mascot/sprint_celebrate.png' : '/assets/mascot/sprint_thinking.png'}
+              alt="Спринт"
+              style={styles.mascotImg}
+            />
+          </motion.div>
+        </div>
 
         {/* Incorrect Answer Card */}
         {!isCorrect && (
@@ -182,7 +187,7 @@ export default function FeedbackStreak({
             style={{
               ...styles.progressFill,
               width: `${progress}%`,
-              backgroundColor: isCorrect ? '#10B981' : '#9CA3AF',
+              backgroundColor: isCorrect ? '#10B981' : '#6B7280',
             }}
           />
         </div>
@@ -199,48 +204,53 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'center',
     alignItems: 'center',
-    background: "url('/assets/backgrounds/student_game_bg.png') center top / cover no-repeat",
-    padding: '20px 16px',
+    justifyContent: 'center',
+    backgroundColor: '#070E1B',
+    backgroundImage: "radial-gradient(circle at 50% 30%, rgba(16, 185, 129, 0.15) 0%, transparent 60%), url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    padding: '16px 20px',
     boxSizing: 'border-box',
-    overflow: 'hidden',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    zIndex: 20,
   },
   backgroundLayer: {
     position: 'absolute',
     inset: 0,
-    background: 'radial-gradient(circle at 50% 35%, rgba(16, 185, 129, 0.25) 0%, rgba(11, 19, 43, 0.95) 75%)',
+    backgroundColor: 'rgba(7, 14, 27, 0.88)',
     pointerEvents: 'none',
   },
   content: {
     position: 'relative',
     zIndex: 2,
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 380,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     textAlign: 'center',
-    gap: 8,
   },
   iconCircle: {
-    width: 64,
-    height: 64,
+    width: 68,
+    height: 68,
     borderRadius: '50%',
     backgroundColor: '#10B981',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 0 28px rgba(16, 185, 129, 0.8), 0 4px 12px rgba(0, 0, 0, 0.4)',
+    boxShadow: '0 0 28px rgba(16, 185, 129, 0.75), inset 0 2px 4px rgba(255, 255, 255, 0.4)',
     border: '3px solid #FFFFFF',
-    marginBottom: 4,
+    marginBottom: 10,
   },
   title: {
-    margin: 0,
     fontSize: 32,
     fontWeight: 900,
     color: '#FFFFFF',
     letterSpacing: '-0.5px',
+    margin: '0 0 4px',
     textShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
   },
   pointsRow: {
@@ -248,16 +258,17 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    marginBottom: 6,
   },
   pointsPlus: {
     fontSize: 22,
     fontWeight: 900,
-    color: '#FFB800',
+    color: '#34D399',
   },
   pointsWord: {
     fontSize: 18,
     fontWeight: 800,
-    color: '#FFFFFF',
+    color: '#E5E7EB',
   },
   streakPill: {
     display: 'inline-flex',
@@ -266,39 +277,62 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '6px 20px',
     background: 'linear-gradient(90deg, #F59E0B 0%, #FF7A00 100%)',
     borderRadius: 999,
-    boxShadow: '0 0 20px rgba(255, 122, 0, 0.7), inset 0 1px 2px rgba(255, 255, 255, 0.5)',
+    boxShadow: '0 0 20px rgba(255, 122, 0, 0.6), inset 0 1px 2px rgba(255, 255, 255, 0.5)',
     border: '1.5px solid #FCD34D',
-    margin: '4px 0 8px',
+    marginBottom: 10,
   },
   streakText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 900,
     color: '#FFFFFF',
     letterSpacing: '0.02em',
   },
   mascotArea: {
-    margin: '6px 0',
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    height: 180,
+    margin: '4px 0 12px',
+  },
+  sunburstGlow: {
+    position: 'absolute',
+    width: 220,
+    height: 220,
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(254, 240, 138, 0.28) 0%, rgba(245, 158, 11, 0.12) 50%, transparent 75%)',
+    pointerEvents: 'none',
+  },
+  mascotWrapper: {
+    position: 'relative',
+    zIndex: 2,
+    height: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mascotImg: {
-    width: 155,
-    height: 155,
+    maxHeight: '100%',
+    width: 'auto',
     objectFit: 'contain',
-    filter: 'drop-shadow(0 0 24px rgba(255, 215, 0, 0.5))',
+    filter: 'drop-shadow(0 8px 20px rgba(0, 0, 0, 0.6))',
   },
   incorrectCard: {
     width: '100%',
-    backgroundColor: 'rgba(22, 32, 53, 0.92)',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
+    backgroundColor: 'rgba(22, 32, 53, 0.94)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
     borderRadius: 18,
-    padding: '10px 14px',
+    padding: '12px 14px',
     display: 'flex',
     flexDirection: 'column',
     gap: 4,
+    marginBottom: 8,
   },
   nextQuestionCard: {
     width: '100%',
-    backgroundColor: 'rgba(14, 30, 58, 0.88)',
-    border: '1px solid rgba(255, 255, 255, 0.14)',
+    backgroundColor: 'rgba(14, 30, 58, 0.92)',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
     borderRadius: 20,
     padding: '12px 18px',
     display: 'flex',
@@ -307,8 +341,8 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-    marginTop: 4,
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
+    marginBottom: 6,
   },
   nextQuestionInfo: {
     display: 'flex',
@@ -332,7 +366,7 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 999,
     overflow: 'hidden',
-    marginTop: 8,
+    marginTop: 10,
   },
   progressFill: {
     height: '100%',

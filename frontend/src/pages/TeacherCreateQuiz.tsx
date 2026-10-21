@@ -1,29 +1,28 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Camera,
-  X,
-  Sparkles,
+  ChevronLeft,
   BookOpen,
-  GraduationCap,
-  Layers,
+  Users,
+  Target,
   HelpCircle,
-  CheckCircle2,
-  ArrowRight,
-  Sliders,
+  ChevronRight,
+  Camera,
+  Sparkles,
+  Check,
+  X,
 } from 'lucide-react';
-import { Spinner } from '@maxhub/max-ui';
-import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
-import MascotTip from '../components/MascotTip';
-import type { Quiz, DifficultyLevel } from '../types/quiz';
+import { TactileButton } from '../components/TactileButton';
+import { haptics } from '../services/haptics';
+import type { Quiz } from '../types/quiz';
 
 export interface TeacherCreateQuizProps {
-  onQuizCreated?: (quiz: Quiz) => void;
-  onNavigateToLobby?: (quizId?: string) => void;
+  onQuizCreated?: (quiz?: Quiz) => void;
+  onNavigateToLobby?: () => void;
   onBack?: () => void;
 }
 
-const SUBJECT_OPTIONS = [
+const SUBJECTS = [
   'Математика',
   'Русский язык',
   'Физика',
@@ -35,302 +34,16 @@ const SUBJECT_OPTIONS = [
   'Информатика',
   'Литература',
   'Английский язык',
-] as const;
+];
 
-const TOPIC_SUGGESTIONS: Record<string, string[]> = {
-  'Математика': [
-    'Обыкновенные дроби: сложение и вычитание',
-    'Линейные уравнения с одной переменной',
-    'Признаки равенства треугольников',
-    'Квадратные уравнения и теорема Виета',
-  ],
-  'Физика': [
-    'Законы Ньютона и сила тяжести',
-    'Закон сохранения механической энергии',
-    'Давление в жидкостях и газах',
-  ],
-  'Информатика': [
-    'Двоичная система счисления и кодирование',
-    'Алгоритмы ветвления и циклов в Python',
-    'Основы баз данных и SQL',
-  ],
-  'Русский язык': [
-    'Правописание корней с чередованием',
-    'Сложноподчинённые предложения с придаточными цели',
-    'Одна и две буквы Н в суффиксах прилагательных',
-  ],
-};
+const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+const QUESTION_COUNTS = [5, 8, 10, 15];
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    width: '100%',
-    maxWidth: 600,
-    margin: '0 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.lg,
-    padding: `${spacing.md}px 0`,
-    boxSizing: 'border-box',
-    color: colors.textPrimary,
-  },
-  header: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.xs,
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: 800,
-    letterSpacing: '-0.5px',
-    color: colors.textPrimary,
-    margin: 0,
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    margin: 0,
-    lineHeight: 1.4,
-  },
-  card: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    boxShadow: shadows.card,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.lg,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: colors.textPrimary,
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.xs,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: 600,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: '0.4px',
-  },
-  select: {
-    width: '100%',
-    height: 48,
-    backgroundColor: colors.bgSecondary,
-    color: colors.textPrimary,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.md,
-    padding: `0 ${spacing.md}px`,
-    fontSize: 15,
-    fontFamily: 'inherit',
-    outline: 'none',
-    boxSizing: 'border-box',
-    cursor: 'pointer',
-    appearance: 'none',
-    backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239CA3AF' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
-    backgroundRepeat: 'no-repeat',
-    backgroundPosition: 'right 14px center',
-    backgroundSize: '16px',
-  },
-  input: {
-    width: '100%',
-    height: 48,
-    backgroundColor: colors.bgSecondary,
-    color: colors.textPrimary,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.md,
-    padding: `0 ${spacing.md}px`,
-    fontSize: 15,
-    fontFamily: 'inherit',
-    outline: 'none',
-    boxSizing: 'border-box',
-    transition: transitions.fast,
-  },
-  row: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: spacing.md,
-  },
-  stepper: {
-    display: 'flex',
-    alignItems: 'center',
-    height: 48,
-    backgroundColor: colors.bgSecondary,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-  },
-  stepperBtn: {
-    width: 44,
-    height: '100%',
-    backgroundColor: 'transparent',
-    border: 'none',
-    color: colors.foxOrange,
-    fontSize: 20,
-    fontWeight: 700,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    userSelect: 'none',
-    transition: transitions.fast,
-  },
-  stepperVal: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 16,
-    fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  suggestionsList: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
-  suggestionChip: {
-    fontSize: 11,
-    padding: '4px 8px',
-    borderRadius: borderRadius.pill,
-    backgroundColor: colors.cardSurfaceHover,
-    color: colors.textSecondary,
-    border: `1px solid ${colors.cardBorder}`,
-    cursor: 'pointer',
-    userSelect: 'none',
-    transition: transitions.fast,
-  },
-  uploadBox: {
-    border: `2px dashed ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: `${spacing.lg}px ${spacing.md}px`,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    cursor: 'pointer',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    transition: transitions.fast,
-    textAlign: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  uploadBoxActive: {
-    borderColor: colors.foxOrange,
-    backgroundColor: colors.foxOrangeLight,
-  },
-  uploadIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: borderRadius.pill,
-    backgroundColor: colors.foxOrangeLight,
-    color: colors.foxOrange,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  previewContainer: {
-    position: 'relative',
-    width: '100%',
-    borderRadius: borderRadius.md,
-    overflow: 'hidden',
-    border: `1px solid ${colors.cardBorder}`,
-    backgroundColor: colors.bgSecondary,
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.sm,
-    boxSizing: 'border-box',
-  },
-  previewImg: {
-    width: 64,
-    height: 64,
-    objectFit: 'cover',
-    borderRadius: borderRadius.sm,
-    flexShrink: 0,
-  },
-  previewInfo: {
-    flex: 1,
-    minWidth: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-  },
-  removeBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 28,
-    height: 28,
-    borderRadius: borderRadius.pill,
-    backgroundColor: 'rgba(239, 68, 68, 0.85)',
-    color: '#FFFFFF',
-    border: 'none',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: transitions.fast,
-  },
-  createButton: {
-    width: '100%',
-    height: 52,
-    backgroundColor: colors.foxOrange,
-    color: '#FFFFFF',
-    border: 'none',
-    borderRadius: borderRadius.lg,
-    fontSize: 16,
-    fontWeight: 700,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    boxShadow: `0 4px 16px ${colors.foxOrange}4D`,
-    transition: transitions.fast,
-    userSelect: 'none',
-  },
-  loadingContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: `${spacing.xxxl}px ${spacing.lg}px`,
-    gap: spacing.lg,
-    textAlign: 'center',
-  },
-  loadingMascot: {
-    width: 120,
-    height: 120,
-    objectFit: 'contain',
-    filter: 'drop-shadow(0 8px 24px rgba(255, 122, 0, 0.35))',
-  },
-  progressBarContainer: {
-    width: '100%',
-    maxWidth: 280,
-    height: 6,
-    backgroundColor: colors.bgSecondary,
-    borderRadius: borderRadius.pill,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: colors.foxOrange,
-    borderRadius: borderRadius.pill,
-  },
+const TOPIC_PRESETS: Record<string, string[]> = {
+  'Математика': ['Дроби', 'Линейные уравнения', 'Треугольники', 'Проценты'],
+  'Физика': ['Законы Ньютона', 'Сила тяжести', 'Давление', 'Энергия'],
+  'Информатика': ['Системы счисления', 'Алгоритмы', 'Базы данных', 'Python'],
+  'Русский язык': ['Чередование корней', 'Сложные предложения', 'Н и НН'],
 };
 
 export default function TeacherCreateQuiz({
@@ -338,478 +51,670 @@ export default function TeacherCreateQuiz({
   onNavigateToLobby,
   onBack,
 }: TeacherCreateQuizProps) {
-  // Form State
   const [subject, setSubject] = useState<string>('Математика');
-  const [grade, setGrade] = useState<number>(5);
-  const [topic, setTopic] = useState<string>('Сложение и вычитание обыкновенных дробей');
-  const [questionCount, setQuestionCount] = useState<number>(5);
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>('medium');
+  const [grade, setGrade] = useState<number>(7);
+  const [topic, setTopic] = useState<string>('Дроби');
+  const [questionCount, setQuestionCount] = useState<number>(10);
+  const [isPhotoUploaded, setIsPhotoUploaded] = useState<boolean>(false);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | null>(null);
 
-  // Photo Upload State
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Generation state
-  const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [generationStep, setGenerationStep] = useState<string>('Анализирую тему ФРП...');
-  const [createdQuiz, setCreatedQuiz] = useState<Quiz | null>(null);
-
-  // Handle Photo Selection
-  const handlePhotoSelect = (file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    setPhotoFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPhotoPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handlePhotoSelect(file);
-  };
-
-  const removePhoto = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setPhotoFile(null);
-    setPhotoPreview(null);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  // Submit and Generate Quiz
-  const handleCreate = () => {
+  const handleStartGeneration = () => {
+    haptics.notification('success');
     setIsGenerating(true);
-    setGenerationStep('Анализирую требования ФРП и кодификатор КЭС...');
 
-    // Progress step simulation
+    // Simulate AI generation with Sleeping Fox screen
     setTimeout(() => {
-      setGenerationStep('Генерирую вопросы с математическими формулами...');
-    }, 800);
-
-    setTimeout(() => {
-      setGenerationStep('Формирую правдоподобные дистракторы и подсказки...');
-    }, 1500);
-
-    // Mock completion after 2.2 seconds
-    setTimeout(() => {
-      const mockQuiz: Quiz = {
-        id: 'quiz-' + Date.now(),
-        title: `${subject}: ${topic}`,
-        subject,
-        grade,
-        topic,
-        kes_codes: ['1.2.1', '1.2.2', '1.2.4'],
-        created_at: new Date().toISOString(),
-        created_by: 'Учитель Сферума',
-        is_ai_generated: true,
-        source_image_url: photoPreview || undefined,
-        questions: [
-          {
-            id: 'q1',
-            text: 'Чему равно значение выражения?',
-            latex: '\\frac{3}{4} + \\frac{1}{2}',
-            type: 'multiple_choice',
-            difficulty: 'medium',
-            time_limit_sec: 15,
-            points: 1000,
-            options: [
-              { id: 'opt1', text: '', latex: '\\frac{5}{4}', color: 'red', shape: 'triangle' },
-              { id: 'opt2', text: '', latex: '\\frac{4}{6}', color: 'blue', shape: 'diamond' },
-              { id: 'opt3', text: '', latex: '\\frac{3}{8}', color: 'yellow', shape: 'circle' },
-              { id: 'opt4', text: '', latex: '\\frac{7}{4}', color: 'green', shape: 'square' },
-            ],
-            correct_option_ids: ['opt1'],
-          },
-          {
-            id: 'q2',
-            text: 'Какая из дробей является правильной?',
-            type: 'multiple_choice',
-            difficulty: 'easy',
-            time_limit_sec: 12,
-            points: 1000,
-            options: [
-              { id: 'opt2_1', text: '', latex: '\\frac{7}{5}', color: 'red', shape: 'triangle' },
-              { id: 'opt2_2', text: '', latex: '\\frac{3}{8}', color: 'blue', shape: 'diamond' },
-              { id: 'opt2_3', text: '', latex: '\\frac{9}{9}', color: 'yellow', shape: 'circle' },
-              { id: 'opt2_4', text: '', latex: '\\frac{11}{4}', color: 'green', shape: 'square' },
-            ],
-            correct_option_ids: ['opt2_2'],
-          },
-        ],
-      };
-
       setIsGenerating(false);
-      setCreatedQuiz(mockQuiz);
-      onQuizCreated?.(mockQuiz);
-    }, 2200);
+      if (onQuizCreated) {
+        onQuizCreated();
+      } else if (onNavigateToLobby) {
+        onNavigateToLobby();
+      }
+    }, 2800);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      haptics.impact('medium');
+      setIsPhotoUploaded(true);
+    }
   };
 
   return (
     <div style={styles.container}>
       {/* Top Header */}
-      <div style={styles.header}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1 style={styles.pageTitle}>
-            <span>🦊</span>
-            <span>Создание викторины</span>
-          </h1>
-          {onBack && (
-            <button
-              onClick={onBack}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: colors.textSecondary,
-                cursor: 'pointer',
-                fontSize: 13,
-              }}
-            >
-              Назад
-            </button>
-          )}
+      <header style={styles.header}>
+        <button
+          onClick={onBack}
+          style={styles.backBtn}
+          title="Назад"
+        >
+          <ChevronLeft size={20} color="#FFFFFF" />
+        </button>
+        <h1 style={styles.headerTitle}>Создание викторины</h1>
+        <div style={{ width: 36 }} />
+      </header>
+
+      {/* Mascot Hero Card */}
+      <motion.div
+        initial={{ y: 15, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+        style={styles.heroCard}
+      >
+        <div style={styles.mascotSpeechBubble}>
+          <p style={styles.speechText}>
+            Привет! Я Спринт. Помогу создать отличную викторину с помощью ИИ!
+          </p>
         </div>
-        <p style={styles.pageSubtitle}>
-          Генерация проверочной работы по стандартам ФРП за считанные секунды
+
+        <div style={styles.mascotWrapper}>
+          <img
+            src="/assets/mascot/sprint_idle.png"
+            alt="Спринт"
+            style={styles.mascotImage}
+          />
+        </div>
+      </motion.div>
+
+      {/* Interactive Selection Tiles */}
+      <div style={styles.tilesContainer}>
+        {/* Tile 1: Subject */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            haptics.impact('light');
+            setActiveModal('subject');
+          }}
+          style={styles.tileCard}
+        >
+          <div style={styles.tileLeft}>
+            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(59, 130, 246, 0.22)', color: '#60A5FA' }}>
+              <BookOpen size={20} />
+            </div>
+            <div style={styles.tileTexts}>
+              <span style={styles.tileLabel}>Предмет</span>
+              <span style={styles.tileValue}>{subject}</span>
+            </div>
+          </div>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </motion.div>
+
+        {/* Tile 2: Grade */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            haptics.impact('light');
+            setActiveModal('grade');
+          }}
+          style={styles.tileCard}
+        >
+          <div style={styles.tileLeft}>
+            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(16, 185, 129, 0.22)', color: '#34D399' }}>
+              <Users size={20} />
+            </div>
+            <div style={styles.tileTexts}>
+              <span style={styles.tileLabel}>Класс</span>
+              <span style={styles.tileValue}>{grade} класс</span>
+            </div>
+          </div>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </motion.div>
+
+        {/* Tile 3: FRP Topic */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            haptics.impact('light');
+            setActiveModal('topic');
+          }}
+          style={styles.tileCard}
+        >
+          <div style={styles.tileLeft}>
+            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(245, 158, 11, 0.22)', color: '#FBBF24' }}>
+              <Target size={20} />
+            </div>
+            <div style={styles.tileTexts}>
+              <span style={styles.tileLabel}>Тема ФРП</span>
+              <span style={styles.tileValue}>{topic}</span>
+            </div>
+          </div>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </motion.div>
+
+        {/* Tile 4: Question Count */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            haptics.impact('light');
+            setActiveModal('count');
+          }}
+          style={styles.tileCard}
+        >
+          <div style={styles.tileLeft}>
+            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(139, 92, 246, 0.22)', color: '#A78BFA' }}>
+              <HelpCircle size={20} />
+            </div>
+            <div style={styles.tileTexts}>
+              <span style={styles.tileLabel}>Количество вопросов</span>
+              <span style={styles.tileValue}>{questionCount}</span>
+            </div>
+          </div>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </motion.div>
+
+        {/* Photo Upload Shortcut Card */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            haptics.impact('light');
+            fileInputRef.current?.click();
+          }}
+          style={{
+            ...styles.tileCard,
+            borderStyle: 'dashed',
+            borderColor: isPhotoUploaded ? '#10B981' : 'rgba(255, 255, 255, 0.22)',
+            backgroundColor: isPhotoUploaded ? 'rgba(16, 185, 129, 0.12)' : 'rgba(14, 25, 45, 0.6)',
+          }}
+        >
+          <div style={styles.tileLeft}>
+            <div style={{ ...styles.tileIconCircle, backgroundColor: isPhotoUploaded ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.1)', color: isPhotoUploaded ? '#34D399' : '#FFFFFF' }}>
+              <Camera size={20} />
+            </div>
+            <div style={styles.tileTexts}>
+              <span style={{ ...styles.tileLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+                {isPhotoUploaded ? (
+                  <>
+                    Фото загружено
+                    <Check size={16} color="#34D399" strokeWidth={3} />
+                  </>
+                ) : (
+                  'Загрузить фото страницы'
+                )}
+              </span>
+              <span style={{ ...styles.tileValue, fontSize: 13, color: '#9CA3AF' }}>
+                {isPhotoUploaded ? 'ИИ извлечёт формулы и упражнения' : 'Из учебника или тетради'}
+              </span>
+            </div>
+          </div>
+          {isPhotoUploaded ? <Check size={20} color="#10B981" /> : <ChevronRight size={20} color="#9CA3AF" />}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={handleFileChange}
+          />
+        </motion.div>
+      </div>
+
+      {/* Primary Action Button */}
+      <div style={styles.actionSection}>
+        <TactileButton
+          theme="orange"
+          size="lg"
+          fullWidth
+          onClick={handleStartGeneration}
+          iconAfter={<Sparkles size={20} />}
+        >
+          Создать с ИИ
+        </TactileButton>
+
+        <p style={styles.buttonHint}>
+          ИИ подберёт вопросы по теме, уровню и создаст интересную викторину
         </p>
       </div>
 
-      {/* Mascot Tip Bubble */}
-      <MascotTip
-        pose="thinking"
-        text="Выберите тему из рубрикатора ФРП или загрузите фото страницы учебника — я сгенерирую вопросы за 30 секунд!"
-        title="Совет от Спринта"
-        size={64}
-      />
-
-      {/* Generation Loading State */}
-      <AnimatePresence mode="wait">
-        {isGenerating ? (
+      {/* Sleeping Fox AI Generation Modal */}
+      <AnimatePresence>
+        {isGenerating && (
           <motion.div
-            key="generating-view"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            style={{ ...styles.card, ...styles.loadingContainer }}
-          >
-            <motion.img
-              src="/assets/mascot/thinking.png"
-              alt="Спринт думает"
-              style={styles.loadingMascot}
-              animate={{
-                y: [0, -8, 0],
-                rotate: [0, -2, 2, 0],
-              }}
-              transition={{
-                duration: 2,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }}
-            />
-
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: spacing.xs }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                <Spinner size={24} appearance="themed" />
-                <span style={{ fontSize: 18, fontWeight: 700, color: colors.foxOrange }}>
-                  ИИ создаёт викторину...
-                </span>
-              </div>
-              <p style={{ fontSize: 13, color: colors.textSecondary, margin: 0, maxWidth: 360 }}>
-                {generationStep}
-              </p>
-            </div>
-
-            <div style={styles.progressBarContainer}>
-              <motion.div
-                style={styles.progressBarFill}
-                initial={{ width: '10%' }}
-                animate={{ width: '92%' }}
-                transition={{ duration: 2.2, ease: 'easeInOut' }}
-              />
-            </div>
-          </motion.div>
-        ) : createdQuiz ? (
-          /* Success Screen */
-          <motion.div
-            key="success-view"
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={styles.card}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: spacing.md }}>
-              <img
-                src="/assets/mascot/celebrate.png"
-                alt="Успех"
-                style={{ width: 72, height: 72, objectFit: 'contain' }}
-              />
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: colors.emeraldGreen }}>
-                  <CheckCircle2 size={18} />
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>Викторина готова!</span>
-                </div>
-                <h3 style={{ fontSize: 18, fontWeight: 800, margin: '4px 0', color: colors.textPrimary }}>
-                  {createdQuiz.title}
-                </h3>
-                <span style={{ fontSize: 12, color: colors.textMuted }}>
-                  {createdQuiz.grade} класс • {questionCount} вопросов по ФРП
-                </span>
-              </div>
-            </div>
-
-            <div
-              style={{
-                backgroundColor: colors.bgSecondary,
-                borderRadius: borderRadius.md,
-                padding: spacing.md,
-                display: 'flex',
-                justifyContent: 'space-around',
-                border: `1px solid ${colors.cardBorder}`,
-              }}
-            >
-              <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 11, color: colors.textMuted, display: 'block' }}>Вопросов</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: colors.foxOrange }}>{questionCount}</span>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 11, color: colors.textMuted, display: 'block' }}>Сложность</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: colors.emeraldGreen }}>
-                  {difficulty === 'easy' ? 'Базовая' : difficulty === 'medium' ? 'Средняя' : 'Повышенная'}
-                </span>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: 11, color: colors.textMuted, display: 'block' }}>Коды КЭС</span>
-                <span style={{ fontSize: 18, fontWeight: 800, color: colors.answerBlue }}>3 темы</span>
-              </div>
-            </div>
-
-            <motion.button
-              type="button"
-              onClick={() => onNavigateToLobby?.(createdQuiz.id)}
-              style={styles.createButton}
-              whileTap={{ scale: 0.98 }}
-              whileHover={{ scale: 1.01 }}
-            >
-              <span>🚀 Перейти в лобби и позвать класс</span>
-              <ArrowRight size={18} />
-            </motion.button>
-
-            <button
-              type="button"
-              onClick={() => setCreatedQuiz(null)}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: colors.textSecondary,
-                fontSize: 13,
-                cursor: 'pointer',
-                textAlign: 'center',
-                padding: spacing.xs,
-              }}
-            >
-              🔄 Сгенерировать другие параметры
-            </button>
-          </motion.div>
-        ) : (
-          /* Creation Form */
-          <motion.div
-            key="form-view"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            style={styles.card}
+            exit={{ opacity: 0 }}
+            style={styles.loadingModalOverlay}
           >
-            {/* Subject & Grade Row */}
-            <div style={styles.row}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <BookOpen size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: -1 }} />
-                  Предмет
-                </label>
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  style={styles.select}
-                >
-                  {SUBJECT_OPTIONS.map((sub) => (
-                    <option key={sub} value={sub} style={{ backgroundColor: colors.bgSecondary }}>
-                      {sub}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <GraduationCap size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: -1 }} />
-                  Класс
-                </label>
-                <select
-                  value={grade}
-                  onChange={(e) => setGrade(Number(e.target.value))}
-                  style={styles.select}
-                >
-                  {[...Array(11)].map((_, i) => (
-                    <option key={i + 1} value={i + 1} style={{ backgroundColor: colors.bgSecondary }}>
-                      {i + 1} класс
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            {/* Topic Input */}
-            <div style={styles.formGroup}>
-              <label style={styles.label}>
-                <Layers size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: -1 }} />
-                Тема урока
-              </label>
-              <input
-                type="text"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                placeholder="Например: Сложение и вычитание обыкновенных дробей"
-                style={styles.input}
-              />
-              {TOPIC_SUGGESTIONS[subject] && (
-                <div style={styles.suggestionsList}>
-                  {TOPIC_SUGGESTIONS[subject].slice(0, 3).map((item) => (
-                    <span
-                      key={item}
-                      style={styles.suggestionChip}
-                      onClick={() => setTopic(item)}
-                      title="Кликните, чтобы подставить"
-                    >
-                      + {item}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Question Count & Difficulty */}
-            <div style={styles.row}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <HelpCircle size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: -1 }} />
-                  Вопросов
-                </label>
-                <div style={styles.stepper}>
-                  <button
-                    type="button"
-                    style={styles.stepperBtn}
-                    onClick={() => setQuestionCount((c: number) => Math.max(3, c - 1))}
-                    disabled={questionCount <= 3}
-                  >
-                    −
-                  </button>
-                  <span style={styles.stepperVal}>{questionCount}</span>
-                  <button
-                    type="button"
-                    style={styles.stepperBtn}
-                    onClick={() => setQuestionCount((c: number) => Math.min(15, c + 1))}
-                    disabled={questionCount >= 15}
-                  >
-                    +
-                  </button>
-                </div>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>
-                  <Sliders size={12} style={{ display: 'inline', marginRight: 4, verticalAlign: -1 }} />
-                  Уровень
-                </label>
-                <select
-                  value={difficulty}
-                  onChange={(e) => setDifficulty(e.target.value as DifficultyLevel)}
-                  style={styles.select}
-                >
-                  <option value="easy" style={{ backgroundColor: colors.bgSecondary }}>Базовый</option>
-                  <option value="medium" style={{ backgroundColor: colors.bgSecondary }}>Средний</option>
-                  <option value="hard" style={{ backgroundColor: colors.bgSecondary }}>Продвинутый</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Photo Upload Area */}
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Источник материалов (фото учебника / доски)</label>
-              <input
-                type="file"
-                ref={fileInputRef}
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={handleFileInputChange}
-              />
-
-              {photoPreview ? (
-                <div style={styles.previewContainer}>
-                  <img src={photoPreview} alt="Предпросмотр фото" style={styles.previewImg} />
-                  <div style={styles.previewInfo}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: colors.textPrimary }}>
-                      {photoFile?.name || 'Фото страницы учебника'}
-                    </span>
-                    <span style={{ fontSize: 11, color: colors.emeraldGreen, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <CheckCircle2 size={12} />
-                      ИИ распознает формулы и задания
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={removePhoto}
-                    style={styles.removeBtn}
-                    title="Удалить фото"
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    ...styles.uploadBox,
-                    ...(isDragOver ? styles.uploadBoxActive : {}),
-                  }}
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setIsDragOver(true);
-                  }}
-                  onDragLeave={() => setIsDragOver(false)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setIsDragOver(false);
-                    const file = e.dataTransfer.files?.[0];
-                    if (file) handlePhotoSelect(file);
-                  }}
-                >
-                  <div style={styles.uploadIconCircle}>
-                    <Camera size={24} />
-                  </div>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: colors.textPrimary }}>
-                    Загрузить фото учебника или доски
-                  </span>
-                  <span style={{ fontSize: 11, color: colors.textMuted }}>
-                    Нажмите или перетащите файл (JPG, PNG) • ИИ считает формулы и текст
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Submit Action Button */}
-            <motion.button
-              type="button"
-              onClick={handleCreate}
-              style={styles.createButton}
-              whileTap={{ scale: 0.98 }}
-              whileHover={{ scale: 1.01 }}
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+              style={styles.loadingModalCard}
             >
-              <Sparkles size={18} />
-              <span>✨ Создать викторину с ИИ</span>
-            </motion.button>
+              {/* Sleeping Fox Illustration */}
+              <div style={styles.sleepingFoxWrapper}>
+                <img
+                  src="/assets/backgrounds/sleep_screen.png"
+                  alt="Спящий Спринт"
+                  style={styles.sleepingFoxImg}
+                />
+              </div>
+
+              <h2 style={styles.loadingTitle}>Спринт составляет квиз...</h2>
+              <p style={styles.loadingSubtitle}>
+                Подбираем интересные задания по теме «{topic}» ({grade} класс) по стандартам ФРП.
+              </p>
+
+              {/* Glowing Pulse Bar */}
+              <div style={styles.loadingBarTrack}>
+                <motion.div
+                  animate={{ x: ['-100%', '100%'] }}
+                  transition={{ repeat: Infinity, duration: 1.4, ease: 'easeInOut' }}
+                  style={styles.loadingBarFill}
+                />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Selection Sheets */}
+      <AnimatePresence>
+        {activeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={styles.modalBackdrop}
+            onClick={() => setActiveModal(null)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              style={styles.modalSheet}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={styles.modalHeader}>
+                <span style={styles.modalTitle}>
+                  {activeModal === 'subject' && 'Выберите предмет'}
+                  {activeModal === 'grade' && 'Выберите класс'}
+                  {activeModal === 'topic' && 'Выберите тему ФРП'}
+                  {activeModal === 'count' && 'Количество вопросов'}
+                </span>
+                <button onClick={() => setActiveModal(null)} style={styles.modalCloseBtn}>
+                  <X size={18} color="#9CA3AF" />
+                </button>
+              </div>
+
+              {/* Modal Body Items */}
+              <div style={styles.modalList}>
+                {activeModal === 'subject' &&
+                  SUBJECTS.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        haptics.selection();
+                        setSubject(item);
+                        const presets = TOPIC_PRESETS[item];
+                        if (presets && presets[0]) setTopic(presets[0]);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: subject === item ? 'rgba(255, 122, 0, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: subject === item ? '#FF7A00' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: subject === item ? '#FF7A00' : '#FFFFFF', fontWeight: 700 }}>
+                        {item}
+                      </span>
+                      {subject === item && <Check size={18} color="#FF7A00" />}
+                    </button>
+                  ))}
+
+                {activeModal === 'grade' &&
+                  GRADES.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        haptics.selection();
+                        setGrade(item);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: grade === item ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: grade === item ? '#10B981' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: grade === item ? '#34D399' : '#FFFFFF', fontWeight: 700 }}>
+                        {item} класс
+                      </span>
+                      {grade === item && <Check size={18} color="#34D399" />}
+                    </button>
+                  ))}
+
+                {activeModal === 'topic' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {(TOPIC_PRESETS[subject] || ['Общий повтор', 'Контрольная работа']).map((item) => (
+                      <button
+                        key={item}
+                        onClick={() => {
+                          haptics.selection();
+                          setTopic(item);
+                          setActiveModal(null);
+                        }}
+                        style={{
+                          ...styles.modalOptionBtn,
+                          backgroundColor: topic === item ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                          borderColor: topic === item ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        <span style={{ color: topic === item ? '#FBBF24' : '#FFFFFF', fontWeight: 700 }}>
+                          {item}
+                        </span>
+                        {topic === item && <Check size={18} color="#FBBF24" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {activeModal === 'count' &&
+                  QUESTION_COUNTS.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        haptics.selection();
+                        setQuestionCount(item);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: questionCount === item ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: questionCount === item ? '#8B5CF6' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: questionCount === item ? '#A78BFA' : '#FFFFFF', fontWeight: 700 }}>
+                        {item} вопросов
+                      </span>
+                      {questionCount === item && <Check size={18} color="#A78BFA" />}
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    position: 'relative',
+    width: '100%',
+    minHeight: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    padding: '12px 14px 18px',
+    boxSizing: 'border-box',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 10,
+    zIndex: 4,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(17, 24, 39, 0.65)',
+    border: '1px solid rgba(255, 255, 255, 0.18)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    letterSpacing: '-0.3px',
+  },
+  heroCard: {
+    position: 'relative',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(14, 25, 45, 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    borderRadius: 24,
+    padding: '14px 16px',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+    marginBottom: 12,
+    zIndex: 3,
+  },
+  mascotSpeechBubble: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  speechText: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: '#F9FAFB',
+    lineHeight: 1.4,
+    margin: 0,
+  },
+  mascotWrapper: {
+    width: 90,
+    height: 90,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  mascotImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5))',
+  },
+  tilesContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    marginBottom: 16,
+    zIndex: 3,
+  },
+  tileCard: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(14, 30, 58, 0.88)',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    backdropFilter: 'blur(14px)',
+    WebkitBackdropFilter: 'blur(14px)',
+    borderRadius: 20,
+    padding: '12px 14px',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+  },
+  tileLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tileIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileTexts: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  tileLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontWeight: 600,
+  },
+  tileValue: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    fontWeight: 800,
+  },
+  actionSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    marginTop: 'auto',
+    zIndex: 3,
+  },
+  buttonHint: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    margin: 0,
+    lineHeight: 1.3,
+  },
+  loadingModalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 50,
+    backgroundColor: 'rgba(8, 13, 26, 0.85)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  loadingModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: 'rgba(17, 24, 39, 0.95)',
+    border: '1px solid rgba(255, 255, 255, 0.18)',
+    borderRadius: 28,
+    padding: '24px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.6)',
+  },
+  sleepingFoxWrapper: {
+    position: 'relative',
+    width: 140,
+    height: 140,
+    marginBottom: 12,
+    borderRadius: 24,
+    overflow: 'hidden',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+  },
+  sleepingFoxImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover',
+  },
+  zzzContainer: {
+    position: 'absolute',
+    top: '30%',
+    right: '25%',
+  },
+  loadingTitle: {
+    fontSize: 18,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: '0 0 6px',
+  },
+  loadingSubtitle: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    margin: '0 0 16px',
+    lineHeight: 1.4,
+  },
+  loadingBarTrack: {
+    width: '100%',
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 999,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  loadingBarFill: {
+    width: '40%',
+    height: '100%',
+    background: 'linear-gradient(90deg, #FF7A00, #F59E0B)',
+    borderRadius: 999,
+    boxShadow: '0 0 10px #FF7A00',
+  },
+  modalBackdrop: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backdropFilter: 'blur(6px)',
+    WebkitBackdropFilter: 'blur(6px)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: 'rgba(17, 24, 39, 0.98)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTop: '1px solid rgba(255, 255, 255, 0.18)',
+    padding: '16px 18px 28px',
+    boxShadow: '0 -8px 30px rgba(0, 0, 0, 0.6)',
+  },
+  modalHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#FFFFFF',
+  },
+  modalCloseBtn: {
+    background: 'transparent',
+    border: 'none',
+    padding: 6,
+    cursor: 'pointer',
+  },
+  modalList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    maxHeight: 280,
+    overflowY: 'auto',
+  },
+  modalOptionBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 14px',
+    borderRadius: 14,
+    border: '1px solid',
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+  },
+};

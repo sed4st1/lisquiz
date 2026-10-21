@@ -1,21 +1,15 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
-  Play,
-  Users,
+  ChevronLeft,
   Copy,
   Check,
-  Share2,
-  Volume2,
-  VolumeX,
-  QrCode,
-  ArrowLeft,
   UserPlus,
+  Rocket,
+  Sparkles,
 } from 'lucide-react';
-import { colors, spacing, borderRadius, shadows, transitions, fonts } from '../theme/tokens';
-import AvatarGrid from '../components/AvatarGrid';
-import { hapticImpact } from '../services/maxBridge';
-import type { Player } from '../types/quiz';
+import { TactileButton } from '../components/TactileButton';
+import { haptics } from '../services/haptics';
 
 export interface TeacherLobbyProps {
   pin?: string;
@@ -27,584 +21,445 @@ export interface TeacherLobbyProps {
   onBack?: () => void;
 }
 
-const INITIAL_PLAYERS: Player[] = [
-  {
-    id: 'p1',
-    user_id: 'u1',
-    display_name: 'Маша К.',
-    avatar: 'hedgehog',
-    score: 0,
-    streak: 0,
-    answers: [],
-    is_online: true,
-  },
-  {
-    id: 'p2',
-    user_id: 'u2',
-    display_name: 'Артём В.',
-    avatar: 'raccoon',
-    score: 0,
-    streak: 0,
-    answers: [],
-    is_online: true,
-  },
-  {
-    id: 'p3',
-    user_id: 'u3',
-    display_name: 'София Л.',
-    avatar: 'owl',
-    score: 0,
-    streak: 0,
-    answers: [],
-    is_online: true,
-  },
-  {
-    id: 'p4',
-    user_id: 'u4',
-    display_name: 'Дима С.',
-    avatar: 'bear',
-    score: 0,
-    streak: 0,
-    answers: [],
-    is_online: true,
-  },
-  {
-    id: 'p5',
-    user_id: 'u5',
-    display_name: 'Полина Т.',
-    avatar: 'bunny',
-    score: 0,
-    streak: 0,
-    answers: [],
-    is_online: true,
-  },
+const CONNECTED_STUDENTS = [
+  { id: '1', name: 'Маша К.', avatar: '/assets/avatars/students/hedgehog.png' },
+  { id: '2', name: 'Артём В.', avatar: '/assets/avatars/students/raccoon.png' },
+  { id: '3', name: 'София Л.', avatar: '/assets/avatars/students/owl.png' },
+  { id: '4', name: 'Дима С.', avatar: '/assets/avatars/students/bear.png' },
+  { id: '5', name: 'Полина Т.', avatar: '/assets/avatars/students/bunny.png' },
+  { id: '6', name: 'Кирилл М.', avatar: '/assets/avatars/students/squirrel.png' },
+  { id: '7', name: 'Алина Д.', avatar: '/assets/avatars/students/hedgehog.png' },
+  { id: '8', name: 'Никита Б.', avatar: '/assets/avatars/students/raccoon.png' },
+  { id: '9', name: 'Лена О.', avatar: '/assets/avatars/students/owl.png' },
+  { id: '10', name: 'Иван З.', avatar: '/assets/avatars/students/bear.png' },
+  { id: '11', name: 'Оля Р.', avatar: '/assets/avatars/students/bunny.png' },
+  { id: '12', name: 'Егор К.', avatar: '/assets/avatars/students/squirrel.png' },
+  { id: '13', name: 'Таня С.', avatar: '/assets/avatars/students/hedgehog.png' },
+  { id: '14', name: 'Максим Г.', avatar: '/assets/avatars/students/raccoon.png' },
+  { id: '15', name: 'Даша Ф.', avatar: '/assets/avatars/students/owl.png' },
 ];
-
-const EXTRA_STUDENTS: Array<{ name: string; avatar: string }> = [
-  { name: 'Кирилл М.', avatar: 'squirrel' },
-  { name: 'Алина Д.', avatar: 'hedgehog' },
-  { name: 'Никита Б.', avatar: 'raccoon' },
-  { name: 'Лена О.', avatar: 'owl' },
-  { name: 'Иван З.', avatar: 'bear' },
-];
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    width: '100%',
-    maxWidth: 600,
-    margin: '0 auto',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.lg,
-    padding: `${spacing.md}px 0`,
-    boxSizing: 'border-box',
-    color: colors.textPrimary,
-  },
-  topBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  backBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    background: 'none',
-    border: 'none',
-    color: colors.textSecondary,
-    cursor: 'pointer',
-    fontSize: 13,
-    padding: 0,
-  },
-  statusBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    color: colors.emeraldGreen,
-    padding: '4px 10px',
-    borderRadius: borderRadius.pill,
-    fontSize: 12,
-    fontWeight: 600,
-  },
-  headerInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-  },
-  quizTitle: {
-    fontSize: 20,
-    fontWeight: 800,
-    color: colors.textPrimary,
-    margin: 0,
-    letterSpacing: '-0.3px',
-  },
-  quizMeta: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    margin: 0,
-  },
-  pinPanel: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    boxShadow: `0 0 24px rgba(255, 122, 0, 0.12), ${shadows.card}`,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: spacing.md,
-    textAlign: 'center',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  pinPanelGlow: {
-    position: 'absolute',
-    top: -40,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: 200,
-    height: 80,
-    background: 'radial-gradient(circle, rgba(255, 122, 0, 0.25) 0%, transparent 70%)',
-    pointerEvents: 'none',
-  },
-  pinLabel: {
-    fontSize: 12,
-    fontWeight: 700,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: '1px',
-    margin: 0,
-  },
-  pinDisplayContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  pinNumber: {
-    fontSize: 38,
-    fontFamily: fonts.mono,
-    fontWeight: 800,
-    letterSpacing: '5px',
-    color: '#FFFFFF',
-    textShadow: '0 2px 12px rgba(255, 122, 0, 0.35)',
-    userSelect: 'all',
-  },
-  copyBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.cardSurfaceHover,
-    border: `1px solid ${colors.cardBorder}`,
-    color: colors.textPrimary,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: transitions.fast,
-  },
-  qrAndStepsRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.lg,
-    width: '100%',
-    padding: `${spacing.sm}px 0`,
-    borderTop: `1px solid ${colors.cardBorder}`,
-    justifyContent: 'center',
-  },
-  qrPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: borderRadius.md,
-    backgroundColor: '#FFFFFF',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-    color: '#111827',
-    fontWeight: 800,
-    fontSize: 13,
-    flexShrink: 0,
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-    padding: 6,
-    boxSizing: 'border-box',
-    position: 'relative',
-  },
-  qrInstruction: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    textAlign: 'left',
-  },
-  playersCard: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: spacing.xl,
-    boxShadow: shadows.card,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.md,
-  },
-  playersHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  counterBadge: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: colors.textPrimary,
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-  },
-  counterHighlight: {
-    color: colors.foxOrange,
-    fontWeight: 800,
-  },
-  startButton: {
-    width: '100%',
-    height: 54,
-    backgroundColor: colors.foxOrange,
-    color: '#FFFFFF',
-    border: 'none',
-    borderRadius: borderRadius.lg,
-    fontSize: 18,
-    fontWeight: 800,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    boxShadow: `0 4px 20px ${colors.foxOrange}66`,
-    userSelect: 'none',
-  },
-  startButtonDisabled: {
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    color: colors.textMuted,
-    cursor: 'not-allowed',
-    boxShadow: 'none',
-  },
-  controlsRow: {
-    display: 'flex',
-    gap: spacing.sm,
-    justifyContent: 'center',
-  },
-  secondaryBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.cardSurfaceHover,
-    border: `1px solid ${colors.cardBorder}`,
-    color: colors.textSecondary,
-    padding: `${spacing.sm}px ${spacing.md}px`,
-    borderRadius: borderRadius.md,
-    fontSize: 13,
-    cursor: 'pointer',
-    transition: transitions.fast,
-  },
-  countdownOverlay: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(13, 19, 34, 0.95)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 999,
-    gap: spacing.lg,
-  },
-};
 
 export default function TeacherLobby({
-  pin = '482 915',
-  quizTitle = 'Обыкновенные дроби: сложение и вычитание',
-  subject = 'Математика',
-  grade = 5,
-  maxStudents = 30,
+  pin = '482915',
+  quizTitle = 'Викторина по математике',
+  grade = 7,
   onStartQuiz,
   onBack,
 }: TeacherLobbyProps) {
-  const [players, setPlayers] = useState<Player[]>(INITIAL_PLAYERS);
   const [copied, setCopied] = useState<boolean>(false);
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [isStarting, setIsStarting] = useState<boolean>(false);
-  const [startCountdown, setStartCountdown] = useState<number>(3);
+  const [students, setStudents] = useState(CONNECTED_STUDENTS);
 
-  // Copy PIN to clipboard
   const handleCopyPin = () => {
-    hapticImpact('light');
-    const cleanPin = pin.replace(/\s+/g, '');
-    navigator.clipboard?.writeText(cleanPin);
+    haptics.notification('success');
+    navigator.clipboard?.writeText(pin);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 2200);
   };
 
-  // Add mock student for testing
-  const handleAddMockStudent = () => {
-    hapticImpact('light');
-    if (players.length >= maxStudents) return;
-    const nextMock = EXTRA_STUDENTS[players.length % EXTRA_STUDENTS.length];
-    const newPlayer: Player = {
-      id: `p-${Date.now()}`,
-      user_id: `u-${Date.now()}`,
-      display_name: `${nextMock.name}`,
-      avatar: nextMock.avatar,
-      score: 0,
-      streak: 0,
-      answers: [],
-      is_online: true,
+  const handleAddStudent = () => {
+    haptics.impact('light');
+    const newStudent = {
+      id: String(Date.now()),
+      name: `Ученик ${students.length + 1}`,
+      avatar: '/assets/avatars/students/bunny.png',
     };
-    setPlayers((prev) => [...prev, newPlayer]);
+    setStudents((prev) => [...prev, newStudent]);
   };
 
-  // Start Quiz flow with countdown
-  const handleStart = () => {
-    if (players.length === 0) return;
-    hapticImpact('heavy');
-    setIsStarting(true);
-    setStartCountdown(3);
-
-    const interval = setInterval(() => {
-      setStartCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          setTimeout(() => {
-            onStartQuiz?.();
-          }, 400);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 900);
-  };
-
-  const isReady = players.length > 0;
+  const digits = pin.split('');
 
   return (
     <div style={styles.container}>
-      {/* Top Bar */}
-      <div style={styles.topBar}>
-        {onBack ? (
-          <button onClick={onBack} style={styles.backBtn}>
-            <ArrowLeft size={16} />
-            <span>Завершить комнату</span>
-          </button>
-        ) : (
-          <div style={{ width: 1 }} />
-        )}
+      {/* Top Header */}
+      <header style={styles.header}>
+        <button
+          onClick={onBack}
+          style={styles.backBtn}
+          title="Назад"
+        >
+          <ChevronLeft size={20} color="#FFFFFF" />
+        </button>
+        <h1 style={styles.headerTitle}>Комната ожидания</h1>
+        <div style={{ width: 36 }} />
+      </header>
 
-        <div style={styles.statusBadge}>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: borderRadius.pill,
-              backgroundColor: colors.emeraldGreen,
-              boxShadow: `0 0 8px ${colors.emeraldGreen}`,
-            }}
+      {/* Quiz Title Pill */}
+      <div style={styles.topicBadgeWrapper}>
+        <div style={styles.topicBadge}>
+          <img
+            src="/assets/icons/icon_sprout.svg"
+            alt="Росток"
+            style={{ width: 16, height: 16 }}
           />
-          <span>Комната открыта</span>
+          <span>{quizTitle} • {grade} класс</span>
         </div>
       </div>
 
-      {/* Header Info */}
-      <div style={styles.headerInfo}>
-        <h1 style={styles.quizTitle}>{quizTitle}</h1>
-        <p style={styles.quizMeta}>
-          {subject} • {grade} класс • 5 заданий
-        </p>
-      </div>
-
-      {/* PIN & QR Panel */}
-      <div style={styles.pinPanel}>
-        <div style={styles.pinPanelGlow} />
-
-        <p style={styles.pinLabel}>Код для подключения (PIN)</p>
-
-        <div style={styles.pinDisplayContainer}>
-          <span style={styles.pinNumber}>{pin}</span>
-          <button
-            type="button"
-            onClick={handleCopyPin}
-            style={styles.copyBtn}
-            title="Скопировать PIN"
-          >
-            {copied ? <Check size={18} color={colors.emeraldGreen} /> : <Copy size={18} />}
-          </button>
-        </div>
-
-        {copied && (
-          <motion.span
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            style={{ fontSize: 12, color: colors.emeraldGreen, fontWeight: 600 }}
-          >
-            ✓ Скопировано в буфер обмена
-          </motion.span>
-        )}
-
-        {/* QR Code and Instructions */}
-        <div style={styles.qrAndStepsRow}>
-          {/* QR Code Graphic Placeholder */}
-          <div style={styles.qrPlaceholder} title="QR-код для входа">
-            <QrCode size={48} color="#0D1322" />
-            <span style={{ fontSize: 9, letterSpacing: '0.5px' }}>Лисквиз</span>
-          </div>
-
-          <div style={styles.qrInstruction}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: colors.textPrimary }}>
-              Как подключиться?
-            </span>
-            <span style={{ fontSize: 12, color: colors.textSecondary, lineHeight: 1.4 }}>
-              1. Отсканируйте QR или откройте Лисквиз в Сферуме<br />
-              2. Введите код комнаты: <b>{pin}</b>
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Connected Players Section */}
-      <div style={styles.playersCard}>
-        <div style={styles.playersHeader}>
-          <div style={styles.counterBadge}>
-            <Users size={16} color={colors.foxOrange} />
-            <span>
-              Подключено: <span style={styles.counterHighlight}>{players.length}</span> из {maxStudents} учеников
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleAddMockStudent}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: colors.textMuted,
-              fontSize: 12,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-            }}
-            title="Добавить тестового ученика для демонстрации"
-          >
-            <UserPlus size={14} />
-            <span>+ Тестовый</span>
-          </button>
-        </div>
-
-        {/* Avatar Grid */}
-        <AvatarGrid players={players} maxDisplay={maxStudents} />
-      </div>
-
-      {/* Start Button with Pulse animation when ready */}
-      <motion.button
-        type="button"
-        onClick={handleStart}
-        disabled={!isReady}
-        style={{
-          ...styles.startButton,
-          ...(!isReady ? styles.startButtonDisabled : {}),
-        }}
-        whileTap={isReady ? { scale: 0.98 } : undefined}
-        animate={
-          isReady
-            ? {
-                boxShadow: [
-                  `0 4px 16px ${colors.foxOrange}40`,
-                  `0 4px 28px ${colors.foxOrange}80`,
-                  `0 4px 16px ${colors.foxOrange}40`,
-                ],
-              }
-            : {}
-        }
-        transition={
-          isReady
-            ? {
-                duration: 2,
-                repeat: Infinity,
-                ease: 'easeInOut',
-              }
-            : undefined
-        }
+      {/* PIN Code Panel */}
+      <motion.div
+        initial={{ y: 15, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+        style={styles.pinCard}
       >
-        <Play size={20} fill="#FFFFFF" />
-        <span>Начать викторину ({players.length})</span>
-      </motion.button>
+        <span style={styles.pinCardTitle}>PIN-код для учеников</span>
 
-      {/* Secondary Controls (Share & Audio) */}
-      <div style={styles.controlsRow}>
-        <button
-          type="button"
-          onClick={() => {
-            hapticImpact('light');
-            navigator.clipboard?.writeText(window.location.href);
-            alert('Ссылка на комнату скопирована для отправки в чат Сферума');
-          }}
-          style={styles.secondaryBtn}
-        >
-          <Share2 size={15} />
-          <span>Отправить ссылку в чат</span>
-        </button>
+        <div style={styles.pinRow} onClick={handleCopyPin} title="Нажмите, чтобы скопировать">
+          <div style={styles.digitBoxesRow}>
+            {digits.map((digit, i) => (
+              <div key={i} style={styles.digitBox}>
+                <span style={styles.digitChar}>{digit}</span>
+              </div>
+            ))}
+          </div>
 
-        <button
-          type="button"
-          onClick={() => setSoundEnabled((v) => !v)}
-          style={styles.secondaryBtn}
-        >
-          {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
-          <span>Звук {soundEnabled ? 'вкл' : 'выкл'}</span>
-        </button>
+          <button style={styles.copyBtn} aria-label="Скопировать PIN">
+            {copied ? <Check size={18} color="#10B981" /> : <Copy size={18} color="#9CA3AF" />}
+          </button>
+        </div>
+
+        {/* Connected Count Indicator */}
+        <div style={styles.statusRow}>
+          <span style={styles.statusDot} />
+          <span style={styles.statusText}>
+            Подключились: <strong style={{ color: '#FFFFFF' }}>{students.length} из 30</strong>
+          </span>
+        </div>
+      </motion.div>
+
+      {/* Students Avatar Grid */}
+      <div style={styles.avatarsCard}>
+        <div style={styles.avatarGrid}>
+          {students.map((student, i) => (
+            <motion.div
+              key={student.id}
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: i * 0.03, type: 'spring', stiffness: 500, damping: 22 }}
+              style={styles.avatarItem}
+              title={student.name}
+            >
+              <div style={styles.avatarCircle}>
+                <img
+                  src={student.avatar}
+                  alt={student.name}
+                  style={styles.avatarImg}
+                />
+                <span style={styles.avatarOnlineDot} />
+              </div>
+              <span style={styles.avatarName}>{student.name}</span>
+            </motion.div>
+          ))}
+
+          {/* Add Student Button */}
+          <motion.div
+            whileTap={{ scale: 0.9 }}
+            onClick={handleAddStudent}
+            style={styles.addAvatarBtn}
+            title="Пригласить ученика"
+          >
+            <div style={styles.addCircle}>
+              <UserPlus size={20} color="#9CA3AF" />
+            </div>
+            <span style={styles.avatarName}>Ещё</span>
+          </motion.div>
+        </div>
       </div>
 
-      {/* Starting Countdown Overlay */}
-      <AnimatePresence>
-        {isStarting && (
-          <motion.div
-            key="countdown-overlay"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={styles.countdownOverlay}
-          >
-            <motion.img
-              src="/assets/mascot/dash.png"
-              alt="Спринт на старте"
-              style={{ width: 140, height: 140, objectFit: 'contain' }}
-              animate={{ y: [0, -10, 0] }}
-              transition={{ repeat: Infinity, duration: 1 }}
-            />
+      {/* Launch Quiz Button */}
+      <div style={styles.actionSection}>
+        <TactileButton
+          theme="green"
+          size="lg"
+          fullWidth
+          onClick={() => {
+            haptics.notification('success');
+            onStartQuiz?.();
+          }}
+          iconBefore={<Rocket size={20} />}
+        >
+          Начать викторину
+        </TactileButton>
+      </div>
 
-            <h2 style={{ fontSize: 22, fontWeight: 800, color: colors.textPrimary, margin: 0 }}>
-              Викторина начинается!
-            </h2>
+      {/* Bottom Glade with Mascot */}
+      <div style={styles.bottomGladeSection}>
+        <div style={styles.mascotSpeechBubble}>
+          <Sparkles size={14} color="#F59E0B" style={{ flexShrink: 0 }} />
+          <span>Все готовы? Тогда поехали!</span>
+        </div>
 
-            <motion.span
-              key={startCountdown}
-              initial={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1.2, opacity: 1 }}
-              exit={{ scale: 1.8, opacity: 0 }}
-              transition={{ duration: 0.6 }}
-              style={{
-                fontSize: 72,
-                fontWeight: 900,
-                color: colors.foxOrange,
-                fontFamily: fonts.mono,
-              }}
-            >
-              {startCountdown > 0 ? startCountdown : 'ПОЕХАЛИ!'}
-            </motion.span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <div style={styles.mascotWrapper}>
+          <img
+            src="/assets/mascot/sprint_idle.png"
+            alt="Спринт в лесу"
+            style={styles.mascotImg}
+          />
+        </div>
+      </div>
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    position: 'relative',
+    width: '100%',
+    minHeight: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    padding: '12px 14px 16px',
+    boxSizing: 'border-box',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 6,
+    zIndex: 4,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(17, 24, 39, 0.65)',
+    border: '1px solid rgba(255, 255, 255, 0.18)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    letterSpacing: '-0.3px',
+  },
+  topicBadgeWrapper: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: 10,
+    zIndex: 3,
+  },
+  topicBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(14, 25, 45, 0.85)',
+    border: '1px solid rgba(16, 185, 129, 0.4)',
+    borderRadius: 999,
+    padding: '5px 14px',
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#34D399',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
+  },
+  pinCard: {
+    position: 'relative',
+    backgroundColor: 'rgba(14, 30, 58, 0.92)',
+    border: '1px solid rgba(255, 255, 255, 0.18)',
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
+    borderRadius: 24,
+    padding: '16px 18px',
+    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    marginBottom: 12,
+    zIndex: 3,
+  },
+  pinCardTitle: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+    marginBottom: 10,
+  },
+  pinRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    cursor: 'pointer',
+    marginBottom: 12,
+  },
+  digitBoxesRow: {
+    display: 'flex',
+    gap: 8,
+  },
+  digitBox: {
+    width: 44,
+    height: 54,
+    backgroundColor: 'rgba(11, 20, 38, 0.9)',
+    border: '1.5px solid rgba(255, 255, 255, 0.22)',
+    borderRadius: 14,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+  },
+  digitChar: {
+    fontSize: 28,
+    fontWeight: 900,
+    color: '#FFFFFF',
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+  },
+  copyBtn: {
+    width: 44,
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  statusRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    backgroundColor: '#10B981',
+    boxShadow: '0 0 10px #10B981',
+  },
+  statusText: {
+    fontSize: 13,
+    color: '#D1D5DB',
+  },
+  avatarsCard: {
+    backgroundColor: 'rgba(14, 25, 45, 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    borderRadius: 22,
+    padding: '14px 12px',
+    marginBottom: 14,
+    zIndex: 3,
+  },
+  avatarGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(5, 1fr)',
+    gap: 10,
+    alignItems: 'center',
+  },
+  avatarItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+  },
+  avatarCircle: {
+    position: 'relative',
+    width: 46,
+    height: 46,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1.5px solid rgba(255, 255, 255, 0.18)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImg: {
+    width: '85%',
+    height: '85%',
+    objectFit: 'contain',
+  },
+  avatarOnlineDot: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 9,
+    height: 9,
+    borderRadius: '50%',
+    backgroundColor: '#10B981',
+    border: '1.5px solid #0D1322',
+  },
+  avatarName: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontWeight: 600,
+    textAlign: 'center',
+    maxWidth: 54,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  addAvatarBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 4,
+    cursor: 'pointer',
+  },
+  addCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: '1.5px dashed rgba(255, 255, 255, 0.25)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionSection: {
+    marginBottom: 12,
+    zIndex: 3,
+  },
+  bottomGladeSection: {
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  mascotSpeechBubble: {
+    backgroundColor: 'rgba(15, 23, 42, 0.94)',
+    border: '1.5px solid rgba(255, 255, 255, 0.2)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    borderRadius: 16,
+    padding: '6px 14px',
+    color: '#F9FAFB',
+    fontSize: 12,
+    fontWeight: 800,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+  },
+  mascotWrapper: {
+    width: 95,
+    height: 95,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mascotImg: {
+    maxHeight: '100%',
+    width: 'auto',
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6))',
+  },
+};

@@ -2,8 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { User, LogIn, Sparkles, Check, ArrowLeft } from 'lucide-react';
 import { Spinner } from '@maxhub/max-ui';
-import { colors, spacing, borderRadius, shadows, transitions, fonts, studentAvatars } from '../theme/tokens';
+import { colors, spacing, borderRadius, transitions, fonts, studentAvatars } from '../theme/tokens';
 import { hapticImpact } from '../services/maxBridge';
+import { TactileButton } from '../components/TactileButton';
 
 export interface StudentJoinProps {
   initialPin?: string;
@@ -14,25 +15,32 @@ export interface StudentJoinProps {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
+    position: 'relative',
     width: '100%',
-    maxWidth: 600,
-    margin: '0 auto',
+    minHeight: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    padding: '12px 14px 18px',
+    boxSizing: 'border-box',
+    color: colors.textPrimary,
+    overflowY: 'auto',
+    overflowX: 'hidden',
+  },
+  card: {
+    backgroundColor: 'rgba(14, 25, 45, 0.9)',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    borderRadius: 24,
+    padding: '18px 16px',
+    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
+    backdropFilter: 'blur(18px)',
+    WebkitBackdropFilter: 'blur(18px)',
     display: 'flex',
     flexDirection: 'column',
     gap: spacing.lg,
-    padding: `${spacing.md}px 0`,
-    boxSizing: 'border-box',
-    color: colors.textPrimary,
-  },
-  card: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.xl,
-    boxShadow: shadows.card,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.xl,
   },
   mascotHeader: {
     display: 'flex',
@@ -85,9 +93,12 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     gap: 8,
     width: '100%',
+    boxSizing: 'border-box',
   },
   pinDigitBox: {
     flex: 1,
+    minWidth: 0,
+    width: '100%',
     height: 56,
     backgroundColor: colors.bgSecondary,
     border: `2px solid ${colors.cardBorder}`,
@@ -366,11 +377,11 @@ export default function StudentJoin({
         {/* Mascot Greeting */}
         <div style={styles.mascotHeader}>
           <motion.img
-            src="/assets/mascot/wave.png"
-            alt="Спринт машет лапой"
+            src="/assets/mascot/sprint_idle.png"
+            alt="Спринт"
             style={styles.mascotImg}
-            animate={{ rotate: [0, 4, -4, 0] }}
-            transition={{ repeat: Infinity, duration: 2.5, ease: 'easeInOut' }}
+            animate={{ y: [0, -4, 0] }}
+            transition={{ repeat: Infinity, duration: 2.8, ease: 'easeInOut' }}
           />
           <div style={styles.welcomeBubble}>
             <h2 style={styles.welcomeBubbleTitle}>Привет! Заходи в игру</h2>
@@ -506,28 +517,16 @@ export default function StudentJoin({
           </div>
 
           {/* Join Room Button */}
-          <motion.button
-            type="submit"
+          <TactileButton
+            theme="orange"
+            size="lg"
+            fullWidth
             disabled={!isFormValid || isSubmitting}
-            style={{
-              ...styles.joinButton,
-              ...(!isFormValid || isSubmitting ? styles.joinButtonDisabled : {}),
-            }}
-            whileTap={isFormValid && !isSubmitting ? { scale: 0.98 } : undefined}
-            whileHover={isFormValid && !isSubmitting ? { scale: 1.01 } : undefined}
+            onClick={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+            iconBefore={isSubmitting ? <Spinner size={20} appearance="contrast-static" /> : <LogIn size={20} />}
           >
-            {isSubmitting ? (
-              <>
-                <Spinner size={20} appearance="contrast-static" />
-                <span>Подключение к викторине...</span>
-              </>
-            ) : (
-              <>
-                <LogIn size={20} />
-                <span>🎮 Войти в комнату</span>
-              </>
-            )}
-          </motion.button>
+            {isSubmitting ? 'Подключение к викторине...' : 'Войти в комнату'}
+          </TactileButton>
         </form>
       </motion.div>
     </div>

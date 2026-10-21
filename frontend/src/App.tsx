@@ -35,7 +35,12 @@ export default function App() {
   const renderScreen = () => {
     switch (screen) {
       case 'teacher_create':
-        return <TeacherCreateQuiz onQuizCreated={() => setScreen('teacher_lobby')} />;
+        return (
+          <TeacherCreateQuiz
+            onQuizCreated={() => setScreen('teacher_lobby')}
+            onBack={() => setScreen('class_grove')}
+          />
+        );
       case 'teacher_lobby':
         return (
           <TeacherLobby
@@ -199,14 +204,13 @@ export default function App() {
         }}
       >
         {[
-          { key: 'class_grove', label: '🌳 Роща' },
-          { key: 'student_game', label: '🎮 Игра' },
-          { key: 'feedback_correct', label: '✨ Победа' },
-          { key: 'sleep_screen', label: '🌙 Отдых' },
-          { key: 'teacher_create', label: '📝 ИИ-тест' },
-          { key: 'teacher_lobby', label: '👥 Лобби' },
-          { key: 'student_join', label: '🚪 Вход' },
-          { key: 'teacher_report', label: '📊 Отчёт' },
+          { key: 'class_grove', label: 'Роща' },
+          { key: 'student_game', label: 'Игра' },
+          { key: 'feedback_correct', label: 'Победа' },
+          { key: 'teacher_create', label: 'Создать квиз' },
+          { key: 'teacher_lobby', label: 'Лобби' },
+          { key: 'student_join', label: 'Вход' },
+          { key: 'teacher_report', label: 'Отчёт' },
         ].map((item) => {
           const isActive = screen === item.key;
           return (

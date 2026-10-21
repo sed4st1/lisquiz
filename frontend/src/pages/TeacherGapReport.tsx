@@ -212,7 +212,7 @@ export default function TeacherGapReport({
         {/* Mascot Insight Banner */}
         <div style={styles.insightBanner}>
           <img
-            src="/assets/mascot/thinking.png"
+            src="/assets/mascot/sprint_thinking.png"
             alt="Спринт"
             style={styles.mascotSmall}
           />
@@ -370,7 +370,8 @@ export default function TeacherGapReport({
                           </span>
                           {q.commonMistake && (
                             <div style={styles.mistakeBox}>
-                              ⚠️ {q.commonMistake}
+                              <AlertTriangle size={14} color={colors.answerRed} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                              {q.commonMistake}
                             </div>
                           )}
                         </div>
@@ -433,7 +434,7 @@ export default function TeacherGapReport({
               ) : (
                 <>
                   <Send size={18} />
-                  <span>📩 Отправить задания для повторения</span>
+                  <span>Отправить задания для повторения</span>
                 </>
               )}
             </motion.button>
@@ -449,14 +450,20 @@ export default function TeacherGapReport({
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    backgroundColor: colors.bgPrimary,
-    minHeight: '100vh',
+    position: 'relative',
     width: '100%',
+    minHeight: '100%',
     display: 'flex',
     justifyContent: 'center',
-    padding: `${spacing.lg}px ${spacing.md}px ${spacing.xxxl}px`,
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    padding: `${spacing.md}px ${spacing.md}px ${spacing.xxxl}px`,
     boxSizing: 'border-box',
     color: colors.textPrimary,
+    overflowY: 'auto',
+    overflowX: 'hidden',
   },
   innerWrapper: {
     width: '100%',

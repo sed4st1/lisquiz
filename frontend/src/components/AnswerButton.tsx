@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { Check, X } from 'lucide-react';
 import katex from 'katex';
 import { haptics } from '../services/haptics';
 
@@ -14,22 +15,42 @@ export interface AnswerButtonProps {
   isSelected?: boolean;
 }
 
-const CARD_ASSETS: Record<'red' | 'blue' | 'yellow' | 'green', string> = {
-  red: '/assets/ui/btn_red_clean.png',
-  blue: '/assets/ui/btn_blue_clean.png',
-  yellow: '/assets/ui/btn_yellow_clean.png',
-  green: '/assets/ui/btn_green_clean.png',
+const BUTTON_THEMES: Record<
+  'red' | 'blue' | 'yellow' | 'green',
+  { bg: string; shadow: string; glow: string }
+> = {
+  red: {
+    bg: '#EF4444',
+    shadow: '#B91C1C',
+    glow: 'rgba(239, 68, 68, 0.8)',
+  },
+  blue: {
+    bg: '#3B82F6',
+    shadow: '#1D4ED8',
+    glow: 'rgba(59, 130, 246, 0.8)',
+  },
+  yellow: {
+    bg: '#F59E0B',
+    shadow: '#B45309',
+    glow: 'rgba(245, 158, 11, 0.8)',
+  },
+  green: {
+    bg: '#10B981',
+    shadow: '#047857',
+    glow: 'rgba(16, 185, 129, 0.8)',
+  },
 };
 
-const GLOW_COLORS: Record<'red' | 'blue' | 'yellow' | 'green', string> = {
-  red: 'rgba(239, 68, 68, 0.85)',
-  blue: 'rgba(59, 130, 246, 0.85)',
-  yellow: 'rgba(245, 158, 11, 0.85)',
-  green: 'rgba(16, 185, 129, 0.85)',
+const SHAPE_SYMBOLS: Record<'triangle' | 'diamond' | 'circle' | 'square', string> = {
+  triangle: '▲',
+  diamond: '◆',
+  circle: '●',
+  square: '■',
 };
 
 export default function AnswerButton({
   color,
+  shape = 'triangle',
   text,
   latex,
   onClick,
@@ -46,6 +67,16 @@ export default function AnswerButton({
     }
   }, [latex]);
 
+  const fontSize = useMemo(() => {
+    if (!text) return 22;
+    const len = text.length;
+    if (len <= 4) return 24;
+    if (len <= 10) return 20;
+    if (len <= 22) return 16;
+    if (len <= 40) return 14;
+    return 12;
+  }, [text]);
+
   const handleClick = () => {
     if (disabled) return;
     haptics.impact('light');
@@ -54,7 +85,7 @@ export default function AnswerButton({
 
   const isWrong = isCorrect === false && isSelected;
   const isWinner = isCorrect === true;
-  const hasTextOrMath = Boolean(text || mathHtml);
+  const theme = BUTTON_THEMES[color];
 
   return (
     <motion.div
@@ -75,164 +106,151 @@ export default function AnswerButton({
       style={{
         position: 'relative',
         width: '100%',
-        aspectRatio: '1.34 / 1',
+        minHeight: 88,
         display: 'flex',
       }}
     >
-      <button
+      <motion.button
         type="button"
         disabled={disabled}
         onClick={handleClick}
+        whileTap={!disabled ? { y: 3, scale: 0.98 } : undefined}
         style={{
           position: 'relative',
           width: '100%',
-          height: '100%',
+          minHeight: 88,
+          backgroundColor: theme.bg,
           border: 'none',
-          background: 'transparent',
-          padding: 0,
-          outline: 'none',
+          borderBottom: `5px solid ${theme.shadow}`,
+          borderRadius: 22,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '10px 12px',
+          boxShadow: isWinner
+            ? `0 0 28px ${theme.glow}, 0 6px 16px rgba(0, 0, 0, 0.45)`
+            : isSelected
+            ? `0 0 20px rgba(255, 255, 255, 0.85), 0 6px 16px rgba(0, 0, 0, 0.45)`
+            : '0 6px 16px rgba(0, 0, 0, 0.35)',
+          outline: isSelected ? '3.5px solid #FFFFFF' : 'none',
+          outlineOffset: 2,
           cursor: disabled ? 'not-allowed' : 'pointer',
-          opacity: disabled && !isSelected && isCorrect === null ? 0.75 : 1,
+          opacity: disabled && !isSelected && isCorrect === null ? 0.65 : 1,
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation',
           userSelect: 'none',
+          boxSizing: 'border-box',
         }}
-        className="tactile-btn-root"
       >
-        {/* Contact Shadow */}
-        <span
+        {/* Subtle Foliage Motif in Background */}
+        <div
           style={{
             position: 'absolute',
-            inset: 2,
-            transform: 'translateY(6px)',
-            borderRadius: 24,
-            backgroundColor: 'rgba(0, 0, 0, 0.45)',
-            filter: 'blur(3px)',
+            inset: 0,
+            borderRadius: 20,
+            overflow: 'hidden',
             pointerEvents: 'none',
+            opacity: 0.12,
+            backgroundImage:
+              'radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.8) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(0, 0, 0, 0.6) 0%, transparent 40%)',
           }}
         />
 
-        {/* Card Face */}
+        {/* Geometric Shape at Top */}
         <span
           style={{
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            height: '100%',
-            borderRadius: 24,
-            backgroundImage: `url(${CARD_ASSETS[color]})`,
-            backgroundSize: '100% 100%',
-            backgroundPosition: 'center center',
-            backgroundRepeat: 'no-repeat',
-            boxShadow: isWinner
-              ? `0 0 24px ${GLOW_COLORS[color]}, inset 0 0 12px rgba(255, 255, 255, 0.6)`
-              : isSelected
-              ? `0 0 16px rgba(255, 255, 255, 0.9), inset 0 0 10px rgba(255, 255, 255, 0.4)`
-              : 'none',
-            outline: isSelected ? '3.5px solid #FFFFFF' : 'none',
-            outlineOffset: 2,
-            transition: 'transform 0.08s ease-out, filter 0.08s ease-out, box-shadow 0.2s ease',
+            fontSize: 22,
+            color: 'rgba(255, 255, 255, 0.92)',
+            lineHeight: 1,
+            marginBottom: 4,
+            filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))',
           }}
-          className="tactile-btn-front"
         >
-          {/* If there is text or LaTeX, display it in the center */}
-          {hasTextOrMath && (
-            <div
-              style={{
-                position: 'relative',
-                zIndex: 2,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '100%',
-                padding: '4px 12px',
-                pointerEvents: 'none',
-              }}
-            >
-              {text && (
-                <span
-                  style={{
-                    color: '#FFFFFF',
-                    fontWeight: 900,
-                    fontSize: 22,
-                    textAlign: 'center',
-                    lineHeight: 1.25,
-                    textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
-                    wordBreak: 'break-word',
-                  }}
-                >
-                  {text}
-                </span>
-              )}
-              {mathHtml && (
-                <span
-                  style={{
-                    color: '#FFFFFF',
-                    fontSize: 24,
-                    fontWeight: 900,
-                    textAlign: 'center',
-                    textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
-                  }}
-                  dangerouslySetInnerHTML={{ __html: mathHtml }}
-                />
-              )}
-            </div>
-          )}
-
-          {/* Reveal Status Badge */}
-          {isWinner && (
-            <span
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                width: 24,
-                height: 24,
-                borderRadius: '50%',
-                backgroundColor: '#10B981',
-                color: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 14,
-                fontWeight: 900,
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
-                border: '2px solid #FFFFFF',
-              }}
-            >
-              ✓
-            </span>
-          )}
-
-          {isWrong && (
-            <span
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                width: 24,
-                height: 24,
-                borderRadius: '50%',
-                backgroundColor: '#EF4444',
-                color: '#FFFFFF',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 14,
-                fontWeight: 900,
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
-                border: '2px solid #FFFFFF',
-              }}
-            >
-              ✕
-            </span>
-          )}
+          {SHAPE_SYMBOLS[shape]}
         </span>
-      </button>
+
+        {/* Answer Text in Bottom Half with Dynamic Responsive Typography */}
+        {text && (
+          <span
+            style={{
+              color: '#FFFFFF',
+              fontWeight: fontSize > 16 ? 900 : 700,
+              fontSize,
+              textAlign: 'center',
+              lineHeight: 1.25,
+              letterSpacing: '0.01em',
+              textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
+              wordBreak: 'break-word',
+              maxWidth: '100%',
+              display: '-webkit-box',
+              WebkitLineClamp: 3,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+          >
+            {text}
+          </span>
+        )}
+
+        {mathHtml && (
+          <span
+            style={{
+              color: '#FFFFFF',
+              fontSize: 22,
+              fontWeight: 900,
+              textAlign: 'center',
+              textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
+            }}
+            dangerouslySetInnerHTML={{ __html: mathHtml }}
+          />
+        )}
+
+        {/* Reveal Status Badge */}
+        {isWinner && (
+          <span
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              backgroundColor: '#10B981',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+              border: '2px solid #FFFFFF',
+            }}
+          >
+            <Check size={14} strokeWidth={3} />
+          </span>
+        )}
+
+        {isWrong && (
+          <span
+            style={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              backgroundColor: '#EF4444',
+              color: '#FFFFFF',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+              border: '2px solid #FFFFFF',
+            }}
+          >
+            <X size={14} strokeWidth={3} />
+          </span>
+        )}
+      </motion.button>
     </motion.div>
   );
 }
