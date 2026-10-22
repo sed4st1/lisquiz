@@ -1,7 +1,4 @@
-"""
-API Routers for Лисквиз (Lisquiz)
-- routes_quiz: генерация и банк вопросов ФРП
-- routes_rooms: игровые комнаты и лобби
-- routes_max: вебхуки бота MAX и проверка параметров мини-приложения
-- websocket: синхронизация игры в реальном времени
-"""
+from .routes_rooms import router as rooms_router
+from .websocket import router as ws_router
+
+__all__ = ["rooms_router", "ws_router"]

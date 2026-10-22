@@ -30,6 +30,8 @@ Thumbs.db
 
 # Logs & temp
 *.log
+*.db
+*.sqlite3
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
