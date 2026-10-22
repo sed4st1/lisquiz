@@ -64,11 +64,12 @@ async def health_check(db: AsyncSession = Depends(get_db)):
     }
 
 # Подключение роутеров API
-from .api import rooms_router, ws_router, routes_quiz, routes_ml2
+from .api import rooms_router, ws_router, routes_quiz, routes_ml2, routes_grove
 
 app.include_router(rooms_router)
 app.include_router(ws_router)
 app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
 app.include_router(routes_ml2.router, prefix="/api/ml2", tags=["ML 2.0"])
+app.include_router(routes_grove.router, prefix="/api/grove", tags=["Class Grove"])
 
 
