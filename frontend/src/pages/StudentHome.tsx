@@ -66,6 +66,11 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
 
   return (
     <div style={styles.container}>
+      {/* Top Header */}
+      <header style={styles.header}>
+        <h1 style={styles.headerTitle}>Вход в викторину</h1>
+      </header>
+
       {/* Mascot Greeting */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
@@ -215,6 +220,20 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     overflowY: 'auto',
     overflowX: 'hidden',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 2,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    letterSpacing: '-0.3px',
   },
   greetingCard: {
     display: 'flex',

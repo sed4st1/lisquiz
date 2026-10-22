@@ -22,6 +22,11 @@ export default function StudentLeaderboard() {
 
   return (
     <div style={styles.container}>
+      {/* Top Header */}
+      <header style={styles.header}>
+        <h1 style={styles.headerTitle}>Рейтинг класса</h1>
+      </header>
+
       {/* Top Hero Pill: My Place in Class */}
       <motion.div
         initial={{ opacity: 0, y: -8 }}
@@ -167,6 +172,20 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
     overflowY: 'auto',
     overflowX: 'hidden',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 2,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    letterSpacing: '-0.3px',
   },
   myRankCard: {
     display: 'flex',

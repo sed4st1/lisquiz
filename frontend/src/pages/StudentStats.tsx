@@ -24,6 +24,11 @@ const ACHIEVEMENTS: AchievementItem[] = [
 export default function StudentStats() {
   return (
     <div style={styles.container}>
+      {/* Top Header */}
+      <header style={styles.header}>
+        <h1 style={styles.headerTitle}>Статистика и достижения</h1>
+      </header>
+
       {/* Hero KPI Grid */}
       <div style={styles.kpiGrid}>
         <motion.div whileHover={{ scale: 1.02 }} style={styles.kpiCard}>
@@ -132,6 +137,20 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 14,
     overflowY: 'auto',
     overflowX: 'hidden',
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 2,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    letterSpacing: '-0.3px',
   },
   kpiGrid: {
     display: 'grid',

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Home, Sprout, Crown, BarChart2, Wrench, X } from 'lucide-react';
+import { Home, Sprout, Crown, BarChart2, Wrench, X, Flame, Droplets, Sparkles } from 'lucide-react';
 
 // Pages
 import ClassGrove from './pages/ClassGrove';
@@ -160,19 +160,20 @@ export default function App() {
           backgroundRepeat: 'no-repeat',
         }}
       >
-        {/* Mobile Top App Bar: Brand + Role Switch */}
+        {/* Mobile Top App Bar: Grove Stats + Role Switch */}
         <header style={styles.topHeader}>
-          <div style={styles.brandGroup}>
-            <img
-              src="/assets/mascot/app_icon.png"
-              alt="Лисквиз"
-              style={styles.mascotIcon}
-            />
-            <div>
-              <h1 style={styles.brandTitle}>Лисквиз</h1>
-              <p style={styles.brandSub}>
-                {role === 'teacher' ? 'Учитель 5А класс' : 'Роща знаний 5А'}
-              </p>
+          <div style={styles.topStatsGroup}>
+            <div style={styles.topStatPill} title="Стрик 5 дней">
+              <Flame size={15} color="#FF7A00" />
+              <span style={styles.topStatVal}>5</span>
+            </div>
+            <div style={styles.topStatPill} title="Здоровье Древа 95%">
+              <Droplets size={14} color="#34D399" />
+              <span style={styles.topStatVal}>95%</span>
+            </div>
+            <div style={styles.topStatPill} title="Стадия Дерева 4">
+              <Sparkles size={13} color="#FBBF24" />
+              <span style={styles.topStatVal}>Ур. 4</span>
             </div>
           </div>
 
@@ -218,7 +219,7 @@ export default function App() {
         </main>
 
         {/* ========================================================
-            TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Image 1)
+            TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Icon only)
            ======================================================== */}
         <div style={styles.dockWrapper}>
           <nav style={styles.bottomNavDock}>
@@ -229,20 +230,18 @@ export default function App() {
                 <button
                   onClick={() => handleTabChange('home')}
                   style={styles.navBtn}
+                  title="Домой"
                 >
                   <div
                     style={{
                       ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
                       border: isActive ? '2px solid #10B981' : '2px solid transparent',
                       boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                     }}
                   >
-                    <Home size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    <Home size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
                   </div>
-                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
-                    Домой
-                  </span>
                 </button>
               );
             })()}
@@ -254,20 +253,18 @@ export default function App() {
                 <button
                   onClick={() => handleTabChange('grove')}
                   style={styles.navBtn}
+                  title="Роща"
                 >
                   <div
                     style={{
                       ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
                       border: isActive ? '2px solid #10B981' : '2px solid transparent',
                       boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                     }}
                   >
-                    <Sprout size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    <Sprout size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
                   </div>
-                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
-                    Роща
-                  </span>
                 </button>
               );
             })()}
@@ -279,20 +276,18 @@ export default function App() {
                 <button
                   onClick={() => handleTabChange('leaderboard')}
                   style={styles.navBtn}
+                  title={role === 'teacher' ? 'Лобби' : 'Рейтинг'}
                 >
                   <div
                     style={{
                       ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
                       border: isActive ? '2px solid #10B981' : '2px solid transparent',
                       boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                     }}
                   >
-                    <Crown size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    <Crown size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
                   </div>
-                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
-                    {role === 'teacher' ? 'Лобби' : 'Рейтинг'}
-                  </span>
                 </button>
               );
             })()}
@@ -304,20 +299,18 @@ export default function App() {
                 <button
                   onClick={() => handleTabChange('stats')}
                   style={styles.navBtn}
+                  title={role === 'teacher' ? 'Отчёт' : 'Статистика'}
                 >
                   <div
                     style={{
                       ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
                       border: isActive ? '2px solid #10B981' : '2px solid transparent',
                       boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                     }}
                   >
-                    <BarChart2 size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    <BarChart2 size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
                   </div>
-                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
-                    {role === 'teacher' ? 'Отчёт' : 'Статистика'}
-                  </span>
                 </button>
               );
             })()}
@@ -582,30 +575,26 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 10,
     flexShrink: 0,
   },
-  brandGroup: {
+  topStatsGroup: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
-  mascotIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    boxShadow: '0 2px 10px rgba(255, 122, 0, 0.35)',
+  topStatPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    borderRadius: 999,
+    padding: '4px 9px',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
   },
-  brandTitle: {
-    fontSize: 16,
-    fontWeight: 900,
+  topStatVal: {
+    fontSize: 12,
+    fontWeight: 800,
     color: '#FFFFFF',
-    lineHeight: 1.1,
-    letterSpacing: '-0.3px',
-    margin: 0,
-  },
-  brandSub: {
-    fontSize: 11,
-    color: '#10B981',
-    fontWeight: 700,
-    margin: 0,
+    letterSpacing: '0.2px',
   },
   roleToggleBox: {
     display: 'flex',
@@ -653,43 +642,35 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 68,
+    height: 58,
     backgroundColor: 'rgba(12, 20, 37, 0.94)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
     border: '1px solid rgba(255, 255, 255, 0.08)',
-    borderRadius: 26,
-    padding: '4px 6px',
+    borderRadius: 29,
+    padding: '0 8px',
     boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)',
     pointerEvents: 'auto',
   },
   navBtn: {
     flex: 1,
-    position: 'relative',
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: '4px 0',
+    padding: 0,
     transition: 'all 0.18s ease',
   },
   navIconCircle: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     transition: 'all 0.18s ease',
-  },
-  navLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    transition: 'color 0.18s ease',
   },
   devHeader: {
     display: 'flex',

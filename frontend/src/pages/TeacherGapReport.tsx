@@ -185,19 +185,10 @@ export default function TeacherGapReport({
       <div style={styles.innerWrapper}>
         {/* Navigation & Header */}
         <header style={styles.header}>
-          <div style={styles.topActions}>
-            <div style={styles.liveTag}>
-              <span style={styles.liveDot} />
-              <span>Синхронизировано со Сферум</span>
-            </div>
-          </div>
-
-          <div style={styles.titleSection}>
-            <h1 style={styles.title}>Отчёт по викторине</h1>
-            <p style={styles.subtitle}>
-              {quizTitle}, {topic} ({grade} класс)
-            </p>
-          </div>
+          <h1 style={styles.headerTitle}>Отчёт по викторине</h1>
+          <p style={styles.subtitle}>
+            {quizTitle}, {topic} ({grade} класс)
+          </p>
         </header>
 
         {/* Mascot Insight Banner */}
@@ -463,53 +454,19 @@ const styles: Record<string, React.CSSProperties> = {
   header: {
     display: 'flex',
     flexDirection: 'column',
-    gap: spacing.sm,
+    width: '100%',
+    marginBottom: 4,
+    zIndex: 4,
   },
-  topActions: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backButton: {
-    background: 'none',
-    border: 'none',
-    color: colors.textSecondary,
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
-    cursor: 'pointer',
-    fontSize: 14,
-    padding: 0,
-  },
-  liveTag: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: 12,
-    color: colors.emeraldGreen,
-    backgroundColor: colors.emeraldGreenLight,
-    padding: '4px 10px',
-    borderRadius: borderRadius.pill,
-    fontWeight: 500,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: '50%',
-    backgroundColor: colors.emeraldGreen,
-  },
-  titleSection: {
-    marginTop: spacing.xs,
-  },
-  title: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 17,
     fontWeight: 800,
-    letterSpacing: '-0.02em',
+    color: '#FFFFFF',
     margin: 0,
-    color: colors.textPrimary,
+    letterSpacing: '-0.3px',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
     marginTop: 4,
   },

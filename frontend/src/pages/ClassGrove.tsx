@@ -3,8 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronRight,
   Droplets,
-  Flame,
-  Sparkles,
   Timer,
   Clock,
 } from 'lucide-react';
@@ -41,8 +39,6 @@ export default function ClassGrove({
   const [points, setPoints] = useState<number>(2840);
   const [acornsFilled, setAcornsFilled] = useState<number>(4);
   const [treeStage, setTreeStage] = useState<TreeStage>(4);
-  const [treeHealth, setTreeHealth] = useState<number>(95);
-  const [streakDays] = useState<number>(5);
   const [bubbleMessage, setBubbleMessage] = useState<string | null>(null);
   const [isWatering, setIsWatering] = useState<boolean>(false);
 
@@ -80,7 +76,6 @@ export default function ClassGrove({
     haptics.notification('success');
     setIsWatering(true);
     setPoints((prev) => prev + 50);
-    setTreeHealth(100);
     setBubbleMessage('Дерево напиталось живой водой! Серия спасена! +50 очков');
 
     // Spawn water droplets splashing towards the tree roots
@@ -117,9 +112,10 @@ export default function ClassGrove({
     setTimeout(() => setBubbleMessage(null), 3200);
   };
 
-  // Click on tree trunk rune
+  // Click on tree trunk rune (cycles stage and triggers sparkles)
   const handleTreeClick = () => {
     haptics.selection();
+    setTreeStage((prev) => ((prev % 4) + 1) as TreeStage);
     const canvas = canvasRef.current;
     if (canvas && engineRef.current) {
       engineRef.current.triggerExplosion(
@@ -133,16 +129,15 @@ export default function ClassGrove({
     setTimeout(() => setBubbleMessage(null), 3000);
   };
 
-  // Cycle tree stages for interactive exploration
-  const handleCycleStage = () => {
-    haptics.selection();
-    setTreeStage((prev) => ((prev % 4) + 1) as TreeStage);
-  };
-
   return (
     <div style={styles.container}>
       {/* Background Ambience Canvas for Sunlight Pollen & Water Splashes */}
       <canvas ref={canvasRef} style={styles.particleCanvas} />
+
+      {/* Top Header */}
+      <header style={styles.header}>
+        <h1 style={styles.headerTitle}>Роща класса</h1>
+      </header>
 
       {/* 6-Acorns Progress Capsule Bar (Starts right at the top) */}
       <div style={styles.acornCapsuleBar}>
@@ -164,10 +159,10 @@ export default function ClassGrove({
                   src={isFilled ? '/assets/icons/acorn_gold.png' : '/assets/icons/acorn_empty.png'}
                   alt={isFilled ? 'Золотой желудь' : 'Пустой желудь'}
                   style={{
-                    width: 26,
-                    height: 26,
+                    width: 28,
+                    height: 28,
                     objectFit: 'contain',
-                    filter: isFilled ? 'drop-shadow(0 0 6px rgba(245, 158, 11, 0.7))' : 'opacity(0.55)',
+                    filter: isFilled ? 'drop-shadow(0 0 6px rgba(245, 158, 11, 0.7))' : 'none',
                   }}
                 />
               </motion.div>
@@ -184,36 +179,6 @@ export default function ClassGrove({
             transition={{ type: 'spring', stiffness: 350, damping: 25 }}
           />
         </div>
-      </div>
-
-      {/* Streak & Tree Health Status Pill */}
-      <div style={styles.statusPillsRow}>
-        <div style={styles.streakPill}>
-          <Flame size={14} color="#F59E0B" />
-          <span>{streakDays} дней стрик</span>
-        </div>
-
-        <div
-          onClick={handleWaterTree}
-          style={{
-            ...styles.healthPill,
-            backgroundColor: treeHealth >= 80 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)',
-            borderColor: treeHealth >= 80 ? 'rgba(16, 185, 129, 0.45)' : 'rgba(239, 68, 68, 0.45)',
-          }}
-          title="Полить, чтобы восстановить здоровье"
-        >
-          <Droplets size={14} color={treeHealth >= 80 ? '#34D399' : '#EF4444'} />
-          <span>Древо: {treeHealth}%</span>
-        </div>
-
-        <button
-          onClick={handleCycleStage}
-          style={styles.stagePill}
-          title="Сменить стадию дерева"
-        >
-          <Sparkles size={13} color="#FBBF24" />
-          <span>Ур. {treeStage}</span>
-        </button>
       </div>
 
       {/* Interactive Glade Layer with Tree & Authentic Wooden Hanging Signs */}
@@ -384,7 +349,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     justifyContent: 'space-between',
     backgroundColor: 'transparent',
-    padding: '10px 14px 84px',
+    padding: '10px 14px 86px',
     boxSizing: 'border-box',
     overflowY: 'auto',
     overflowX: 'hidden',
@@ -404,12 +369,14 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 4,
+    marginBottom: 8,
   },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    letterSpacing: '-0.3px',
   },
   backBtn: {
     width: 36,
