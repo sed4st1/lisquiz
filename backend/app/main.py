@@ -38,8 +38,9 @@ async def health_check():
     }
 
 # Подключение роутеров API
-from .api import routes_quiz, routes_ml2
+from .api import routes_quiz, routes_ml2, routes_grove
 
 app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
 app.include_router(routes_ml2.router, prefix="/api/ml2", tags=["ML 2.0"])
+app.include_router(routes_grove.router, prefix="/api/grove", tags=["Class Grove"])
 
