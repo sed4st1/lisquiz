@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Home, Award, BarChart3, Wrench, X } from 'lucide-react';
+import { Home, Sprout, Crown, BarChart2, Wrench, X } from 'lucide-react';
 
 // Pages
 import ClassGrove from './pages/ClassGrove';
@@ -206,97 +206,115 @@ export default function App() {
         </main>
 
         {/* ========================================================
-            GLOBAL PERSISTENT BOTTOM NAVIGATION DOCK
+            TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Image 1)
            ======================================================== */}
-        <nav style={styles.bottomNavDock}>
-          {/* Tab 1: Домой */}
-          <button
-            onClick={() => handleTabChange('home')}
-            style={{
-              ...styles.navBtn,
-              color: tab === 'home' && !subScreen ? '#34D399' : '#9CA3AF',
-            }}
-          >
-            <div
-              style={{
-                ...styles.navIconBox,
-                backgroundColor: tab === 'home' && !subScreen ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-              }}
-            >
-              <Home size={20} color={tab === 'home' && !subScreen ? '#34D399' : '#9CA3AF'} />
-            </div>
-            <span style={{ fontWeight: tab === 'home' && !subScreen ? 800 : 600 }}>Домой</span>
-          </button>
+        <div style={styles.dockWrapper}>
+          <nav style={styles.bottomNavDock}>
+            {/* Tab 1: Домой */}
+            {(() => {
+              const isActive = tab === 'home' && !subScreen;
+              return (
+                <button
+                  onClick={() => handleTabChange('home')}
+                  style={styles.navBtn}
+                >
+                  {isActive && <div style={styles.dockNotch} />}
+                  <div
+                    style={{
+                      ...styles.navIconCircle,
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                    }}
+                  >
+                    <Home size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                  </div>
+                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
+                    Домой
+                  </span>
+                </button>
+              );
+            })()}
 
-          {/* Tab 2: Роща */}
-          <button
-            onClick={() => handleTabChange('grove')}
-            style={{
-              ...styles.navBtn,
-              color: tab === 'grove' && !subScreen ? '#34D399' : '#9CA3AF',
-            }}
-          >
-            <div
-              style={{
-                ...styles.navIconBox,
-                backgroundColor: tab === 'grove' && !subScreen ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-              }}
-            >
-              <img
-                src="/assets/icons/icon_sprout.svg"
-                alt="Роща"
-                style={{
-                  width: 20,
-                  height: 20,
-                  filter: tab === 'grove' && !subScreen ? 'none' : 'grayscale(1) opacity(0.6)',
-                }}
-              />
-            </div>
-            <span style={{ fontWeight: tab === 'grove' && !subScreen ? 800 : 600 }}>Роща</span>
-          </button>
+            {/* Tab 2: Роща */}
+            {(() => {
+              const isActive = tab === 'grove' && !subScreen;
+              return (
+                <button
+                  onClick={() => handleTabChange('grove')}
+                  style={styles.navBtn}
+                >
+                  {isActive && <div style={styles.dockNotch} />}
+                  <div
+                    style={{
+                      ...styles.navIconCircle,
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                    }}
+                  >
+                    <Sprout size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                  </div>
+                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
+                    Роща
+                  </span>
+                </button>
+              );
+            })()}
 
-          {/* Tab 3: Рейтинг (Ученик: классный лидерборд / Учитель: лобби и комната) */}
-          <button
-            onClick={() => handleTabChange('leaderboard')}
-            style={{
-              ...styles.navBtn,
-              color: tab === 'leaderboard' && !subScreen ? '#34D399' : '#9CA3AF',
-            }}
-          >
-            <div
-              style={{
-                ...styles.navIconBox,
-                backgroundColor: tab === 'leaderboard' && !subScreen ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-              }}
-            >
-              <Award size={20} color={tab === 'leaderboard' && !subScreen ? '#34D399' : '#9CA3AF'} />
-            </div>
-            <span style={{ fontWeight: tab === 'leaderboard' && !subScreen ? 800 : 600 }}>
-              {role === 'teacher' ? 'Лобби' : 'Рейтинг'}
-            </span>
-          </button>
+            {/* Tab 3: Рейтинг / Лобби */}
+            {(() => {
+              const isActive = tab === 'leaderboard' && !subScreen;
+              return (
+                <button
+                  onClick={() => handleTabChange('leaderboard')}
+                  style={styles.navBtn}
+                >
+                  {isActive && <div style={styles.dockNotch} />}
+                  <div
+                    style={{
+                      ...styles.navIconCircle,
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                    }}
+                  >
+                    <Crown size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                  </div>
+                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
+                    {role === 'teacher' ? 'Лобби' : 'Рейтинг'}
+                  </span>
+                </button>
+              );
+            })()}
 
-          {/* Tab 4: Статистика (Ученик: личные ачивки / Учитель: полный Gap Report) */}
-          <button
-            onClick={() => handleTabChange('stats')}
-            style={{
-              ...styles.navBtn,
-              color: tab === 'stats' && !subScreen ? '#34D399' : '#9CA3AF',
-            }}
-          >
-            <div
-              style={{
-                ...styles.navIconBox,
-                backgroundColor: tab === 'stats' && !subScreen ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-              }}
-            >
-              <BarChart3 size={20} color={tab === 'stats' && !subScreen ? '#34D399' : '#9CA3AF'} />
-            </div>
-            <span style={{ fontWeight: tab === 'stats' && !subScreen ? 800 : 600 }}>
-              {role === 'teacher' ? 'Отчёт' : 'Статистика'}
-            </span>
-          </button>
-        </nav>
+            {/* Tab 4: Статистика / Отчёт */}
+            {(() => {
+              const isActive = tab === 'stats' && !subScreen;
+              return (
+                <button
+                  onClick={() => handleTabChange('stats')}
+                  style={styles.navBtn}
+                >
+                  {isActive && <div style={styles.dockNotch} />}
+                  <div
+                    style={{
+                      ...styles.navIconCircle,
+                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'rgba(255, 255, 255, 0.05)',
+                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                    }}
+                  >
+                    <BarChart2 size={20} color={isActive ? '#10B981' : '#7E8B9B'} />
+                  </div>
+                  <span style={{ ...styles.navLabel, color: isActive ? '#10B981' : '#7E8B9B' }}>
+                    {role === 'teacher' ? 'Отчёт' : 'Статистика'}
+                  </span>
+                </button>
+              );
+            })()}
+          </nav>
+        </div>
       </div>
 
       {/* ========================================================
@@ -616,41 +634,63 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundSize: 'cover',
     backgroundRepeat: 'no-repeat',
   },
+  dockWrapper: {
+    padding: '0 12px 14px 12px',
+    backgroundColor: 'transparent',
+    zIndex: 15,
+    flexShrink: 0,
+  },
   bottomNavDock: {
     display: 'flex',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 60,
-    backgroundColor: 'rgba(11, 19, 43, 0.95)',
+    height: 68,
+    backgroundColor: 'rgba(12, 20, 37, 0.96)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
-    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 26,
     padding: '4px 6px',
-    zIndex: 15,
-    flexShrink: 0,
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)',
   },
   navBtn: {
     flex: 1,
+    position: 'relative',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 3,
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    fontSize: 11,
     padding: '4px 0',
-    transition: 'all 0.15s ease',
+    transition: 'all 0.18s ease',
   },
-  navIconBox: {
-    width: 32,
-    height: 26,
-    borderRadius: 999,
+  dockNotch: {
+    position: 'absolute',
+    top: -5,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: 14,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#10B981',
+    boxShadow: '0 0 8px #10B981',
+  },
+  navIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.15s ease',
+    transition: 'all 0.18s ease',
+  },
+  navLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    transition: 'color 0.18s ease',
   },
   devHeader: {
     display: 'flex',

@@ -2,9 +2,9 @@ export const colors = {
   // Core palette
   bgPrimary: '#0D1322',
   bgSecondary: '#111827',
-  cardSurface: '#162035',
-  cardSurfaceHover: '#1C2A45',
-  cardBorder: 'transparent',
+  cardSurface: '#18243E',
+  cardSurfaceHover: '#1F2F52',
+  cardBorder: '#283A60',
 
   // Brand
   foxOrange: '#FF7A00',
@@ -20,9 +20,9 @@ export const colors = {
   answerGreen: '#22C55E',
 
   // Text
-  textPrimary: '#F9FAFB',
-  textSecondary: '#9CA3AF',
-  textMuted: '#6B7280',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#E2E8F0',
+  textMuted: '#94A3B8',
 
   // Status
   success: '#10B981',
@@ -31,8 +31,8 @@ export const colors = {
   info: '#3B82F6',
 
   // Overlay
-  overlay: 'rgba(0, 0, 0, 0.5)',
-  glassCard: 'rgba(22, 32, 53, 0.85)',
+  overlay: 'rgba(0, 0, 0, 0.65)',
+  glassCard: '#18243E',
 } as const;
 
 export const spacing = {
@@ -54,8 +54,10 @@ export const borderRadius = {
 } as const;
 
 export const shadows = {
-  card: 'none',
-  cardHover: 'none',
+  card: '0 4px 0 #131C30',
+  cardHover: '0 6px 0 #131C30',
+  duoBtnOrange: '0 4px 0 #B85000',
+  duoBtnGreen: '0 4px 0 #0D694B',
   glow: (color: string) => `0 0 20px ${color}40`,
   answerButton: '0 4px 0',
 } as const;

@@ -102,23 +102,28 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
 
         {/* 6-Digit PIN Boxes */}
         <div style={styles.pinRow} onPaste={handlePaste}>
-          {digits.map((digit, i) => (
-            <input
-              key={i}
-              ref={(el) => (inputRefs.current[i] = el)}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handleDigitChange(i, e.target.value)}
-              onKeyDown={(e) => handleKeyDown(i, e)}
-              style={{
-                ...styles.digitInput,
-                backgroundColor: digit ? 'rgba(255, 122, 0, 0.22)' : 'rgba(255, 255, 255, 0.08)',
-                color: digit ? '#FFB366' : '#FFFFFF',
-              }}
-            />
-          ))}
+          {digits.map((digit, i) => {
+            const isFilled = Boolean(digit);
+            return (
+              <input
+                key={i}
+                ref={(el) => (inputRefs.current[i] = el)}
+                type="text"
+                inputMode="numeric"
+                maxLength={1}
+                value={digit}
+                onChange={(e) => handleDigitChange(i, e.target.value)}
+                onKeyDown={(e) => handleKeyDown(i, e)}
+                style={{
+                  ...styles.digitInput,
+                  backgroundColor: isFilled ? '#2A1F18' : '#1B2742',
+                  borderColor: isFilled ? '#FF7A00' : '#33446B',
+                  borderBottomColor: isFilled ? '#B85000' : '#23304E',
+                  color: isFilled ? '#FF9E3B' : '#FFFFFF',
+                }}
+              />
+            );
+          })}
         </div>
 
         {/* Avatar Picker Chips */}
@@ -137,7 +142,9 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
                   }}
                   style={{
                     ...styles.avatarChip,
-                    backgroundColor: isSelected ? 'rgba(255, 122, 0, 0.28)' : 'rgba(255, 255, 255, 0.08)',
+                    backgroundColor: isSelected ? '#2A1F18' : '#1B2742',
+                    borderColor: isSelected ? '#FF7A00' : '#33446B',
+                    borderBottomColor: isSelected ? '#B85000' : '#23304E',
                   }}
                 >
                   <span style={styles.avatarEmoji}>{av.label.split(' ')[0]}</span>
@@ -148,8 +155,9 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
           </div>
         </div>
 
-        {/* Big Tactile Action Button */}
-        <button
+        {/* Big Tactile Action Button (Duolingo 3D button) */}
+        <motion.button
+          whileTap={canJoin && !isJoining ? { y: 2 } : {}}
           disabled={!canJoin || isJoining}
           onClick={handleJoin}
           style={{
@@ -158,9 +166,9 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
             cursor: canJoin ? 'pointer' : 'not-allowed',
           }}
         >
-          <Sparkles size={18} />
+          <Sparkles size={20} />
           <span>{isJoining ? 'Подключение...' : 'Войти в викторину'}</span>
-        </button>
+        </motion.button>
       </motion.div>
 
       {/* Class Grove Mini Snapshot Card */}
@@ -215,43 +223,45 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(22, 32, 53, 0.9)',
-    border: 'none',
+    backgroundColor: '#151F36',
+    border: '2px solid #283756',
+    borderBottom: '4px solid #1E2B45',
     borderRadius: 20,
-    padding: '14px 16px',
-    boxShadow: 'none',
+    padding: '16px 18px',
   },
   mascotSpeech: {
     flex: 1,
   },
   greetingTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 900,
     color: '#FFFFFF',
     margin: 0,
+    letterSpacing: '-0.2px',
   },
   greetingSub: {
-    fontSize: 12,
-    color: '#9CA3AF',
+    fontSize: 13,
+    color: '#E2E8F0',
     marginTop: 4,
-    lineHeight: 1.35,
+    lineHeight: 1.4,
+    fontWeight: 500,
   },
   mascotImg: {
-    width: 62,
-    height: 62,
+    width: 68,
+    height: 68,
     objectFit: 'contain',
-    marginLeft: 8,
-    filter: 'drop-shadow(0 4px 12px rgba(255, 122, 0, 0.3))',
+    marginLeft: 10,
+    filter: 'drop-shadow(0 4px 14px rgba(255, 122, 0, 0.4))',
   },
   joinCard: {
-    backgroundColor: 'rgba(22, 32, 53, 0.95)',
-    border: 'none',
+    backgroundColor: '#151F36',
+    border: '2px solid #283756',
+    borderBottom: '4px solid #1E2B45',
     borderRadius: 22,
-    padding: '16px',
+    padding: '18px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 14,
-    boxShadow: 'none',
+    gap: 16,
   },
   joinCardHeader: {
     display: 'flex',
@@ -264,14 +274,15 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   joinCardTitle: {
-    fontSize: 15,
-    fontWeight: 800,
+    fontSize: 16,
+    fontWeight: 900,
     color: '#FFFFFF',
+    letterSpacing: '-0.2px',
   },
   pinHint: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: 600,
+    fontSize: 12,
+    color: '#CBD5E1',
+    fontWeight: 700,
   },
   pinRow: {
     display: 'flex',
@@ -283,12 +294,14 @@ const styles: Record<string, React.CSSProperties> = {
   digitInput: {
     flex: '1 1 0',
     minWidth: 0,
-    maxWidth: 46,
-    height: 48,
-    borderRadius: 12,
-    border: 'none',
+    maxWidth: 48,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderStyle: 'solid',
+    borderBottomWidth: 4,
     textAlign: 'center',
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: 900,
     outline: 'none',
     boxSizing: 'border-box',
@@ -300,11 +313,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   avatarLabel: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: 800,
+    color: '#CBD5E1',
     textTransform: 'uppercase',
-    letterSpacing: '0.4px',
+    letterSpacing: '0.5px',
   },
   avatarRow: {
     display: 'flex',
@@ -316,99 +329,107 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    border: 'none',
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderStyle: 'solid',
+    borderBottomWidth: 3,
     cursor: 'pointer',
     position: 'relative',
     flexShrink: 0,
     transition: 'all 0.15s ease',
   },
   avatarEmoji: {
-    fontSize: 22,
+    fontSize: 24,
   },
   checkDot: {
     position: 'absolute',
     top: -4,
     right: -4,
-    width: 16,
-    height: 16,
+    width: 18,
+    height: 18,
     borderRadius: 999,
     backgroundColor: '#FF7A00',
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: 900,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.4)',
   },
   joinBtn: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 50,
+    gap: 10,
+    height: 52,
     backgroundColor: '#FF7A00',
     color: '#FFFFFF',
     border: 'none',
-    borderRadius: 14,
-    fontSize: 15,
-    fontWeight: 800,
-    boxShadow: 'none',
+    borderBottom: '4px solid #B85000',
+    borderRadius: 16,
+    fontSize: 16,
+    fontWeight: 900,
+    letterSpacing: '0.2px',
+    boxShadow: '0 4px 14px rgba(255, 122, 0, 0.4)',
     transition: 'all 0.15s ease',
   },
   groveSnapshotCard: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
-    border: 'none',
-    borderRadius: 18,
-    padding: '12px 14px',
-    boxShadow: 'none',
+    backgroundColor: '#10232E',
+    border: '2px solid #1B4A3C',
+    borderBottom: '4px solid #14382E',
+    borderRadius: 20,
+    padding: '14px 16px',
     cursor: 'pointer',
   },
   groveSnapshotLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   groveIconBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    border: '1.5px solid rgba(16, 185, 129, 0.4)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
   groveSnapshotTitle: {
-    fontSize: 13,
-    fontWeight: 800,
-    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: 900,
+    color: '#34D399',
   },
   groveSnapshotSub: {
-    fontSize: 11,
-    color: '#D1D5DB',
+    fontSize: 12,
+    color: '#E2E8F0',
     marginTop: 2,
+    fontWeight: 600,
   },
   groveSnapshotBtn: {
     border: 'none',
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
-    color: '#34D399',
-    padding: '6px 12px',
-    borderRadius: 10,
-    fontSize: 11,
-    fontWeight: 700,
+    borderBottom: '3px solid #065F46',
+    backgroundColor: '#10B981',
+    color: '#FFFFFF',
+    padding: '8px 14px',
+    borderRadius: 12,
+    fontSize: 12,
+    fontWeight: 800,
     cursor: 'pointer',
   },
   questCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    border: 'none',
-    borderRadius: 16,
-    padding: '12px 14px',
-    boxShadow: 'none',
+    backgroundColor: '#192033',
+    border: '2px solid #3B3322',
+    borderBottom: '4px solid #F59E0B',
+    borderRadius: 18,
+    padding: '14px 16px',
   },
   questHeader: {
     display: 'flex',
@@ -417,14 +438,17 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: 4,
   },
   questTitle: {
-    fontSize: 12,
-    fontWeight: 800,
-    color: '#F59E0B',
+    fontSize: 13,
+    fontWeight: 900,
+    color: '#FBBF24',
+    textTransform: 'uppercase',
+    letterSpacing: '0.4px',
   },
   questText: {
-    fontSize: 11,
-    color: '#9CA3AF',
+    fontSize: 13,
+    color: '#E2E8F0',
     margin: 0,
-    lineHeight: 1.4,
+    lineHeight: 1.45,
+    fontWeight: 500,
   },
 };
