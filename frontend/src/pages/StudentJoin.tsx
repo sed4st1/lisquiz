@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { User, LogIn, Sparkles, Check, ArrowLeft } from 'lucide-react';
+import { User, LogIn, Sparkles, Check } from 'lucide-react';
 import { Spinner } from '@maxhub/max-ui';
 import { colors, spacing, borderRadius, transitions, fonts, studentAvatars } from '../theme/tokens';
 import { hapticImpact } from '../services/maxBridge';
@@ -10,7 +10,6 @@ export interface StudentJoinProps {
   initialPin?: string;
   onJoinRoom?: (data: { pin: string; displayName: string; avatar: string }) => void;
   onJoined?: () => void;
-  onBack?: () => void;
 }
 
 const styles: Record<string, React.CSSProperties> = {
@@ -247,7 +246,6 @@ export default function StudentJoin({
   initialPin = '',
   onJoinRoom,
   onJoined,
-  onBack,
 }: StudentJoinProps) {
   // Parse initial PIN if provided (e.g. '482915' or '482 915')
   const cleanInitial = initialPin.replace(/\s+/g, '').slice(0, 6);
@@ -348,26 +346,6 @@ export default function StudentJoin({
 
   return (
     <div style={styles.container}>
-      {onBack && (
-        <button
-          onClick={onBack}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            background: 'none',
-            border: 'none',
-            color: colors.textSecondary,
-            cursor: 'pointer',
-            fontSize: 13,
-            padding: 0,
-          }}
-        >
-          <ArrowLeft size={16} />
-          <span>На главную</span>
-        </button>
-      )}
-
       {/* Main Card */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}

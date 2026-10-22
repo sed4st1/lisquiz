@@ -1,7 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronLeft,
   BookOpen,
   Users,
   Target,
@@ -19,7 +18,6 @@ import type { Quiz } from '../types/quiz';
 export interface TeacherCreateQuizProps {
   onQuizCreated?: (quiz?: Quiz) => void;
   onNavigateToLobby?: () => void;
-  onBack?: () => void;
 }
 
 const SUBJECTS = [
@@ -49,7 +47,6 @@ const TOPIC_PRESETS: Record<string, string[]> = {
 export default function TeacherCreateQuiz({
   onQuizCreated,
   onNavigateToLobby,
-  onBack,
 }: TeacherCreateQuizProps) {
   const [subject, setSubject] = useState<string>('Математика');
   const [grade, setGrade] = useState<number>(7);
@@ -87,15 +84,7 @@ export default function TeacherCreateQuiz({
     <div style={styles.container}>
       {/* Top Header */}
       <header style={styles.header}>
-        <button
-          onClick={onBack}
-          style={styles.backBtn}
-          title="Назад"
-        >
-          <ChevronLeft size={20} color="#FFFFFF" />
-        </button>
         <h1 style={styles.headerTitle}>Создание викторины</h1>
-        <div style={{ width: 36 }} />
       </header>
 
       {/* Mascot Hero Card */}

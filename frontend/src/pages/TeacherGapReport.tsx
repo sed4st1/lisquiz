@@ -10,7 +10,6 @@ import {
   ChevronUp,
   CheckCircle2,
   BookOpen,
-  ArrowLeft,
 } from 'lucide-react';
 import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
 
@@ -33,7 +32,6 @@ export interface TeacherGapReportProps {
   totalStudents?: number;
   questions?: QuestionAnalyticsItem[];
   onSendReviewTasks?: (topics: string[]) => void;
-  onBack?: () => void;
 }
 
 const DEFAULT_QUESTIONS: QuestionAnalyticsItem[] = [
@@ -150,7 +148,6 @@ export default function TeacherGapReport({
   totalStudents = 26,
   questions = DEFAULT_QUESTIONS,
   onSendReviewTasks,
-  onBack,
 }: TeacherGapReportProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [isSent, setIsSent] = useState(false);
@@ -189,12 +186,6 @@ export default function TeacherGapReport({
         {/* Navigation & Header */}
         <header style={styles.header}>
           <div style={styles.topActions}>
-            {onBack && (
-              <button onClick={onBack} style={styles.backButton}>
-                <ArrowLeft size={18} />
-                <span>Назад</span>
-              </button>
-            )}
             <div style={styles.liveTag}>
               <span style={styles.liveDot} />
               <span>Синхронизировано со Сферум</span>

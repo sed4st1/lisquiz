@@ -1,24 +1,18 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronLeft,
   ChevronRight,
-  Users,
-  Home,
-  Award,
-  BarChart3,
-  Clock,
   Droplets,
-  Timer,
   Flame,
   Sparkles,
+  Timer,
+  Clock,
 } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { CanvasParticleEngine } from '../services/particles';
 import { JuicyScoreCounter } from '../components/JuicyScoreCounter';
 
 interface ClassGroveProps {
-  onBack?: () => void;
   onStartQuiz?: () => void;
   onOpenLeaderboard?: () => void;
   onOpenStats?: () => void;
@@ -41,9 +35,7 @@ const STAGE_NAMES: Record<TreeStage, string> = {
 };
 
 export default function ClassGrove({
-  onBack,
   onStartQuiz,
-  onOpenLeaderboard,
   onOpenStats,
 }: ClassGroveProps) {
   const [points, setPoints] = useState<number>(2840);
@@ -51,7 +43,6 @@ export default function ClassGrove({
   const [treeStage, setTreeStage] = useState<TreeStage>(4);
   const [treeHealth, setTreeHealth] = useState<number>(95);
   const [streakDays] = useState<number>(5);
-  const [activeTab, setActiveTab] = useState<'home' | 'grove' | 'leaderboard' | 'stats'>('grove');
   const [bubbleMessage, setBubbleMessage] = useState<string | null>(null);
   const [isWatering, setIsWatering] = useState<boolean>(false);
 
@@ -153,38 +144,7 @@ export default function ClassGrove({
       {/* Background Ambience Canvas for Sunlight Pollen & Water Splashes */}
       <canvas ref={canvasRef} style={styles.particleCanvas} />
 
-      {/* Top Header */}
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <button
-            onClick={onBack}
-            style={styles.backBtn}
-            title="Назад"
-          >
-            <ChevronLeft size={20} color="#FFFFFF" />
-          </button>
-
-          <div style={styles.logoBadge}>
-            <img
-              src="/assets/icons/icon_sprout.svg"
-              alt="Росток"
-              style={{ width: 18, height: 18 }}
-            />
-          </div>
-
-          <div style={styles.headerTitles}>
-            <span style={styles.brandTitle}>Роща класса</span>
-            <span style={styles.brandSub}>Вместе мы растём!</span>
-          </div>
-        </div>
-
-        <div style={styles.playerCountPill}>
-          <Users size={14} color="#D1D5DB" />
-          <span>28 / 30</span>
-        </div>
-      </header>
-
-      {/* 6-Acorns Progress Capsule Bar */}
+      {/* 6-Acorns Progress Capsule Bar (Starts right at the top) */}
       <div style={styles.acornCapsuleBar}>
         <div style={styles.acornsRow}>
           {[1, 2, 3, 4, 5, 6].map((num) => {
@@ -410,71 +370,6 @@ export default function ClassGrove({
 
         <ChevronRight size={22} color="#9CA3AF" />
       </motion.div>
-
-      {/* Bottom Navigation Dock */}
-      <nav style={styles.bottomNavDock}>
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveTab('home');
-            onBack?.();
-          }}
-          style={{
-            ...styles.navTabBtn,
-            color: activeTab === 'home' ? '#34D399' : '#9CA3AF',
-          }}
-        >
-          <Home size={18} />
-          <span>Домой</span>
-        </button>
-
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveTab('grove');
-          }}
-          style={styles.navTabBtnActive}
-        >
-          <div style={styles.activePillGlow}>
-            <img
-              src="/assets/icons/icon_sprout.svg"
-              alt="Роща"
-              style={{ width: 18, height: 18 }}
-            />
-          </div>
-          <span style={{ color: '#34D399', fontWeight: 800 }}>Роща</span>
-        </button>
-
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveTab('leaderboard');
-            onOpenLeaderboard?.();
-          }}
-          style={{
-            ...styles.navTabBtn,
-            color: activeTab === 'leaderboard' ? '#34D399' : '#9CA3AF',
-          }}
-        >
-          <Award size={18} />
-          <span>Рейтинг</span>
-        </button>
-
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveTab('stats');
-            onOpenStats?.();
-          }}
-          style={{
-            ...styles.navTabBtn,
-            color: activeTab === 'stats' ? '#34D399' : '#9CA3AF',
-          }}
-        >
-          <BarChart3 size={18} />
-          <span>Статистика</span>
-        </button>
-      </nav>
     </div>
   );
 }

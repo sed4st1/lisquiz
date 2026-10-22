@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
-  ChevronLeft,
   Copy,
   Check,
   UserPlus,
@@ -18,7 +17,6 @@ export interface TeacherLobbyProps {
   grade?: number;
   maxStudents?: number;
   onStartQuiz?: () => void;
-  onBack?: () => void;
 }
 
 const CONNECTED_STUDENTS = [
@@ -44,7 +42,6 @@ export default function TeacherLobby({
   quizTitle = 'Викторина по математике',
   grade = 7,
   onStartQuiz,
-  onBack,
 }: TeacherLobbyProps) {
   const [copied, setCopied] = useState<boolean>(false);
   const [students, setStudents] = useState(CONNECTED_STUDENTS);
@@ -72,15 +69,7 @@ export default function TeacherLobby({
     <div style={styles.container}>
       {/* Top Header */}
       <header style={styles.header}>
-        <button
-          onClick={onBack}
-          style={styles.backBtn}
-          title="Назад"
-        >
-          <ChevronLeft size={20} color="#FFFFFF" />
-        </button>
         <h1 style={styles.headerTitle}>Комната ожидания</h1>
-        <div style={{ width: 36 }} />
       </header>
 
       {/* Quiz Title Pill */}
