@@ -11,6 +11,7 @@ class AnswerOption(BaseModel):
 
 class Question(BaseModel):
     id: int
+    canonical_id: Optional[int] = None
     text: str
     options: List[AnswerOption]
     explanation: Optional[str] = ""
@@ -18,6 +19,14 @@ class Question(BaseModel):
     topic: Optional[str] = None
     grade: Optional[int] = None
     subject: Optional[str] = None
+    difficulty: Optional[str] = "medium"
+    meta_source: Optional[str] = None
+
+class QuizVariant(BaseModel):
+    variant_number: int  # 1, 2, 3, 4
+    quiz_id: str
+    questions: List[Question]
+    question_order: List[int]  # canonical IDs in sequence
 
 class Quiz(BaseModel):
     id: str
@@ -27,6 +36,8 @@ class Quiz(BaseModel):
     topic: str
     questions: List[Question]
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    source: Optional[str] = "bank"  # "bank", "gigachat", "ocr"
+    variants: Optional[Dict[int, QuizVariant]] = None
 
 class QuizCreateRequest(BaseModel):
     subject: str = Field(..., example="Математика")
@@ -34,6 +45,7 @@ class QuizCreateRequest(BaseModel):
     topic: str = Field(..., example="Обыкновенные дроби")
     question_count: int = Field(5, ge=1, le=20, example=5)
     source_notes: Optional[str] = None  # Конспект или текст с доски
+    num_variants: int = Field(4, ge=1, le=4, example=4)
 
 class Player(BaseModel):
     id: str
@@ -43,6 +55,7 @@ class Player(BaseModel):
     streak: int = 0
     connected: bool = True
     blurred_count: int = 0  # Сворачивание окна (защита от списывания)
+    variant_number: int = 1  # Назначенный вариант античита (1, 2, 3, 4)
 
 class GameRoom(BaseModel):
     room_code: str

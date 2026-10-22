@@ -37,8 +37,9 @@ async def health_check():
         "max_bot_configured": bool(settings.MAX_BOT_TOKEN)
     }
 
-# Место для подключения роутеров (будут реализованы в feature-ветках):
-# from .api import routes_quiz, routes_rooms, routes_max, websocket
-# app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
-# app.include_router(routes_rooms.router, prefix="/api/rooms", tags=["Rooms"])
-# app.include_router(routes_max.router, prefix="/api/max", tags=["MAX Platform"])
+# Подключение роутеров API
+from .api import routes_quiz, routes_ml2
+
+app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
+app.include_router(routes_ml2.router, prefix="/api/ml2", tags=["ML 2.0"])
+
