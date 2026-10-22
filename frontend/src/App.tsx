@@ -159,7 +159,7 @@ export default function App() {
             <div>
               <h1 style={styles.brandTitle}>Лисквиз</h1>
               <p style={styles.brandSub}>
-                {role === 'teacher' ? 'Учитель • 5А класс' : 'Роща знаний • 5А'}
+                {role === 'teacher' ? 'Учитель 5А класс' : 'Роща знаний 5А'}
               </p>
             </div>
           </div>
@@ -583,11 +583,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   roleToggleBox: {
     display: 'flex',
-    background: 'rgba(255, 255, 255, 0.06)',
+    background: 'rgba(255, 255, 255, 0.08)',
     borderRadius: 12,
     padding: 3,
     gap: 2,
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    border: 'none',
   },
   roleBtn: {
     border: 'none',
@@ -611,6 +611,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
   },
   bottomNavDock: {
     display: 'flex',

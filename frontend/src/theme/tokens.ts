@@ -4,7 +4,7 @@ export const colors = {
   bgSecondary: '#111827',
   cardSurface: '#162035',
   cardSurfaceHover: '#1C2A45',
-  cardBorder: 'rgba(255, 255, 255, 0.06)',
+  cardBorder: 'transparent',
 
   // Brand
   foxOrange: '#FF7A00',
@@ -54,8 +54,8 @@ export const borderRadius = {
 } as const;
 
 export const shadows = {
-  card: '0 4px 24px rgba(0, 0, 0, 0.3)',
-  cardHover: '0 8px 32px rgba(0, 0, 0, 0.4)',
+  card: 'none',
+  cardHover: 'none',
   glow: (color: string) => `0 0 20px ${color}40`,
   answerButton: '0 4px 0',
 } as const;

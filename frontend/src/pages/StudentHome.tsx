@@ -75,7 +75,7 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
         <div style={styles.mascotSpeech}>
           <h2 style={styles.greetingTitle}>Привет, {studentName}! 🦊</h2>
           <p style={styles.greetingSub}>
-            5А класс • Введи PIN с доски учителя, чтобы войти в игру!
+            5А класс, введи PIN с доски учителя для входа в игру
           </p>
         </div>
 
@@ -114,8 +114,7 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
               onKeyDown={(e) => handleKeyDown(i, e)}
               style={{
                 ...styles.digitInput,
-                borderColor: digit ? '#FF7A00' : 'rgba(255, 255, 255, 0.16)',
-                backgroundColor: digit ? 'rgba(255, 122, 0, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                backgroundColor: digit ? 'rgba(255, 122, 0, 0.22)' : 'rgba(255, 255, 255, 0.08)',
                 color: digit ? '#FFB366' : '#FFFFFF',
               }}
             />
@@ -138,8 +137,7 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
                   }}
                   style={{
                     ...styles.avatarChip,
-                    backgroundColor: isSelected ? 'rgba(255, 122, 0, 0.22)' : 'rgba(255, 255, 255, 0.05)',
-                    borderColor: isSelected ? '#FF7A00' : 'rgba(255, 255, 255, 0.1)',
+                    backgroundColor: isSelected ? 'rgba(255, 122, 0, 0.28)' : 'rgba(255, 255, 255, 0.08)',
                   }}
                 >
                   <span style={styles.avatarEmoji}>{av.label.split(' ')[0]}</span>
@@ -172,8 +170,8 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
             <Droplets size={18} color="#34D399" />
           </div>
           <div>
-            <div style={styles.groveSnapshotTitle}>Роща 5А класса • 95%</div>
-            <div style={styles.groveSnapshotSub}>Волшебный Дуб • 5 дней стрик 🔥</div>
+            <div style={styles.groveSnapshotTitle}>Роща 5А класса (95%)</div>
+            <div style={styles.groveSnapshotSub}>Волшебный Дуб, 5 дней стрик 🔥</div>
           </div>
         </div>
 
@@ -203,6 +201,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
     padding: '14px 14px 20px',
     boxSizing: 'border-box',
     gap: 12,
@@ -213,11 +215,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(22, 32, 53, 0.85)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(22, 32, 53, 0.9)',
+    border: 'none',
     borderRadius: 20,
     padding: '14px 16px',
-    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3)',
+    boxShadow: 'none',
   },
   mascotSpeech: {
     flex: 1,
@@ -243,13 +245,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   joinCard: {
     backgroundColor: 'rgba(22, 32, 53, 0.95)',
-    border: '1px solid rgba(255, 122, 0, 0.3)',
+    border: 'none',
     borderRadius: 22,
     padding: '16px',
     display: 'flex',
     flexDirection: 'column',
     gap: 14,
-    boxShadow: '0 8px 30px rgba(0, 0, 0, 0.45)',
+    boxShadow: 'none',
   },
   joinCardHeader: {
     display: 'flex',
@@ -273,19 +275,23 @@ const styles: Record<string, React.CSSProperties> = {
   },
   pinRow: {
     display: 'flex',
-    justifyContent: 'space-between',
-    gap: 8,
+    justifyContent: 'center',
+    gap: 6,
     width: '100%',
+    boxSizing: 'border-box',
   },
   digitInput: {
-    flex: 1,
-    height: 52,
-    borderRadius: 14,
-    border: '2px solid',
+    flex: '1 1 0',
+    minWidth: 0,
+    maxWidth: 46,
+    height: 48,
+    borderRadius: 12,
+    border: 'none',
     textAlign: 'center',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 900,
     outline: 'none',
+    boxSizing: 'border-box',
     transition: 'all 0.15s ease',
   },
   avatarSection: {
@@ -313,7 +319,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 44,
     height: 44,
     borderRadius: 12,
-    border: '1px solid',
+    border: 'none',
     cursor: 'pointer',
     position: 'relative',
     flexShrink: 0,
@@ -349,17 +355,18 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 14,
     fontSize: 15,
     fontWeight: 800,
-    boxShadow: '0 6px 20px rgba(255, 122, 0, 0.45)',
+    boxShadow: 'none',
     transition: 'all 0.15s ease',
   },
   groveSnapshotCard: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    border: '1px solid rgba(16, 185, 129, 0.25)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    border: 'none',
     borderRadius: 18,
     padding: '12px 14px',
+    boxShadow: 'none',
     cursor: 'pointer',
   },
   groveSnapshotLeft: {
@@ -397,10 +404,11 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
   },
   questCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: 'none',
     borderRadius: 16,
     padding: '12px 14px',
+    boxShadow: 'none',
   },
   questHeader: {
     display: 'flex',

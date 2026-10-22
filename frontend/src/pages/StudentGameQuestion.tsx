@@ -155,14 +155,14 @@ export default function StudentGameQuestion({
           <div style={styles.headerTitles}>
             <span style={styles.brandTitle}>Lisquiz</span>
             <span style={styles.brandSub}>
-              Викторина • {classNameTitle} • {subjectTitle}
+              Викторина, {classNameTitle}, {subjectTitle}
             </span>
           </div>
         </div>
 
         <div style={styles.playerCountPill}>
           <Users size={14} color="#D1D5DB" />
-          <span>28 / 30</span>
+          <span>28 из 30</span>
         </div>
       </header>
 

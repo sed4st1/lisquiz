@@ -80,7 +80,7 @@ export default function TeacherLobby({
             alt="Росток"
             style={{ width: 16, height: 16 }}
           />
-          <span>{quizTitle} • {grade} класс</span>
+          <span>{quizTitle}, {grade} класс</span>
         </div>
       </div>
 
@@ -245,8 +245,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(14, 25, 45, 0.85)',
-    border: '1px solid rgba(16, 185, 129, 0.4)',
+    backgroundColor: 'rgba(14, 25, 45, 0.88)',
+    border: 'none',
     borderRadius: 999,
     padding: '5px 14px',
     fontSize: 12,
@@ -254,17 +254,17 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#34D399',
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
+    boxShadow: 'none',
   },
   pinCard: {
     position: 'relative',
-    backgroundColor: 'rgba(14, 30, 58, 0.92)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
+    backgroundColor: 'rgba(14, 30, 58, 0.94)',
+    border: 'none',
     backdropFilter: 'blur(18px)',
     WebkitBackdropFilter: 'blur(18px)',
     borderRadius: 24,
     padding: '16px 18px',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
+    boxShadow: 'none',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
@@ -294,12 +294,12 @@ const styles: Record<string, React.CSSProperties> = {
     width: 44,
     height: 54,
     backgroundColor: 'rgba(11, 20, 38, 0.9)',
-    border: '1.5px solid rgba(255, 255, 255, 0.22)',
+    border: 'none',
     borderRadius: 14,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
+    boxShadow: 'none',
   },
   digitChar: {
     fontSize: 28,
@@ -312,10 +312,11 @@ const styles: Record<string, React.CSSProperties> = {
     height: 54,
     borderRadius: 14,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
+    border: 'none',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    boxShadow: 'none',
     cursor: 'pointer',
   },
   statusRow: {
@@ -328,19 +329,19 @@ const styles: Record<string, React.CSSProperties> = {
     height: 8,
     borderRadius: '50%',
     backgroundColor: '#10B981',
-    boxShadow: '0 0 10px #10B981',
   },
   statusText: {
     fontSize: 13,
     color: '#D1D5DB',
   },
   avatarsCard: {
-    backgroundColor: 'rgba(14, 25, 45, 0.85)',
-    border: '1px solid rgba(255, 255, 255, 0.14)',
+    backgroundColor: 'rgba(14, 25, 45, 0.88)',
+    border: 'none',
     backdropFilter: 'blur(16px)',
     WebkitBackdropFilter: 'blur(16px)',
     borderRadius: 22,
     padding: '14px 12px',
+    boxShadow: 'none',
     marginBottom: 14,
     zIndex: 3,
   },
@@ -362,7 +363,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: 46,
     borderRadius: '50%',
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    border: '1.5px solid rgba(255, 255, 255, 0.18)',
+    border: 'none',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

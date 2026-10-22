@@ -195,7 +195,7 @@ export default function TeacherGapReport({
           <div style={styles.titleSection}>
             <h1 style={styles.title}>Отчёт по викторине</h1>
             <p style={styles.subtitle}>
-              {quizTitle} • {topic} ({grade} класс)
+              {quizTitle}, {topic} ({grade} класс)
             </p>
           </div>
         </header>
@@ -395,7 +395,7 @@ export default function TeacherGapReport({
                 <div style={styles.weakTopicInfo}>
                   <div style={styles.weakTopicTitle}>{item.topic}</div>
                   <div style={styles.weakTopicSub}>
-                    Код ФРП: <strong>{item.kesCode}</strong> • Результат класса:{' '}
+                    Код ФРП: <strong>{item.kesCode}</strong>, результат класса:{' '}
                     <span style={{ color: colors.answerRed, fontWeight: 700 }}>
                       {item.correctPercentage}%
                     </span>

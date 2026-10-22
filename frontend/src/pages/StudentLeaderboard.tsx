@@ -33,7 +33,7 @@ export default function StudentLeaderboard() {
           <div>
             <div style={styles.myRankTitle}>Твоё место в классе</div>
             <div style={styles.myRankSub}>
-              {currentStudent.score} очков • {currentStudent.streak} дней стрик 🔥
+              {currentStudent.score} очков, стрик {currentStudent.streak} дней 🔥
             </div>
           </div>
         </div>
@@ -57,7 +57,7 @@ export default function StudentLeaderboard() {
           <span style={styles.podiumAvatar}>{CLASS_PLAYERS[1].avatar}</span>
           <span style={styles.podiumName}>{CLASS_PLAYERS[1].name}</span>
           <span style={styles.podiumScore}>{CLASS_PLAYERS[1].score} б.</span>
-          <div style={{ ...styles.podiumBlock, height: 70, backgroundColor: 'rgba(156, 163, 175, 0.25)', borderColor: '#9CA3AF' }}>
+          <div style={{ ...styles.podiumBlock, height: 70, backgroundColor: 'rgba(156, 163, 175, 0.28)' }}>
             <span style={styles.podiumMedal}>🥈 2</span>
           </div>
         </div>
@@ -68,7 +68,7 @@ export default function StudentLeaderboard() {
           <span style={{ ...styles.podiumAvatar, fontSize: 36 }}>{CLASS_PLAYERS[0].avatar}</span>
           <span style={{ ...styles.podiumName, fontWeight: 800 }}>{CLASS_PLAYERS[0].name}</span>
           <span style={styles.podiumScore}>{CLASS_PLAYERS[0].score} б.</span>
-          <div style={{ ...styles.podiumBlock, height: 95, backgroundColor: 'rgba(245, 158, 11, 0.3)', borderColor: '#F59E0B' }}>
+          <div style={{ ...styles.podiumBlock, height: 95, backgroundColor: 'rgba(245, 158, 11, 0.32)' }}>
             <span style={styles.podiumMedal}>🥇 1</span>
           </div>
         </div>
@@ -80,7 +80,7 @@ export default function StudentLeaderboard() {
             {CLASS_PLAYERS[2].name}
           </span>
           <span style={styles.podiumScore}>{CLASS_PLAYERS[2].score} б.</span>
-          <div style={{ ...styles.podiumBlock, height: 55, backgroundColor: 'rgba(217, 119, 6, 0.25)', borderColor: '#D97706' }}>
+          <div style={{ ...styles.podiumBlock, height: 55, backgroundColor: 'rgba(217, 119, 6, 0.28)' }}>
             <span style={styles.podiumMedal}>🥉 3</span>
           </div>
         </div>
@@ -103,8 +103,7 @@ export default function StudentLeaderboard() {
                 onClick={() => haptics.selection()}
                 style={{
                   ...styles.rankRow,
-                  backgroundColor: isMe ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.04)',
-                  borderColor: isMe ? '#10B981' : 'rgba(255, 255, 255, 0.08)',
+                  backgroundColor: isMe ? 'rgba(16, 185, 129, 0.22)' : 'rgba(255, 255, 255, 0.05)',
                 }}
               >
                 <div style={styles.rankRowLeft}>
@@ -149,6 +148,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
     padding: '14px 14px 18px',
     boxSizing: 'border-box',
     gap: 12,
@@ -159,12 +162,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(16, 185, 129, 0.18)',
-    border: '1px solid rgba(16, 185, 129, 0.4)',
+    backgroundColor: 'rgba(16, 185, 129, 0.22)',
+    border: 'none',
     borderRadius: 18,
     padding: '12px 14px',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
+    boxShadow: 'none',
   },
   myRankLeft: {
     display: 'flex',
@@ -191,7 +193,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    backgroundColor: 'rgba(16, 185, 129, 0.3)',
     padding: '4px 8px',
     borderRadius: 999,
     fontSize: 12,
@@ -202,12 +204,13 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    border: '1px solid rgba(245, 158, 11, 0.25)',
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    border: 'none',
     borderRadius: 12,
     padding: '8px 12px',
     fontSize: 12,
     color: '#FDE68A',
+    boxShadow: 'none',
   },
   podiumContainer: {
     display: 'flex',
@@ -249,7 +252,8 @@ const styles: Record<string, React.CSSProperties> = {
   podiumBlock: {
     width: '100%',
     borderRadius: '12px 12px 6px 6px',
-    border: '1px solid',
+    border: 'none',
+    boxShadow: 'none',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -287,7 +291,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     padding: '10px 12px',
     borderRadius: 14,
-    border: '1px solid',
+    border: 'none',
+    boxShadow: 'none',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
   },

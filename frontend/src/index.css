@@ -76,7 +76,7 @@ body {
   height: 92vh;
   max-height: 880px;
   margin: 0 auto !important;
-  background: #0B132B;
+  background: #0B132B url('/assets/backgrounds/quiz_bg_clean.png') center top / cover no-repeat;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 40px;
   box-shadow: 0 30px 90px -10px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -97,7 +97,7 @@ body {
     border-radius: 0;
     border: none;
     box-shadow: none;
-    background: var(--bg-primary);
+    background: #0B132B url('/assets/backgrounds/quiz_bg_clean.png') center top / cover no-repeat;
   }
 }
 

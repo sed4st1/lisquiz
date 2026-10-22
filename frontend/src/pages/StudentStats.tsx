@@ -17,8 +17,8 @@ const ACHIEVEMENTS: AchievementItem[] = [
   { id: '2', icon: '⚡', title: 'Быстрый Лис', desc: 'Ответил верно быстрее чем за 3 секунды', unlocked: true },
   { id: '3', icon: '🦉', title: 'Мудрая Сова', desc: 'Серия из 10 правильных ответов', unlocked: true },
   { id: '4', icon: '👑', title: 'Топ-3 Класса', desc: 'Вошел в тройку лидеров викторины', unlocked: true },
-  { id: '5', icon: '💎', title: 'Мастер Дробей', desc: 'Реши 15 задач на сложение дробей', unlocked: false, progress: '8/15' },
-  { id: '6', icon: '🐾', title: 'Друг Спринта', desc: 'Сыграй 20 викторин в Лисквизе', unlocked: false, progress: '12/20' },
+  { id: '5', icon: '💎', title: 'Мастер Дробей', desc: 'Реши 15 задач на сложение дробей', unlocked: false, progress: '8 из 15' },
+  { id: '6', icon: '🐾', title: 'Друг Спринта', desc: 'Сыграй 20 викторин в Лисквизе', unlocked: false, progress: '12 из 20' },
 ];
 
 export default function StudentStats() {
@@ -82,7 +82,7 @@ export default function StudentStats() {
       <div style={styles.achievementsSection}>
         <div style={styles.achievementsHeader}>
           <Award size={16} color="#F59E0B" />
-          <span style={styles.sectionTitle}>Достижения и значки (4/6)</span>
+          <span style={styles.sectionTitle}>Достижения и значки (4 из 6)</span>
         </div>
 
         <div style={styles.achievementsList}>
@@ -94,7 +94,6 @@ export default function StudentStats() {
               style={{
                 ...styles.achievementCard,
                 opacity: a.unlocked ? 1 : 0.6,
-                borderColor: a.unlocked ? 'rgba(255, 122, 0, 0.35)' : 'rgba(255, 255, 255, 0.08)',
               }}
             >
               <div style={styles.badgeEmoji}>{a.icon}</div>
@@ -127,6 +126,10 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
     padding: '14px 14px 20px',
     boxSizing: 'border-box',
     gap: 14,
@@ -139,13 +142,13 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   kpiCard: {
-    backgroundColor: 'rgba(22, 32, 53, 0.85)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(22, 32, 53, 0.9)',
+    border: 'none',
     borderRadius: 18,
     padding: '14px',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
+    boxShadow: 'none',
   },
   kpiIconWrapOrange: {
     width: 32,
@@ -200,10 +203,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
   },
   groveContributionCard: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    border: '1px solid rgba(16, 185, 129, 0.3)',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    border: 'none',
     borderRadius: 18,
     padding: '14px',
+    boxShadow: 'none',
   },
   groveHeader: {
     display: 'flex',
@@ -274,10 +278,11 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    border: '1px solid',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: 'none',
     borderRadius: 14,
     padding: '10px 12px',
+    boxShadow: 'none',
     cursor: 'pointer',
   },
   badgeEmoji: {
