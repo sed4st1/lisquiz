@@ -422,9 +422,9 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
   },
   questCard: {
-    backgroundColor: '#18243A',
-    border: '1.5px solid rgba(245, 158, 11, 0.35)',
-    borderBottom: '4px solid #141C2E',
+    backgroundColor: '#192136',
+    border: '1.5px solid rgba(245, 158, 11, 0.4)',
+    borderBottom: '4px solid #78350F',
     borderRadius: 18,
     padding: '16px 18px',
     boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',

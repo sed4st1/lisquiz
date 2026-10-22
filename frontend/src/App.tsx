@@ -638,7 +638,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: 'transparent',
-    paddingBottom: 90,
   },
   dockWrapper: {
     position: 'absolute',

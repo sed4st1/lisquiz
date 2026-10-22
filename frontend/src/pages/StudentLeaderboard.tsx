@@ -1,12 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Flame, TrendingUp, Sparkles, Users } from 'lucide-react';
+import { Flame, TrendingUp, Sparkles } from 'lucide-react';
 import { haptics } from '../services/haptics';
 
 const CLASS_PLAYERS = [
   { rank: 1, id: 'p_1', name: 'Артём В.', avatar: '🦊', score: 1820, streak: 6, isCurrent: false },
   { rank: 2, id: 'p_2', name: 'София Л.', avatar: '🦉', score: 1570, streak: 4, isCurrent: false },
-  { rank: 3, id: 'p_current', name: 'Иван К. (Ты)', avatar: '🦝', score: 1450, streak: 5, isCurrent: true },
+  { rank: 3, id: 'p_current', name: 'Иван К.', avatar: '🦝', score: 1450, streak: 5, isCurrent: true },
   { rank: 4, id: 'p_4', name: 'Маша К.', avatar: '🦔', score: 1290, streak: 3, isCurrent: false },
   { rank: 5, id: 'p_5', name: 'Дима С.', avatar: '🐻', score: 1180, streak: 2, isCurrent: false },
   { rank: 6, id: 'p_6', name: 'Полина Т.', avatar: '🦊', score: 1040, streak: 4, isCurrent: false },
@@ -59,7 +59,7 @@ export default function StudentLeaderboard() {
               <span>{CLASS_PLAYERS[1].avatar}</span>
             </div>
             <span style={styles.podiumName}>{CLASS_PLAYERS[1].name}</span>
-            <span style={styles.podiumScore}>{CLASS_PLAYERS[1].score} б.</span>
+            <span style={styles.podiumScore}>{CLASS_PLAYERS[1].score} б</span>
             <div style={{ ...styles.podiumBlock, ...styles.podiumSilver, height: 72 }}>
               <span style={styles.podiumMedal}>🥈 2</span>
             </div>
@@ -75,7 +75,7 @@ export default function StudentLeaderboard() {
               {CLASS_PLAYERS[0].name}
             </span>
             <span style={{ ...styles.podiumScore, color: '#FBBF24' }}>
-              {CLASS_PLAYERS[0].score} б.
+              {CLASS_PLAYERS[0].score} б
             </span>
             <div style={{ ...styles.podiumBlock, ...styles.podiumGold, height: 96 }}>
               <span style={{ ...styles.podiumMedal, fontSize: 14 }}>🥇 1</span>
@@ -90,26 +90,16 @@ export default function StudentLeaderboard() {
             <span style={{ ...styles.podiumName, color: '#34D399', fontWeight: 800 }}>
               {CLASS_PLAYERS[2].name}
             </span>
-            <span style={styles.podiumScore}>{CLASS_PLAYERS[2].score} б.</span>
+            <span style={styles.podiumScore}>{CLASS_PLAYERS[2].score} б</span>
             <div style={{ ...styles.podiumBlock, ...styles.podiumBronze, height: 56 }}>
               <span style={styles.podiumMedal}>🥉 3</span>
             </div>
           </div>
         </div>
-
-        {/* Solid Connecting Base Pedestal */}
-        <div style={styles.podiumBaseBar}>
-          <span style={styles.podiumBaseLabel}>ПЬЕДЕСТАЛ ПОЧЁТА</span>
-        </div>
       </div>
 
       {/* Full Class Ranking List */}
       <div style={styles.listSection}>
-        <div style={styles.listHeader}>
-          <span>Рейтинг 5А класса ({CLASS_PLAYERS.length} учеников)</span>
-          <Users size={14} color="#9CA3AF" />
-        </div>
-
         <div style={styles.rankingList}>
           {CLASS_PLAYERS.map((p) => {
             const isMe = p.isCurrent;
@@ -135,21 +125,25 @@ export default function StudentLeaderboard() {
                     #{p.rank}
                   </div>
                   <span style={styles.avatarEmoji}>{p.avatar}</span>
-                  <div style={styles.studentInfo}>
-                    <span style={{ ...styles.studentName, color: isMe ? '#34D399' : '#FFFFFF', fontWeight: isMe ? 800 : 600 }}>
+                  <div style={styles.studentInfoCol}>
+                    <span
+                      style={{
+                        ...styles.studentName,
+                        color: isMe ? '#34D399' : '#FFFFFF',
+                        fontWeight: isMe ? 900 : 700,
+                      }}
+                    >
                       {p.name}
                     </span>
-                    {p.streak > 1 && (
-                      <span style={styles.streakTag}>
-                        <Flame size={10} color="#F59E0B" />
-                        <span>x{p.streak}</span>
-                      </span>
-                    )}
+                    <div style={styles.streakSubRow}>
+                      <Flame size={13} color="#FF7A00" />
+                      <span style={styles.streakCount}>{p.streak}</span>
+                    </div>
                   </div>
                 </div>
 
                 <div style={styles.rankRowRight}>
-                  <span style={styles.scoreNumber}>{p.score} б.</span>
+                  <span style={styles.scoreNumber}>{p.score} б</span>
                 </div>
               </motion.div>
             );
@@ -326,40 +320,11 @@ const styles: Record<string, React.CSSProperties> = {
     textShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
     letterSpacing: '0.3px',
   },
-  podiumBaseBar: {
-    width: '100%',
-    backgroundColor: '#151F36',
-    border: '2px solid #283756',
-    borderBottom: '5px solid #0F172A',
-    borderRadius: 14,
-    padding: '6px 0',
-    textAlign: 'center',
-    boxShadow: '0 6px 16px rgba(0, 0, 0, 0.5)',
-    marginTop: -2,
-  },
-  podiumBaseLabel: {
-    fontSize: 10,
-    fontWeight: 900,
-    color: '#94A3B8',
-    letterSpacing: '1.2px',
-    textTransform: 'uppercase',
-  },
   listSection: {
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
     marginTop: 4,
-  },
-  listHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    fontSize: 12,
-    fontWeight: 800,
-    color: '#CBD5E1',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    padding: '0 4px',
   },
   rankingList: {
     display: 'flex',
@@ -381,42 +346,43 @@ const styles: Record<string, React.CSSProperties> = {
   rankRowLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   rankBadge: {
     fontSize: 13,
-    fontWeight: 800,
-    width: 24,
+    fontWeight: 900,
+    width: 22,
   },
   avatarEmoji: {
-    fontSize: 20,
+    fontSize: 24,
   },
-  studentInfo: {
+  studentInfoCol: {
     display: 'flex',
-    alignItems: 'center',
-    gap: 6,
+    flexDirection: 'column',
+    gap: 2,
   },
   studentName: {
-    fontSize: 13,
+    fontSize: 15,
+    letterSpacing: '-0.2px',
   },
-  streakTag: {
+  streakSubRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    padding: '2px 5px',
-    borderRadius: 6,
-    fontSize: 10,
+    gap: 4,
+  },
+  streakCount: {
+    fontSize: 12,
     fontWeight: 700,
-    color: '#F59E0B',
+    color: '#FF9E3B',
   },
   rankRowRight: {
     display: 'flex',
     alignItems: 'center',
   },
   scoreNumber: {
-    fontSize: 13,
-    fontWeight: 800,
+    fontSize: 15,
+    fontWeight: 900,
     color: '#FFFFFF',
+    letterSpacing: '-0.2px',
   },
 };

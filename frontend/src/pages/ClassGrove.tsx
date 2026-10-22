@@ -384,7 +384,7 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     justifyContent: 'space-between',
     backgroundColor: 'transparent',
-    padding: '12px 14px 92px',
+    padding: '10px 14px 84px',
     boxSizing: 'border-box',
     overflowY: 'auto',
     overflowX: 'hidden',
@@ -707,7 +707,7 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
     cursor: 'pointer',
     touchAction: 'manipulation',
-    marginBottom: 8,
+    marginBottom: 0,
   },
   pointsCardLeft: {
     display: 'flex',
