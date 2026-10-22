@@ -63,8 +63,12 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "max_bot_configured": bool(settings.MAX_BOT_TOKEN)
     }
 
-# Подключение роутеров
-from .api import rooms_router, ws_router
+# Подключение роутеров API
+from .api import rooms_router, ws_router, routes_quiz, routes_ml2
+
 app.include_router(rooms_router)
 app.include_router(ws_router)
+app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
+app.include_router(routes_ml2.router, prefix="/api/ml2", tags=["ML 2.0"])
+
 

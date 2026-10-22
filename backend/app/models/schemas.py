@@ -30,6 +30,7 @@ class AnswerOption(BaseModel):
 
 class Question(BaseModel):
     id: int
+    canonical_id: Optional[int] = None
     text: str
     options: List[AnswerOption]
     explanation: Optional[str] = ""
@@ -37,6 +38,14 @@ class Question(BaseModel):
     topic: Optional[str] = None
     grade: Optional[int] = None
     subject: Optional[str] = None
+    difficulty: Optional[str] = "medium"
+    meta_source: Optional[str] = None
+
+class QuizVariant(BaseModel):
+    variant_number: int  # 1, 2, 3, 4
+    quiz_id: str
+    questions: List[Question]
+    question_order: List[int]  # canonical IDs in sequence
 
 
 class Quiz(BaseModel):
@@ -47,6 +56,8 @@ class Quiz(BaseModel):
     topic: str
     questions: List[Question]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    source: Optional[str] = "bank"  # "bank", "gigachat", "ocr"
+    variants: Optional[Dict[int, QuizVariant]] = None
 
 
 class QuizCreateRequest(BaseModel):
@@ -55,6 +66,7 @@ class QuizCreateRequest(BaseModel):
     topic: str = Field(..., examples=["Обыкновенные дроби"])
     question_count: int = Field(5, ge=1, le=20, examples=[5])
     source_notes: Optional[str] = None
+    num_variants: int = Field(4, ge=1, le=4, examples=[4])
 
 
 class Player(BaseModel):
@@ -64,7 +76,8 @@ class Player(BaseModel):
     score: int = 0
     streak: int = 0
     connected: bool = True
-    blurred_count: int = 0  # Сворачивание окна (Page Visibility)
+    blurred_count: int = 0  # Сворачивание окна (Page Visibility / античит)
+    variant_number: int = 1  # Назначенный вариант античита (1, 2, 3, 4)
     pseudonym_id: Optional[str] = None
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

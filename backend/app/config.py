@@ -18,9 +18,12 @@ class Settings(BaseSettings):
     MAX_WEBHOOK_URL: str = ""
 
     # AI / LLM
-    LLM_PROVIDER: str = "mock"  # mock, gigachat, yandexgpt
+    LLM_PROVIDER: str = "gigachat"  # mock, gigachat, yandexgpt
     GIGACHAT_CREDENTIALS: str = ""
+    GIGACHAT_CLIENT_ID: str = ""
+    GIGACHAT_CLIENT_SECRET: str = ""
     GIGACHAT_SCOPE: str = "GIGACHAT_API_PERS"
+    GIGACHAT_MODEL: str = "GigaChat"
     YANDEX_GPT_API_KEY: str = ""
     YANDEX_FOLDER_ID: str = ""
 
@@ -31,5 +34,6 @@ class Settings(BaseSettings):
     @property
     def cors_origins_list(self) -> List[str]:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",") if origin.strip()]
+
 
 settings = Settings()
