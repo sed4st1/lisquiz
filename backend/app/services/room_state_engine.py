@@ -20,6 +20,8 @@ from ..models.schemas import (
     GapReport,
     QuestionStat,
 )
+from .adaptive_engine import adaptive_engine
+from .remediation_engine import remediation_engine
 
 logger = logging.getLogger(__name__)
 
@@ -354,7 +356,7 @@ class RoomStateEngine:
             return await self.transition_state(room_code, RoomStatus.COUNTDOWN)
 
     async def start_question(self, room_code: str, question_index: int) -> RoomStatus:
-        """Начало вопроса: сброс таймера и списка ответивших."""
+        """Начало вопроса: сброс таймера, калибровка тира и списка ответивших."""
         async with self.get_room_lock(room_code):
             room = await self.get_room(room_code)
             if not room:
@@ -364,6 +366,29 @@ class RoomStateEngine:
             room.answered_player_ids = []
             room.question_start_epoch_ms = int(time.time() * 1000)
             cur_q = room.quiz.questions[question_index]
+
+            # Определение параметров сложности (тиры 1, 2, 3)
+            # Tier 1: 15 сек, 500 очков
+            # Tier 2: 25 сек, 750 очков
+            # Tier 3: 40 сек, 1000 очков, is_boss: true
+            tier = getattr(cur_q, "tier", None)
+            is_boss = bool(getattr(cur_q, "is_boss", False))
+
+            if tier == 3 or is_boss or cur_q.difficulty == "hard":
+                tier = 3
+                is_boss = True
+                cur_q.time_limit_sec = 40
+            elif tier == 1 or cur_q.time_limit_sec <= 15 or cur_q.difficulty == "easy":
+                tier = 1
+                is_boss = False
+                cur_q.time_limit_sec = 15
+            else:
+                tier = 2
+                is_boss = False
+                cur_q.time_limit_sec = cur_q.time_limit_sec or 25
+
+            cur_q.tier = tier
+            cur_q.is_boss = is_boss
             room.time_remaining = cur_q.time_limit_sec
 
             return await self.transition_state(room_code, RoomStatus.QUESTION)
@@ -440,18 +465,38 @@ class RoomStateEngine:
             # Проверка правильности
             cur_q = room.quiz.questions[room.current_question_index]
             correct_opt = next((o for o in cur_q.options if o.is_correct), None)
-            is_correct = correct_opt and (correct_opt.id == sub.option_id)
+            is_correct = bool(correct_opt and (correct_opt.id == sub.option_id))
 
-            points, new_streak, speed_bonus = self.calculate_score(
-                question=cur_q,
-                time_taken_sec=sub.time_taken_sec,
-                is_correct=is_correct,
-                current_streak=player.streak,
-                tab_blurred=sub.tab_blurred,
+            tier = getattr(cur_q, "tier", 2) or 2
+            time_limit = getattr(cur_q, "time_limit_sec", 25)
+
+            # Оценка когнитивного порога чтения (тихий античит van der Linden)
+            options_dict = [o.model_dump() for o in cur_q.options]
+            time_floor = adaptive_engine.calculate_time_floor(cur_q.text, options_dict)
+            is_rapid, effort_weight = adaptive_engine.evaluate_response_effort(sub.time_taken_sec, time_floor)
+
+            # Расчёт адаптивных очков через adaptive_engine.calculate_points(is_correct, tier, time_taken_sec, is_rapid)
+            points = adaptive_engine.calculate_points(
+                is_correct,
+                tier,
+                sub.time_taken_sec,
+                is_rapid,
+                time_limit_sec=time_limit,
+                streak=player.streak,
             )
+
+            new_streak = (player.streak + 1) if is_correct else 0
+            base_pts = 500 if tier == 1 else (750 if tier == 2 else 1000)
+            speed_bonus = max(0, points - base_pts) if (is_correct and not is_rapid) else 0
 
             player.score += points
             player.streak = new_streak
+
+            # Обогащение телеметрии ответа для итогового отчёта
+            sub.is_correct = is_correct
+            sub.is_rapid = is_rapid
+            sub.points_awarded = points
+            sub.tier = tier
 
             # Энергия «Рощи класса» (Class Grove)
             if is_correct:
@@ -669,11 +714,43 @@ class RoomStateEngine:
         class_acc = int((total_correct_all / total_answers_all) * 100) if len(room_subs) > 0 else 100
         flagged = [p.name for p in room.players.values() if p.blurred_count > 1]
 
+        # Формирование телеметрии ответов для ML 2.0 движка ремедиации и античита
+        session_responses = []
+        for s in room_subs:
+            pl = room.players.get(s.player_id)
+            cur_q_match = next((q for q in room.quiz.questions if q.id == s.question_id), None)
+            canonical = (cur_q_match.canonical_id or f"item_{cur_q_match.id}") if cur_q_match else f"item_{s.question_id}"
+            
+            opt_idx = 0
+            if cur_q_match:
+                for idx, opt in enumerate(cur_q_match.options):
+                    if opt.id == s.option_id:
+                        opt_idx = idx
+                        break
+
+            session_responses.append({
+                "student_id": s.player_id,
+                "student_name": pl.name if pl else "Ученик",
+                "student_pseudo_id": (pl.pseudonym_id if pl else s.player_id),
+                "item_id": str(canonical),
+                "opt_idx": opt_idx,
+                "is_correct": bool(s.is_correct),
+                "response_time_sec": s.time_taken_sec,
+                "tab_blurred": bool(s.tab_blurred),
+                "blur_count": pl.blurred_count if pl else 0,
+                "rapid_flag": bool(s.is_rapid),
+                "rapid_guess_count": 1 if s.is_rapid else 0
+            })
+
+        ml2_report = remediation_engine.generate_class_gap_report(room_code, session_responses)
+
         hw_recommendation = (
             f"Скорректировать домашнее задание по темам: {', '.join(weak_topics)}"
             if weak_topics
             else "Тема отлично усвоена классом, закрепить стандартным упражнением."
         )
+
+        topics = weak_topics or ml2_report.get("teacher_action_recommendations", []) or [f"Повторение: {room.quiz.topic}"]
 
         return GapReport(
             room_code=room_code,
@@ -683,9 +760,13 @@ class RoomStateEngine:
             class_accuracy_percent=class_acc,
             grove_growth_percent=room.grove_energy,
             questions_stats=stats,
-            topics_to_review=weak_topics or [f"Повторение: {room.quiz.topic}"],
+            topics_to_review=topics,
             homework_recommendation=hw_recommendation,
             flagged_cheaters=flagged,
+            top_misconceptions=ml2_report.get("top_misconceptions", []),
+            cheating_audit_log=ml2_report.get("cheating_audit_log", []),
+            skills_breakdown=ml2_report.get("skills_breakdown", []),
+            root_cause_attribution=ml2_report.get("root_cause_attribution", {}),
         )
 
 

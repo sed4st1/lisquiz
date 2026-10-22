@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { ChevronLeft, Users, Sparkles } from 'lucide-react';
+import { ChevronLeft, Users, Sparkles, Flame } from 'lucide-react';
 import AnswerButton from '../components/AnswerButton';
 import { haptics } from '../services/haptics';
 import type { QuizOption } from '../types/quiz';
@@ -17,8 +17,10 @@ export interface StudentGameQuestionProps {
   options?: QuizOption[];
   correctOptionId?: string;
   timeLimitSec?: number;
+  tier?: number;
+  is_boss?: boolean;
   onAnswer?: (isCorrect: boolean) => void;
-  onAnswerSubmit?: (optionId: string, isCorrect: boolean, responseTimeMs: number) => void;
+  onAnswerSubmit?: (optionId: string, isCorrect: boolean, responseTimeMs: number, tabBlurred: boolean) => void;
   onTimeUp?: () => void;
   onBack?: () => void;
 }
@@ -59,16 +61,42 @@ export default function StudentGameQuestion({
   latex,
   options = DEFAULT_OPTIONS,
   correctOptionId = 'opt_1',
-  timeLimitSec = 10,
+  timeLimitSec,
+  tier = 2,
+  is_boss = false,
   onAnswer,
   onAnswerSubmit,
   onTimeUp,
   onBack,
 }: StudentGameQuestionProps) {
+  const isBossQuestion = Boolean(is_boss || tier === 3);
+  const initialTimeLimit = isBossQuestion ? 40 : (timeLimitSec || (tier === 1 ? 15 : 25));
+
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
-  const [timeLeft, setTimeLeft] = useState<number>(timeLimitSec);
+  const [timeLeft, setTimeLeft] = useState<number>(initialTimeLimit);
   const startTimeRef = useRef<number>(Date.now());
+  const hasBlurredRef = useRef<boolean>(false);
+
+  // Silent anti-cheat: track window blur / tab switch silently without warning student
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        hasBlurredRef.current = true;
+      }
+    };
+    const handleBlur = () => {
+      hasBlurredRef.current = true;
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   // Countdown timer
   useEffect(() => {
@@ -105,6 +133,7 @@ export default function StudentGameQuestion({
 
     const responseTimeMs = Date.now() - startTimeRef.current;
     const isCorrect = optionId === correctOptionId;
+    const tabBlurred = hasBlurredRef.current;
 
     setSelectedOptionId(optionId);
     if (isCorrect) {
@@ -113,7 +142,7 @@ export default function StudentGameQuestion({
       haptics.notification('error');
     }
 
-    onAnswerSubmit?.(optionId, isCorrect, responseTimeMs);
+    onAnswerSubmit?.(optionId, isCorrect, responseTimeMs, tabBlurred);
     if (onAnswer) {
       setTimeout(() => {
         onAnswer(isCorrect);
@@ -183,12 +212,36 @@ export default function StudentGameQuestion({
         })}
       </div>
 
-      {/* Question Number Pill */}
+      {/* Question Number Pill and Boss Badge */}
       <div style={styles.timerRow}>
         <div style={styles.questionNumPill}>
           <Sparkles size={14} color="#34D399" />
           <span>Вопрос {questionNumber} из {totalQuestions}</span>
         </div>
+
+        {isBossQuestion && (
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: [1, 1.05, 1], opacity: 1 }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              padding: '4px 10px',
+              borderRadius: 20,
+              backgroundColor: 'rgba(239, 68, 68, 0.22)',
+              border: '1.5px solid #EF4444',
+              color: '#F87171',
+              fontSize: 12,
+              fontWeight: 800,
+              boxShadow: '0 0 14px rgba(239, 68, 68, 0.45)',
+            }}
+          >
+            <Flame size={14} color="#EF4444" fill="#EF4444" />
+            <span>Сложная задача (х2 очков)</span>
+          </motion.div>
+        )}
       </div>
 
       {/* Question Card with Timer Notch Cutout */}
@@ -214,20 +267,35 @@ export default function StudentGameQuestion({
               cy="27"
               r="23"
               fill="transparent"
-              stroke={timeLeft <= 3 ? '#EF4444' : '#F59E0B'}
+              stroke={
+                isBossQuestion
+                  ? timeLeft <= 8
+                    ? '#EF4444'
+                    : '#F97316'
+                  : timeLeft <= 3
+                  ? '#EF4444'
+                  : '#F59E0B'
+              }
               strokeWidth="3.5"
               strokeDasharray={144.5}
-              strokeDashoffset={144.5 * (1 - timeLeft / timeLimitSec)}
+              strokeDashoffset={144.5 * (1 - timeLeft / initialTimeLimit)}
               strokeLinecap="round"
               style={{
-                filter: timeLeft <= 3 ? 'drop-shadow(0 0 8px #EF4444)' : 'drop-shadow(0 0 8px #F59E0B)',
+                filter:
+                  timeLeft <= (isBossQuestion ? 8 : 3)
+                    ? 'drop-shadow(0 0 8px #EF4444)'
+                    : isBossQuestion
+                    ? 'drop-shadow(0 0 8px #F97316)'
+                    : 'drop-shadow(0 0 8px #F59E0B)',
                 transform: 'rotate(-90deg)',
                 transformOrigin: '50% 50%',
                 transition: 'stroke-dashoffset 0.8s ease, stroke 0.3s ease',
               }}
             />
           </svg>
-          <span style={styles.timerText}>{timeLeft}</span>
+          <span style={{ ...styles.timerText, color: isBossQuestion && timeLeft <= 8 ? '#EF4444' : '#FFFFFF' }}>
+            {timeLeft}
+          </span>
         </div>
 
         {/* The Card Body */}

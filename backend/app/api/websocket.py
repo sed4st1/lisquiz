@@ -119,11 +119,21 @@ async def websocket_room_endpoint(
                         await room_state_engine.start_question(room_code, q_idx)
                         cur_q = room.quiz.questions[q_idx]
 
+                        tier = getattr(cur_q, "tier", 2) or 2
+                        is_boss = bool(getattr(cur_q, "is_boss", False))
+                        time_limit_sec = cur_q.time_limit_sec
+
                         # Для учителя отправляем полные данные (включая правильный ответ)
                         q_teacher = cur_q.model_dump()
+                        q_teacher["tier"] = tier
+                        q_teacher["is_boss"] = is_boss
+                        q_teacher["time_limit_sec"] = time_limit_sec
 
                         # Для учеников скрываем правильный ответ от инспектора сети
                         q_student = cur_q.model_dump()
+                        q_student["tier"] = tier
+                        q_student["is_boss"] = is_boss
+                        q_student["time_limit_sec"] = time_limit_sec
                         for opt in q_student["options"]:
                             opt["is_correct"] = False
 
@@ -134,7 +144,9 @@ async def websocket_room_endpoint(
                                 "question_index": q_idx,
                                 "total_questions": len(room.quiz.questions),
                                 "question": q_teacher,
-                                "time_limit_sec": cur_q.time_limit_sec,
+                                "tier": tier,
+                                "is_boss": is_boss,
+                                "time_limit_sec": time_limit_sec,
                             },
                         )
                         await ws_manager.broadcast_students(
@@ -144,7 +156,9 @@ async def websocket_room_endpoint(
                                 "question_index": q_idx,
                                 "total_questions": len(room.quiz.questions),
                                 "question": q_student,
-                                "time_limit_sec": cur_q.time_limit_sec,
+                                "tier": tier,
+                                "is_boss": is_boss,
+                                "time_limit_sec": time_limit_sec,
                             },
                         )
 

@@ -166,12 +166,14 @@ class AdaptiveEngine:
     def calculate_points(
         self,
         is_correct: bool,
-        p_pred: float,
+        *args,
+        p_pred: float = 0.5,
         tier: int = 2,
         time_taken_sec: float = 5.0,
-        time_limit_sec: float = 20.0,
+        time_limit_sec: float = 25.0,
         streak: int = 0,
-        is_rapid: bool = False
+        is_rapid: bool = False,
+        **kwargs
     ) -> int:
         """
         Формула очков Lisquiz 2.0:
@@ -182,7 +184,47 @@ class AdaptiveEngine:
         - Surprise бонус: до +500 очков за неожиданно верный ответ на сложное задание!
         - Мягкий тайм-фактор: от 1.0 до 0.7 (быстрый ответ дает умеренный плюс, но не решающий).
         - Множитель серии (streak): до x1.5 при серии из 5+.
+        Поддерживает вызов: calculate_points(is_correct, tier, time_taken_sec, is_rapid)
+        а также вызовы с именованными аргументами.
         """
+        if args:
+            if isinstance(args[0], int) and args[0] in (1, 2, 3):
+                tier = args[0]
+                if len(args) > 1:
+                    time_taken_sec = float(args[1])
+                if len(args) > 2:
+                    is_rapid = bool(args[2])
+            elif isinstance(args[0], float) and len(args) > 1 and isinstance(args[1], int):
+                p_pred = args[0]
+                tier = args[1]
+                if len(args) > 2:
+                    time_taken_sec = float(args[2])
+                if len(args) > 3:
+                    time_limit_sec = float(args[3])
+                if len(args) > 4:
+                    streak = int(args[4])
+                if len(args) > 5:
+                    is_rapid = bool(args[5])
+            else:
+                if len(args) >= 1:
+                    tier = int(args[0])
+                if len(args) >= 2:
+                    time_taken_sec = float(args[1])
+                if len(args) >= 3:
+                    is_rapid = bool(args[2])
+
+        if "p_pred" in kwargs:
+            p_pred = float(kwargs["p_pred"])
+        if "tier" in kwargs:
+            tier = int(kwargs["tier"])
+        if "time_taken_sec" in kwargs:
+            time_taken_sec = float(kwargs["time_taken_sec"])
+        if "time_limit_sec" in kwargs:
+            time_limit_sec = float(kwargs["time_limit_sec"])
+        if "streak" in kwargs:
+            streak = int(kwargs["streak"])
+        if "is_rapid" in kwargs:
+            is_rapid = bool(kwargs["is_rapid"])
         if not is_correct or is_rapid:
             return 0
 

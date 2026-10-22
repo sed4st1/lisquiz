@@ -1,6 +1,6 @@
 from enum import Enum
 from datetime import datetime, timezone
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -40,6 +40,9 @@ class Question(BaseModel):
     subject: Optional[str] = None
     difficulty: Optional[str] = "medium"
     meta_source: Optional[str] = None
+    tier: Optional[int] = 2
+    is_boss: Optional[bool] = False
+    skill_id: Optional[str] = None
 
 class QuizVariant(BaseModel):
     variant_number: int  # 1, 2, 3, 4
@@ -115,6 +118,10 @@ class AnswerSubmission(BaseModel):
     option_id: int
     time_taken_sec: float
     tab_blurred: bool = False
+    is_correct: Optional[bool] = None
+    is_rapid: Optional[bool] = False
+    points_awarded: Optional[int] = 0
+    tier: Optional[int] = 2
 
 
 class SyncState(BaseModel):
@@ -153,3 +160,7 @@ class GapReport(BaseModel):
     topics_to_review: List[str]
     homework_recommendation: Optional[str] = None
     flagged_cheaters: List[str] = []
+    top_misconceptions: Optional[List[Dict[str, Any]]] = None
+    cheating_audit_log: Optional[List[Dict[str, Any]]] = None
+    skills_breakdown: Optional[List[Dict[str, Any]]] = None
+    root_cause_attribution: Optional[Dict[str, int]] = None

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   BookOpen,
@@ -10,10 +10,39 @@ import {
   Sparkles,
   Check,
   X,
+  GraduationCap,
+  ArrowLeft,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
 import type { Quiz } from '../types/quiz';
+
+export interface TextbookItem {
+  id: string;
+  subject: string;
+  grade: number;
+  author: string;
+  title: string;
+  publisher?: string;
+  chapters_count?: number;
+}
+
+export interface ParagraphItem {
+  num: number;
+  title: string;
+  skill_id?: string;
+  topic?: string;
+  keywords?: string[];
+}
+
+const FALLBACK_TEXTBOOKS: TextbookItem[] = [
+  { id: 'peryshkin_phys_7', subject: 'Физика', grade: 7, author: 'Пёрышкин А.В., Иванов А.И.', title: 'Физика 7 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'vilenkin_math_6', subject: 'Математика', grade: 6, author: 'Виленкин Н.Я. и др.', title: 'Математика 6 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'merzlyak_math_6', subject: 'Математика', grade: 6, author: 'Мерзляк А.Г. и др.', title: 'Математика 6 класс (Вентана-Граф)', publisher: 'Вентана-Граф', chapters_count: 2 },
+  { id: 'ladyzhenskaya_rus_6', subject: 'Русский язык', grade: 6, author: 'Ладыженская Т.А. и др.', title: 'Русский язык 6 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 1 },
+  { id: 'makarychev_alg_7', subject: 'Алгебра', grade: 7, author: 'Макарычев Ю.Н. и др.', title: 'Алгебра 7 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'atanasyan_geom_7_9', subject: 'Геометрия', grade: 7, author: 'Атанасян Л.С. и др.', title: 'Геометрия 7–9 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 2 },
+];
 
 export interface TeacherCreateQuizProps {
   onQuizCreated?: (quiz?: Quiz) => void;
@@ -54,9 +83,50 @@ export default function TeacherCreateQuiz({
   const [questionCount, setQuestionCount] = useState<number>(10);
   const [isPhotoUploaded, setIsPhotoUploaded] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | null>(null);
+  const [textbooks, setTextbooks] = useState<TextbookItem[]>(FALLBACK_TEXTBOOKS);
+  const [selectedTextbook, setSelectedTextbook] = useState<TextbookItem | null>(null);
+  const [selectedParagraph, setSelectedParagraph] = useState<ParagraphItem | null>(null);
+  const [inspectingTextbook, setInspectingTextbook] = useState<any | null>(null);
+  const [textbookModalStep, setTextbookModalStep] = useState<'books' | 'paragraphs'>('books');
+  const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | 'textbook' | null>(null);
+  const [speechText, setSpeechText] = useState<string>('Привет! Я Спринт. Помогу создать отличную викторину по школьной программе!');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    fetch('/api/ml2/textbooks')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.textbooks && d.textbooks.length > 0) {
+          setTextbooks(d.textbooks);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSelectTextbookForInspection = async (tb: TextbookItem) => {
+    haptics.selection();
+    setInspectingTextbook(tb);
+    setTextbookModalStep('paragraphs');
+    try {
+      const res = await fetch(`/api/ml2/textbooks/${tb.id}`);
+      if (res.ok) {
+        const full = await res.json();
+        setInspectingTextbook(full);
+      }
+    } catch {}
+  };
+
+  const handleSelectParagraph = (para: ParagraphItem) => {
+    haptics.notification('success');
+    setSelectedTextbook(inspectingTextbook);
+    setSelectedParagraph(para);
+    if (inspectingTextbook?.subject) setSubject(inspectingTextbook.subject);
+    if (inspectingTextbook?.grade) setGrade(inspectingTextbook.grade);
+    setTopic(`§ ${para.num}. ${para.title}`);
+    setSpeechText(`Выбран § ${para.num} «${para.title}» из учебника ${inspectingTextbook?.author?.split(' ')[0]}. Готовлю проверенные задачи!`);
+    setActiveModal(null);
+  };
 
   const handleStartGeneration = () => {
     haptics.notification('success');
@@ -96,7 +166,7 @@ export default function TeacherCreateQuiz({
       >
         <div style={styles.mascotSpeechBubble}>
           <p style={styles.speechText}>
-            Привет! Я Спринт. Помогу создать отличную викторину с помощью ИИ!
+            {speechText}
           </p>
         </div>
 
@@ -111,6 +181,36 @@ export default function TeacherCreateQuiz({
 
       {/* Interactive Selection Tiles */}
       <div style={styles.tilesContainer}>
+        {/* Tile: Russian Textbooks & Paragraphs */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            haptics.impact('light');
+            setTextbookModalStep('books');
+            setActiveModal('textbook');
+          }}
+          style={{
+            ...styles.tileCard,
+            borderColor: selectedParagraph ? '#EC4899' : '#283756',
+            backgroundColor: selectedParagraph ? 'rgba(236, 72, 153, 0.08)' : '#151F36',
+          }}
+        >
+          <div style={styles.tileLeft}>
+            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(236, 72, 153, 0.22)', color: '#F472B6' }}>
+              <GraduationCap size={20} />
+            </div>
+            <div style={styles.tileTexts}>
+              <span style={styles.tileLabel}>Учебник РФ и параграф</span>
+              <span style={{ ...styles.tileValue, color: selectedParagraph ? '#F472B6' : '#FFFFFF' }}>
+                {selectedParagraph
+                  ? `${selectedTextbook?.author?.split(' ')[0] || ''} § ${selectedParagraph.num}. ${selectedParagraph.title}`
+                  : 'Выбрать из каталога ФГОС'}
+              </span>
+            </div>
+          </div>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </motion.div>
+
         {/* Tile 1: Subject */}
         <motion.div
           whileTap={{ scale: 0.98 }}
@@ -324,6 +424,7 @@ export default function TeacherCreateQuiz({
                   {activeModal === 'grade' && 'Выберите класс'}
                   {activeModal === 'topic' && 'Выберите тему ФРП'}
                   {activeModal === 'count' && 'Количество вопросов'}
+                  {activeModal === 'textbook' && (textbookModalStep === 'books' ? 'Каталог учебников РФ' : 'Выбор параграфа')}
                 </span>
                 <button onClick={() => setActiveModal(null)} style={styles.modalCloseBtn}>
                   <X size={18} color="#9CA3AF" />
@@ -332,6 +433,118 @@ export default function TeacherCreateQuiz({
 
               {/* Modal Body Items */}
               <div style={styles.modalList}>
+                {activeModal === 'textbook' && (
+                  <div>
+                    {textbookModalStep === 'paragraphs' && inspectingTextbook ? (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                          <button
+                            onClick={() => {
+                              haptics.selection();
+                              setTextbookModalStep('books');
+                            }}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#9CA3AF',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              cursor: 'pointer',
+                              fontSize: 13,
+                              fontWeight: 700,
+                              padding: '4px 0',
+                            }}
+                          >
+                            <ArrowLeft size={16} /> К списку учебников
+                          </button>
+                        </div>
+                        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 14, backgroundColor: 'rgba(236, 72, 153, 0.12)' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#F472B6' }}>
+                            {inspectingTextbook.title} ({inspectingTextbook.author})
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 340, overflowY: 'auto' }}>
+                          {inspectingTextbook.sections?.map((sec: any, sIdx: number) => (
+                            <div key={sIdx} style={{ marginBottom: 6 }}>
+                              <span style={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                                {sec.chapter}
+                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                                {sec.paragraphs?.map((p: ParagraphItem) => {
+                                  const isSelected = selectedParagraph?.num === p.num && selectedTextbook?.id === inspectingTextbook.id;
+                                  return (
+                                    <button
+                                      key={p.num}
+                                      onClick={() => handleSelectParagraph(p)}
+                                      style={{
+                                        ...styles.modalOptionBtn,
+                                        backgroundColor: isSelected ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                        borderColor: isSelected ? '#EC4899' : 'rgba(255, 255, 255, 0.1)',
+                                        textAlign: 'left',
+                                        alignItems: 'flex-start',
+                                        padding: '10px 12px',
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                                        <span style={{ color: isSelected ? '#F472B6' : '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
+                                          § {p.num}. {p.title}
+                                        </span>
+                                        {p.topic && (
+                                          <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                            Тема: {p.topic}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {isSelected && <Check size={18} color="#EC4899" />}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
+                        <span style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 4 }}>
+                          Учебники РФ (ФГОС/ФРП) с привязкой задач к параграфам:
+                        </span>
+                        {textbooks.map((tb) => {
+                          const isSelected = selectedTextbook?.id === tb.id;
+                          return (
+                            <button
+                              key={tb.id}
+                              onClick={() => handleSelectTextbookForInspection(tb)}
+                              style={{
+                                ...styles.modalOptionBtn,
+                                backgroundColor: isSelected ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                                borderColor: isSelected ? '#EC4899' : 'rgba(255, 255, 255, 0.1)',
+                                textAlign: 'left',
+                                padding: '12px 14px',
+                              }}
+                            >
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ color: isSelected ? '#F472B6' : '#FFFFFF', fontWeight: 800, fontSize: 13.5 }}>
+                                    {tb.title}
+                                  </span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#E5E7EB' }}>
+                                    {tb.subject} {tb.grade} кл
+                                  </span>
+                                </div>
+                                <span style={{ color: '#9CA3AF', fontSize: 11.5 }}>
+                                  {tb.author} • {tb.publisher}
+                                </span>
+                              </div>
+                              <ChevronRight size={18} color="#9CA3AF" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {activeModal === 'subject' &&
                   SUBJECTS.map((item) => (
                     <button

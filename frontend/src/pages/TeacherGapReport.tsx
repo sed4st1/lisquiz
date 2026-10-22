@@ -10,6 +10,10 @@ import {
   ChevronUp,
   CheckCircle2,
   BookOpen,
+  ShieldAlert,
+  EyeOff,
+  Zap,
+  Lightbulb,
 } from 'lucide-react';
 import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
 
@@ -25,14 +29,88 @@ export interface QuestionAnalyticsItem {
   commonMistake?: string;
 }
 
+export interface MisconceptionItem {
+  misc_id: string;
+  title: string;
+  occurrences: number;
+  pct_of_class: number;
+  correction_hint?: string;
+}
+
+export interface CheatingAuditItem {
+  student_id: string;
+  student_name: string;
+  blur_count: number;
+  rapid_guess_count: number;
+  total_answers: number;
+  risk_level: 'CLEAN' | 'MEDIUM' | 'HIGH' | string;
+  flags: string[];
+}
+
 export interface TeacherGapReportProps {
   quizTitle?: string;
   topic?: string;
   grade?: number;
   totalStudents?: number;
   questions?: QuestionAnalyticsItem[];
+  topMisconceptions?: MisconceptionItem[];
+  cheatingAuditLog?: CheatingAuditItem[];
   onSendReviewTasks?: (topics: string[]) => void;
 }
+
+const DEFAULT_MISCONCEPTIONS: MisconceptionItem[] = [
+  {
+    misc_id: 'MC.EQ.DIV',
+    title: 'Выражение делителя из равенства (деление вместо умножения)',
+    occurrences: 11,
+    pct_of_class: 42.3,
+    correction_hint: 'Напомнить треугольник формул и правило: делитель = делимое разделить на частное.',
+  },
+  {
+    misc_id: 'MC.DENS.UNIT',
+    title: 'Перевод единиц плотности: путаница множителя 1000',
+    occurrences: 8,
+    pct_of_class: 30.8,
+    correction_hint: 'Напомнить правило: 1 г/см³ = 1000 кг/м³, кубический метр тяжелее в 1000 раз.',
+  },
+  {
+    misc_id: 'MC.ARCH.BODYDENS',
+    title: 'Подстановка плотности тела вместо жидкости в силу Архимеда',
+    occurrences: 5,
+    pct_of_class: 19.2,
+    correction_hint: 'Показать демонстрацию: сила Архимеда зависит только от вытесненной жидкости.',
+  },
+];
+
+const DEFAULT_CHEATING_LOG: CheatingAuditItem[] = [
+  {
+    student_id: 'p_104',
+    student_name: 'Максим Г.',
+    blur_count: 3,
+    rapid_guess_count: 2,
+    total_answers: 10,
+    risk_level: 'HIGH',
+    flags: ['Сворачивание вкладки во время вопроса (3 раза)', 'Клики быстрее порога чтения (2 раза)'],
+  },
+  {
+    student_id: 'p_112',
+    student_name: 'Егор В.',
+    blur_count: 2,
+    rapid_guess_count: 0,
+    total_answers: 10,
+    risk_level: 'MEDIUM',
+    flags: ['Сворачивание приложения во время теста (2 раза)'],
+  },
+  {
+    student_id: 'p_107',
+    student_name: 'Артём К.',
+    blur_count: 0,
+    rapid_guess_count: 1,
+    total_answers: 10,
+    risk_level: 'MEDIUM',
+    flags: ['Один ответ быстрее 0.8 сек (возможно угадывание)'],
+  },
+];
 
 const DEFAULT_QUESTIONS: QuestionAnalyticsItem[] = [
   {
@@ -147,6 +225,8 @@ export default function TeacherGapReport({
   grade = 5,
   totalStudents = 26,
   questions = DEFAULT_QUESTIONS,
+  topMisconceptions = DEFAULT_MISCONCEPTIONS,
+  cheatingAuditLog = DEFAULT_CHEATING_LOG,
   onSendReviewTasks,
 }: TeacherGapReportProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
@@ -395,6 +475,168 @@ export default function TeacherGapReport({
                 <div style={styles.gapTag}>Пробел в знаниях</div>
               </div>
             ))}
+          </div>
+
+          {/* Частые ошибки класса (ML 2.0 Root-Cause DAG) */}
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Lightbulb size={18} color="#F59E0B" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                  Частые ошибки класса
+                </h3>
+                <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                  Дистракторы и когнитивные заблуждения по результатам теста
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+              {topMisconceptions.map((m, idx) => (
+                <div
+                  key={m.misc_id || idx}
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: 18,
+                    backgroundColor: '#151F36',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: '#FCD34D', flex: 1 }}>
+                      {m.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        padding: '4px 10px',
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(245, 158, 11, 0.18)',
+                        color: '#FBBF24',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {m.occurrences} чел ({m.pct_of_class}%)
+                    </span>
+                  </div>
+                  {m.correction_hint && (
+                    <div style={{ marginTop: 4 }}>
+                      <span style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.45 }}>
+                        💡 <strong style={{ color: '#D1D5DB' }}>Педагогический совет:</strong> {m.correction_hint}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Тихий античит: Аудит честности викторины */}
+          <div style={{ marginTop: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShieldAlert size={18} color="#EF4444" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                  Аудит честности викторины
+                </h3>
+                <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                  Тихая телеметрия переключения окон и скорости ответов
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+              {cheatingAuditLog.map((student) => {
+                const isHigh = student.risk_level === 'HIGH';
+                const isMedium = student.risk_level === 'MEDIUM';
+                const badgeBg = isHigh
+                  ? 'rgba(239, 68, 68, 0.22)'
+                  : isMedium
+                  ? 'rgba(245, 158, 11, 0.22)'
+                  : 'rgba(16, 185, 129, 0.22)';
+                const badgeColor = isHigh ? '#F87171' : isMedium ? '#FBBF24' : '#34D399';
+                const badgeText = isHigh ? 'Высокий риск' : isMedium ? 'Внимание' : 'Чисто';
+
+                return (
+                  <div
+                    key={student.student_id}
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: 18,
+                      backgroundColor: '#151F36',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: '#FFFFFF',
+                          }}
+                        >
+                          {student.student_name[0]}
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: '#FFFFFF' }}>
+                          {student.student_name}
+                        </span>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '3px 9px',
+                          borderRadius: 12,
+                          backgroundColor: badgeBg,
+                          color: badgeColor,
+                        }}
+                      >
+                        {badgeText}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: student.blur_count > 0 ? '#F87171' : '#9CA3AF' }}>
+                        <EyeOff size={13} />
+                        <span>Сворачиваний: <strong>{student.blur_count}</strong></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: student.rapid_guess_count > 0 ? '#FBBF24' : '#9CA3AF' }}>
+                        <Zap size={13} />
+                        <span>Быстрых кликов: <strong>{student.rapid_guess_count}</strong></span>
+                      </div>
+                    </div>
+
+                    {student.flags && student.flags.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
+                        {student.flags.map((flag, fIdx) => (
+                          <span key={fIdx} style={{ fontSize: 11.5, color: '#9CA3AF' }}>
+                            • {flag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Action Button */}
