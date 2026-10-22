@@ -142,12 +142,24 @@ export default function App() {
     return null;
   };
 
+  const activeBg = (tab === 'grove' && !subScreen)
+    ? "url('/assets/backgrounds/grove_bg_clean.png')"
+    : "url('/assets/backgrounds/quiz_bg_clean.png')";
+
   return (
     <div className="desktop-layout">
       {/* ========================================================
           MOBILE PHONE FRAME (Authentic Sferum / MAX experience)
          ======================================================== */}
-      <div className="app-container">
+      <div
+        className="app-container"
+        style={{
+          backgroundImage: activeBg,
+          backgroundPosition: 'center top',
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
         {/* Mobile Top App Bar: Brand + Role Switch */}
         <header style={styles.topHeader}>
           <div style={styles.brandGroup}>
@@ -218,7 +230,6 @@ export default function App() {
                   onClick={() => handleTabChange('home')}
                   style={styles.navBtn}
                 >
-                  {isActive && <div style={styles.dockNotch} />}
                   <div
                     style={{
                       ...styles.navIconCircle,
@@ -244,7 +255,6 @@ export default function App() {
                   onClick={() => handleTabChange('grove')}
                   style={styles.navBtn}
                 >
-                  {isActive && <div style={styles.dockNotch} />}
                   <div
                     style={{
                       ...styles.navIconCircle,
@@ -270,7 +280,6 @@ export default function App() {
                   onClick={() => handleTabChange('leaderboard')}
                   style={styles.navBtn}
                 >
-                  {isActive && <div style={styles.dockNotch} />}
                   <div
                     style={{
                       ...styles.navIconCircle,
@@ -296,7 +305,6 @@ export default function App() {
                   onClick={() => handleTabChange('stats')}
                   style={styles.navBtn}
                 >
-                  {isActive && <div style={styles.dockNotch} />}
                   <div
                     style={{
                       ...styles.navIconCircle,
@@ -629,29 +637,32 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
-    backgroundPosition: 'center top',
-    backgroundSize: 'cover',
-    backgroundRepeat: 'no-repeat',
+    backgroundColor: 'transparent',
+    paddingBottom: 90,
   },
   dockWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     padding: '0 12px 14px 12px',
     backgroundColor: 'transparent',
-    zIndex: 15,
-    flexShrink: 0,
+    zIndex: 25,
+    pointerEvents: 'none',
   },
   bottomNavDock: {
     display: 'flex',
     justifyContent: 'space-around',
     alignItems: 'center',
     height: 68,
-    backgroundColor: 'rgba(12, 20, 37, 0.96)',
+    backgroundColor: 'rgba(12, 20, 37, 0.94)',
     backdropFilter: 'blur(20px)',
     WebkitBackdropFilter: 'blur(20px)',
     border: '1px solid rgba(255, 255, 255, 0.08)',
     borderRadius: 26,
     padding: '4px 6px',
     boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)',
+    pointerEvents: 'auto',
   },
   navBtn: {
     flex: 1,
@@ -666,17 +677,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     padding: '4px 0',
     transition: 'all 0.18s ease',
-  },
-  dockNotch: {
-    position: 'absolute',
-    top: -5,
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: 14,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#10B981',
-    boxShadow: '0 0 8px #10B981',
   },
   navIconCircle: {
     width: 42,

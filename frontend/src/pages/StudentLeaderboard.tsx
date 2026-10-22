@@ -51,38 +51,55 @@ export default function StudentLeaderboard() {
       </div>
 
       {/* Podium Top-3 */}
-      <div style={styles.podiumContainer}>
-        {/* 2nd Place */}
-        <div style={styles.podiumColumn}>
-          <span style={styles.podiumAvatar}>{CLASS_PLAYERS[1].avatar}</span>
-          <span style={styles.podiumName}>{CLASS_PLAYERS[1].name}</span>
-          <span style={styles.podiumScore}>{CLASS_PLAYERS[1].score} б.</span>
-          <div style={{ ...styles.podiumBlock, height: 70, backgroundColor: 'rgba(156, 163, 175, 0.28)' }}>
-            <span style={styles.podiumMedal}>🥈 2</span>
+      <div style={styles.podiumWrapper}>
+        <div style={styles.podiumContainer}>
+          {/* 2nd Place */}
+          <div style={styles.podiumColumn}>
+            <div style={styles.podiumAvatarWrap}>
+              <span>{CLASS_PLAYERS[1].avatar}</span>
+            </div>
+            <span style={styles.podiumName}>{CLASS_PLAYERS[1].name}</span>
+            <span style={styles.podiumScore}>{CLASS_PLAYERS[1].score} б.</span>
+            <div style={{ ...styles.podiumBlock, ...styles.podiumSilver, height: 72 }}>
+              <span style={styles.podiumMedal}>🥈 2</span>
+            </div>
+          </div>
+
+          {/* 1st Place */}
+          <div style={styles.podiumColumn}>
+            <div style={styles.crownIcon}>👑</div>
+            <div style={{ ...styles.podiumAvatarWrap, ...styles.podiumAvatarGold }}>
+              <span style={{ fontSize: 32 }}>{CLASS_PLAYERS[0].avatar}</span>
+            </div>
+            <span style={{ ...styles.podiumName, fontWeight: 800, color: '#FCD34D' }}>
+              {CLASS_PLAYERS[0].name}
+            </span>
+            <span style={{ ...styles.podiumScore, color: '#FBBF24' }}>
+              {CLASS_PLAYERS[0].score} б.
+            </span>
+            <div style={{ ...styles.podiumBlock, ...styles.podiumGold, height: 96 }}>
+              <span style={{ ...styles.podiumMedal, fontSize: 14 }}>🥇 1</span>
+            </div>
+          </div>
+
+          {/* 3rd Place (Current student) */}
+          <div style={styles.podiumColumn}>
+            <div style={styles.podiumAvatarWrap}>
+              <span>{CLASS_PLAYERS[2].avatar}</span>
+            </div>
+            <span style={{ ...styles.podiumName, color: '#34D399', fontWeight: 800 }}>
+              {CLASS_PLAYERS[2].name}
+            </span>
+            <span style={styles.podiumScore}>{CLASS_PLAYERS[2].score} б.</span>
+            <div style={{ ...styles.podiumBlock, ...styles.podiumBronze, height: 56 }}>
+              <span style={styles.podiumMedal}>🥉 3</span>
+            </div>
           </div>
         </div>
 
-        {/* 1st Place */}
-        <div style={styles.podiumColumn}>
-          <div style={styles.crownIcon}>👑</div>
-          <span style={{ ...styles.podiumAvatar, fontSize: 36 }}>{CLASS_PLAYERS[0].avatar}</span>
-          <span style={{ ...styles.podiumName, fontWeight: 800 }}>{CLASS_PLAYERS[0].name}</span>
-          <span style={styles.podiumScore}>{CLASS_PLAYERS[0].score} б.</span>
-          <div style={{ ...styles.podiumBlock, height: 95, backgroundColor: 'rgba(245, 158, 11, 0.32)' }}>
-            <span style={styles.podiumMedal}>🥇 1</span>
-          </div>
-        </div>
-
-        {/* 3rd Place (Current student) */}
-        <div style={styles.podiumColumn}>
-          <span style={styles.podiumAvatar}>{CLASS_PLAYERS[2].avatar}</span>
-          <span style={{ ...styles.podiumName, color: '#34D399', fontWeight: 800 }}>
-            {CLASS_PLAYERS[2].name}
-          </span>
-          <span style={styles.podiumScore}>{CLASS_PLAYERS[2].score} б.</span>
-          <div style={{ ...styles.podiumBlock, height: 55, backgroundColor: 'rgba(217, 119, 6, 0.28)' }}>
-            <span style={styles.podiumMedal}>🥉 3</span>
-          </div>
+        {/* Solid Connecting Base Pedestal */}
+        <div style={styles.podiumBaseBar}>
+          <span style={styles.podiumBaseLabel}>ПЬЕДЕСТАЛ ПОЧЁТА</span>
         </div>
       </div>
 
@@ -150,11 +167,8 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
-    backgroundPosition: 'center top',
-    backgroundSize: 'cover',
-    backgroundRepeat: 'no-repeat',
-    padding: '14px 14px 18px',
+    backgroundColor: 'transparent',
+    padding: '14px 14px 92px',
     boxSizing: 'border-box',
     gap: 12,
     overflowY: 'auto',
@@ -209,37 +223,59 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#261F12',
-    border: '2px solid #5C4318',
-    borderBottom: '4px solid #F59E0B',
+    backgroundColor: '#18243A',
+    border: '1.5px solid rgba(245, 158, 11, 0.35)',
+    borderBottom: '4px solid #141C2E',
     borderRadius: 16,
-    padding: '10px 14px',
+    padding: '12px 14px',
     fontSize: 13,
     fontWeight: 700,
     color: '#FEF3C7',
     lineHeight: 1.4,
   },
+  podiumWrapper: {
+    display: 'flex',
+    flexDirection: 'column',
+    width: '100%',
+    padding: '4px 0',
+  },
   podiumContainer: {
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    gap: 10,
-    padding: '8px 4px 4px',
+    gap: 8,
+    width: '100%',
   },
   podiumColumn: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     flex: 1,
-    maxWidth: 96,
+    maxWidth: 104,
   },
   crownIcon: {
-    fontSize: 18,
-    marginBottom: -4,
+    fontSize: 22,
+    marginBottom: -6,
+    filter: 'drop-shadow(0 2px 8px rgba(251, 191, 36, 0.6))',
   },
-  podiumAvatar: {
-    fontSize: 32,
+  podiumAvatarWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    backgroundColor: '#151F36',
+    border: '2px solid rgba(255, 255, 255, 0.25)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 26,
     marginBottom: 4,
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.4)',
+  },
+  podiumAvatarGold: {
+    width: 52,
+    height: 52,
+    border: '2.5px solid #FCD34D',
+    boxShadow: '0 0 16px rgba(251, 191, 36, 0.5)',
   },
   podiumName: {
     fontSize: 12,
@@ -249,27 +285,64 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: 84,
+    maxWidth: 90,
   },
   podiumScore: {
     fontSize: 12,
     fontWeight: 800,
-    color: '#FBBF24',
-    marginBottom: 4,
+    color: '#E2E8F0',
+    marginBottom: 6,
   },
   podiumBlock: {
     width: '100%',
-    borderRadius: '16px 16px 8px 8px',
-    border: '2px solid rgba(255, 255, 255, 0.15)',
-    borderBottom: '4px solid rgba(0, 0, 0, 0.4)',
+    borderRadius: '16px 16px 4px 4px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    boxSizing: 'border-box',
+  },
+  podiumGold: {
+    backgroundColor: '#D97706',
+    border: '2px solid #FCD34D',
+    borderBottom: '6px solid #78350F',
+    boxShadow: '0 8px 24px rgba(217, 119, 6, 0.45)',
+  },
+  podiumSilver: {
+    backgroundColor: '#475569',
+    border: '2px solid #94A3B8',
+    borderBottom: '6px solid #1E293B',
+    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.35)',
+  },
+  podiumBronze: {
+    backgroundColor: '#9A3412',
+    border: '2px solid #FB923C',
+    borderBottom: '6px solid #431407',
+    boxShadow: '0 8px 20px rgba(154, 52, 18, 0.35)',
   },
   podiumMedal: {
     fontSize: 13,
     fontWeight: 900,
     color: '#FFFFFF',
+    textShadow: '0 1px 3px rgba(0, 0, 0, 0.6)',
+    letterSpacing: '0.3px',
+  },
+  podiumBaseBar: {
+    width: '100%',
+    backgroundColor: '#151F36',
+    border: '2px solid #283756',
+    borderBottom: '5px solid #0F172A',
+    borderRadius: 14,
+    padding: '6px 0',
+    textAlign: 'center',
+    boxShadow: '0 6px 16px rgba(0, 0, 0, 0.5)',
+    marginTop: -2,
+  },
+  podiumBaseLabel: {
+    fontSize: 10,
+    fontWeight: 900,
+    color: '#94A3B8',
+    letterSpacing: '1.2px',
+    textTransform: 'uppercase',
   },
   listSection: {
     display: 'flex',
