@@ -178,8 +178,6 @@ export default function TeacherLiveGame({
     haptics.impact('medium');
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'NEXT_QUESTION' });
-    } else {
-      onFinishQuiz();
     }
   };
 
@@ -360,10 +358,20 @@ export default function TeacherLiveGame({
               </div>
             )}
 
-            <div style={styles.actionRow}>
+            <div style={styles.actionRowColumn}>
+              <TactileButton
+                theme="orange"
+                size="lg"
+                fullWidth
+                onClick={handleNextQuestionOrFinish}
+                iconAfter={<ArrowRight size={18} />}
+              >
+                {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
+              </TactileButton>
+
               <TactileButton
                 theme="yellow"
-                size="lg"
+                size="md"
                 fullWidth
                 onClick={handleShowLeaderboard}
                 iconBefore={<Trophy size={18} />}
@@ -607,6 +615,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   actionRow: {
     marginTop: 8,
+  },
+  actionRowColumn: {
+    marginTop: 10,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
   },
   cardHeader: {
     display: 'flex',

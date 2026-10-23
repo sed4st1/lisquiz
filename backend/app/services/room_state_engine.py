@@ -35,10 +35,10 @@ class InvalidStateTransitionError(Exception):
 VALID_TRANSITIONS: Dict[RoomStatus, List[RoomStatus]] = {
     RoomStatus.LOBBY: [RoomStatus.COUNTDOWN, RoomStatus.FINISHED],
     RoomStatus.COUNTDOWN: [RoomStatus.QUESTION, RoomStatus.FINISHED],
-    RoomStatus.QUESTION: [RoomStatus.REVEAL_RESULTS, RoomStatus.FINISHED],
-    RoomStatus.REVEAL_RESULTS: [RoomStatus.LEADERBOARD, RoomStatus.FINISHED],
+    RoomStatus.QUESTION: [RoomStatus.REVEAL_RESULTS, RoomStatus.LEADERBOARD, RoomStatus.FINISHED],
+    RoomStatus.REVEAL_RESULTS: [RoomStatus.LEADERBOARD, RoomStatus.COUNTDOWN, RoomStatus.FINISHED],
     RoomStatus.LEADERBOARD: [RoomStatus.COUNTDOWN, RoomStatus.FINISHED],
-    RoomStatus.FINISHED: [],
+    RoomStatus.FINISHED: [RoomStatus.LOBBY, RoomStatus.COUNTDOWN],
 }
 
 

@@ -166,6 +166,7 @@ export default function App() {
           initialQuestionData={currentQuestionData}
           onFinishQuiz={() => {
             setSubScreen(null);
+            setTeacherToken('');
             setTab('stats');
           }}
         />
@@ -195,8 +196,9 @@ export default function App() {
             setSubScreen('student_game');
           }}
           onGameFinished={() => {
+            socketService.disconnect();
             setSubScreen(null);
-            setTab('leaderboard');
+            setTab('home');
           }}
         />
       );

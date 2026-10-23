@@ -160,46 +160,49 @@ async def websocket_room_endpoint(
 
                 elif event == "TEACHER_ACTION":
                     action = data.get("action")
-                    if action == "START_GAME":
-                        await room_state_engine.start_game(room_code)
-                        await ws_manager.broadcast_room(
-                            room_code,
-                            "COUNTDOWN_START",
-                            {"countdown_sec": 3, "total_questions": len(room.quiz.questions), "question_index": 0},
-                        )
-
-                    elif action == "START_QUESTION":
-                        q_idx = int(data.get("question_index", room.current_question_index))
-                        await broadcast_question(room_code, q_idx)
-
-                    elif action == "SHOW_RESULTS":
-                        results = await room_state_engine.reveal_results(room_code)
-                        await ws_manager.broadcast_room(room_code, "QUESTION_RESULTS", results)
-
-                    elif action == "SHOW_LEADERBOARD":
-                        lb = await room_state_engine.show_leaderboard(room_code)
-                        await ws_manager.broadcast_room(room_code, "LEADERBOARD_UPDATE", lb)
-
-                    elif action == "NEXT_QUESTION":
-                        nxt = await room_state_engine.next_question(room_code)
-                        if nxt["has_next"]:
-                            next_idx = nxt["question_index"]
+                    try:
+                        if action == "START_GAME":
+                            await room_state_engine.start_game(room_code)
                             await ws_manager.broadcast_room(
                                 room_code,
                                 "COUNTDOWN_START",
-                                {
-                                    "countdown_sec": 3,
-                                    "question_index": next_idx,
-                                    "total_questions": len(room.quiz.questions),
-                                },
+                                {"countdown_sec": 3, "total_questions": len(room.quiz.questions), "question_index": 0},
                             )
-                        else:
-                            gap_rep = await room_state_engine.generate_gap_report(room_code)
-                            await ws_manager.broadcast_room(
-                                room_code,
-                                "GAME_FINISHED",
-                                {"gap_report": gap_rep.model_dump() if gap_rep else {}},
-                            )
+
+                        elif action == "START_QUESTION":
+                            q_idx = int(data.get("question_index", room.current_question_index))
+                            await broadcast_question(room_code, q_idx)
+
+                        elif action == "SHOW_RESULTS":
+                            results = await room_state_engine.reveal_results(room_code)
+                            await ws_manager.broadcast_room(room_code, "QUESTION_RESULTS", results)
+
+                        elif action == "SHOW_LEADERBOARD":
+                            lb = await room_state_engine.show_leaderboard(room_code)
+                            await ws_manager.broadcast_room(room_code, "LEADERBOARD_UPDATE", lb)
+
+                        elif action == "NEXT_QUESTION":
+                            nxt = await room_state_engine.next_question(room_code)
+                            if nxt["has_next"]:
+                                next_idx = nxt["question_index"]
+                                await ws_manager.broadcast_room(
+                                    room_code,
+                                    "COUNTDOWN_START",
+                                    {
+                                        "countdown_sec": 3,
+                                        "question_index": next_idx,
+                                        "total_questions": len(room.quiz.questions),
+                                    },
+                                )
+                            else:
+                                gap_rep = await room_state_engine.generate_gap_report(room_code)
+                                await ws_manager.broadcast_room(
+                                    room_code,
+                                    "GAME_FINISHED",
+                                    {"gap_report": gap_rep.model_dump() if gap_rep else {}},
+                                )
+                    except Exception as err:
+                        logger.error(f"Ошибка при обработке TEACHER_ACTION '{action}': {err}", exc_info=True)
 
             # ==========================================
             # Действия Ученика
