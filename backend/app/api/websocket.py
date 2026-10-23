@@ -1,4 +1,5 @@
 import time
+import asyncio
 import logging
 from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
@@ -9,6 +10,59 @@ from ..services.ws_manager import ws_manager
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["WebSockets"])
+
+
+async def broadcast_question(room_code: str, q_idx: int):
+    """Синхронный запуск вопроса и рассылка всем участникам комнаты."""
+    room = await room_state_engine.get_room(room_code)
+    if not room or q_idx >= len(room.quiz.questions):
+        return
+
+    await room_state_engine.start_question(room_code, q_idx)
+    cur_q = room.quiz.questions[q_idx]
+
+    tier = getattr(cur_q, "tier", 2) or 2
+    is_boss = bool(getattr(cur_q, "is_boss", False))
+    time_limit_sec = cur_q.time_limit_sec
+
+    # Для учителя отправляем полные данные (включая правильный ответ)
+    q_teacher = cur_q.model_dump()
+    q_teacher["tier"] = tier
+    q_teacher["is_boss"] = is_boss
+    q_teacher["time_limit_sec"] = time_limit_sec
+
+    # Для учеников скрываем правильный ответ от инспектора сети
+    q_student = cur_q.model_copy(deep=True).model_dump()
+    q_student["tier"] = tier
+    q_student["is_boss"] = is_boss
+    q_student["time_limit_sec"] = time_limit_sec
+    for opt in q_student["options"]:
+        opt["is_correct"] = False
+
+    await ws_manager.broadcast_teacher(
+        room_code,
+        "QUESTION_START",
+        {
+            "question_index": q_idx,
+            "total_questions": len(room.quiz.questions),
+            "question": q_teacher,
+            "tier": tier,
+            "is_boss": is_boss,
+            "time_limit_sec": time_limit_sec,
+        },
+    )
+    await ws_manager.broadcast_students(
+        room_code,
+        "QUESTION_START",
+        {
+            "question_index": q_idx,
+            "total_questions": len(room.quiz.questions),
+            "question": q_student,
+            "tier": tier,
+            "is_boss": is_boss,
+            "time_limit_sec": time_limit_sec,
+        },
+    )
 
 
 @router.websocket("/ws/rooms/{room_code}")
@@ -111,56 +165,12 @@ async def websocket_room_endpoint(
                         await ws_manager.broadcast_room(
                             room_code,
                             "COUNTDOWN_START",
-                            {"countdown_sec": 3, "total_questions": len(room.quiz.questions)},
+                            {"countdown_sec": 3, "total_questions": len(room.quiz.questions), "question_index": 0},
                         )
 
                     elif action == "START_QUESTION":
                         q_idx = int(data.get("question_index", room.current_question_index))
-                        await room_state_engine.start_question(room_code, q_idx)
-                        cur_q = room.quiz.questions[q_idx]
-
-                        tier = getattr(cur_q, "tier", 2) or 2
-                        is_boss = bool(getattr(cur_q, "is_boss", False))
-                        time_limit_sec = cur_q.time_limit_sec
-
-                        # Для учителя отправляем полные данные (включая правильный ответ)
-                        q_teacher = cur_q.model_dump()
-                        q_teacher["tier"] = tier
-                        q_teacher["is_boss"] = is_boss
-                        q_teacher["time_limit_sec"] = time_limit_sec
-
-                        # Для учеников скрываем правильный ответ от инспектора сети
-                        q_student = cur_q.model_dump()
-                        q_student["tier"] = tier
-                        q_student["is_boss"] = is_boss
-                        q_student["time_limit_sec"] = time_limit_sec
-                        for opt in q_student["options"]:
-                            opt["is_correct"] = False
-
-                        await ws_manager.broadcast_teacher(
-                            room_code,
-                            "QUESTION_START",
-                            {
-                                "question_index": q_idx,
-                                "total_questions": len(room.quiz.questions),
-                                "question": q_teacher,
-                                "tier": tier,
-                                "is_boss": is_boss,
-                                "time_limit_sec": time_limit_sec,
-                            },
-                        )
-                        await ws_manager.broadcast_students(
-                            room_code,
-                            "QUESTION_START",
-                            {
-                                "question_index": q_idx,
-                                "total_questions": len(room.quiz.questions),
-                                "question": q_student,
-                                "tier": tier,
-                                "is_boss": is_boss,
-                                "time_limit_sec": time_limit_sec,
-                            },
-                        )
+                        await broadcast_question(room_code, q_idx)
 
                     elif action == "SHOW_RESULTS":
                         results = await room_state_engine.reveal_results(room_code)
@@ -173,12 +183,13 @@ async def websocket_room_endpoint(
                     elif action == "NEXT_QUESTION":
                         nxt = await room_state_engine.next_question(room_code)
                         if nxt["has_next"]:
+                            next_idx = nxt["question_index"]
                             await ws_manager.broadcast_room(
                                 room_code,
                                 "COUNTDOWN_START",
                                 {
                                     "countdown_sec": 3,
-                                    "question_index": nxt["question_index"],
+                                    "question_index": next_idx,
                                     "total_questions": len(room.quiz.questions),
                                 },
                             )

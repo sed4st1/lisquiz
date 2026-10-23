@@ -90,14 +90,7 @@ export default function TeacherLobby({
 
         socketService.on('SYNC_STATE', (data: any) => {
           if (!isMounted) return;
-          if (data && Array.isArray(data.players)) {
-            const list: ConnectedStudent[] = data.players.map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              avatar: p.avatar,
-            }));
-            setStudents(list);
-          } else if (data && data.players && typeof data.players === 'object') {
+          if (data && data.players && Object.keys(data.players).length > 0) {
             const list: ConnectedStudent[] = Object.values(data.players).map((p: any) => ({
               id: p.id,
               name: p.name,
@@ -133,9 +126,6 @@ export default function TeacherLobby({
               clearInterval(interval);
               if (isMounted) {
                 setCountdown(null);
-                if (socketService.isConnected()) {
-                  socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
-                }
                 onStartQuiz?.();
               }
             } else {
@@ -152,10 +142,10 @@ export default function TeacherLobby({
 
     return () => {
       isMounted = false;
-      socketService.off('SYNC_STATE', () => {});
-      socketService.off('PLAYER_JOINED', () => {});
-      socketService.off('PLAYER_LEFT', () => {});
-      socketService.off('COUNTDOWN_START', () => {});
+      socketService.off('SYNC_STATE', () => { });
+      socketService.off('PLAYER_JOINED', () => { });
+      socketService.off('PLAYER_LEFT', () => { });
+      socketService.off('COUNTDOWN_START', () => { });
     };
   }, [propPin, propToken]);
 
@@ -252,13 +242,13 @@ export default function TeacherLobby({
       <div style={styles.avatarsCard}>
         {students.length === 0 ? (
           <div style={styles.emptyContainer}>
-            <div style={styles.emptyPulseCircle}>
-              <Users size={26} color="#34D399" />
+            <div style={styles.emptyIconCircle}>
+              <Users size={28} color="#60A5FA" />
             </div>
-            <p style={styles.emptyTitle}>Ждём подключения учеников...</p>
-            <p style={styles.emptySubtitle}>
-              Откройте Лисквиз в Сферуме и введите PIN-код выше
-            </p>
+            <span style={styles.emptyTitle}>Ждём подключения учеников</span>
+            <span style={styles.emptySubtitle}>
+              Ученики открывают игру и вводят PIN код
+            </span>
           </div>
         ) : (
           <div style={styles.avatarGrid}>
@@ -509,31 +499,29 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '28px 12px',
+    padding: '28px 16px',
+    gap: 8,
     textAlign: 'center',
   },
-  emptyPulseCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
+  emptyIconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: '50%',
     backgroundColor: '#0F172A',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 10,
+    marginBottom: 4,
   },
   emptyTitle: {
     fontSize: 14,
     fontWeight: 800,
     color: '#FFFFFF',
-    margin: '0 0 4px 0',
   },
   emptySubtitle: {
     fontSize: 12,
     color: '#94A3B8',
-    margin: 0,
-    maxWidth: 240,
-    lineHeight: 1.4,
+    lineHeight: 1.3,
   },
   avatarGrid: {
     display: 'grid',

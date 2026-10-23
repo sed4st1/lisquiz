@@ -1,15 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import {
-  Clock,
+  Users,
   Sparkles,
-  Flame,
-  CheckCircle2,
-  ChevronRight,
-  BarChart3,
+  BarChart2,
   Trophy,
+  ArrowRight,
+  Flame,
+  Check,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { socketService } from '../services/socketService';
@@ -17,76 +17,42 @@ import { haptics } from '../services/haptics';
 
 export interface TeacherLiveGameProps {
   roomCode: string;
-  initialQuestionData?: any;
-  onFinishGame: () => void;
+  initialQuestionData: any;
+  onFinishQuiz: () => void;
 }
 
-type LiveMode = 'question' | 'results' | 'leaderboard';
-
-const SHAPE_MAP: Record<string, string> = {
-  triangle: '▲',
-  diamond: '◆',
-  circle: '●',
-  square: '■',
-};
-
-const COLOR_MAP: Record<string, { bg: string; text: string }> = {
-  red: { bg: '#EF4444', text: '#FFFFFF' },
-  orange: { bg: '#F97316', text: '#FFFFFF' },
-  blue: { bg: '#3B82F6', text: '#FFFFFF' },
-  yellow: { bg: '#EAB308', text: '#0F172A' },
-  green: { bg: '#10B981', text: '#FFFFFF' },
-};
+type TeacherPhase = 'question' | 'results' | 'leaderboard';
 
 export default function TeacherLiveGame({
   roomCode,
   initialQuestionData,
-  onFinishGame,
+  onFinishQuiz,
 }: TeacherLiveGameProps) {
-  const [mode, setMode] = useState<LiveMode>('question');
   const [questionData, setQuestionData] = useState<any>(initialQuestionData);
+  const [phase, setPhase] = useState<TeacherPhase>('question');
   const [answeredCount, setAnsweredCount] = useState<number>(0);
-  const [totalStudents, setTotalStudents] = useState<number>(1);
-  const [timeRemaining, setTimeRemaining] = useState<number>(
-    initialQuestionData?.time_limit_sec || 20
-  );
+  const [totalStudents, setTotalStudents] = useState<number>(0);
   const [resultsData, setResultsData] = useState<any>(null);
   const [leaderboardData, setLeaderboardData] = useState<any>(null);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
-  // Timer countdown in question mode
-  useEffect(() => {
-    if (mode !== 'question' || timeRemaining <= 0) return;
-    const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [mode, timeRemaining]);
+  const curQ = questionData?.question;
+  const qIndex = (questionData?.question_index ?? 0) + 1;
+  const totalQ = questionData?.total_questions ?? 1;
+  const isBoss = Boolean(questionData?.is_boss);
+  const isLastQuestion = qIndex >= totalQ;
 
-  // WebSocket listeners
+  // Listen to WebSocket events
   useEffect(() => {
     let isMounted = true;
 
-    const handleQuestionStart = (data: any) => {
-      if (!isMounted) return;
-      setQuestionData(data);
-      setMode('question');
-      setAnsweredCount(0);
-      setTimeRemaining(data.time_limit_sec || 20);
-      setResultsData(null);
-      setLeaderboardData(null);
-    };
-
     const handleAnswerCollected = (data: any) => {
       if (!isMounted) return;
-      haptics.selection();
-      setAnsweredCount(data.answered_count || 0);
-      if (data.total_players) {
+      haptics.impact('light');
+      if (typeof data.answered_count === 'number') {
+        setAnsweredCount(data.answered_count);
+      }
+      if (typeof data.total_players === 'number') {
         setTotalStudents(data.total_players);
       }
     };
@@ -95,291 +61,232 @@ export default function TeacherLiveGame({
       if (!isMounted) return;
       haptics.notification('success');
       setResultsData(data);
-      setMode('results');
+      setPhase('results');
     };
 
     const handleLeaderboardUpdate = (data: any) => {
       if (!isMounted) return;
-      haptics.impact('medium');
+      haptics.notification('success');
       setLeaderboardData(data);
-      setMode('leaderboard');
+      setPhase('leaderboard');
+    };
+
+    const handleCountdownStart = (data: any) => {
+      if (!isMounted) return;
+      const sec = data.countdown_sec || 3;
+      setCountdown(sec);
+
+      let cur = sec;
+      const interval = setInterval(() => {
+        cur -= 1;
+        if (cur <= 0) {
+          clearInterval(interval);
+          if (isMounted) setCountdown(null);
+        } else {
+          if (isMounted) setCountdown(cur);
+        }
+      }, 1000);
+    };
+
+    const handleQuestionStart = (data: any) => {
+      if (!isMounted) return;
+      haptics.notification('success');
+      setQuestionData(data);
+      setAnsweredCount(0);
+      setPhase('question');
     };
 
     const handleGameFinished = () => {
       if (!isMounted) return;
       haptics.notification('success');
-      onFinishGame();
+      onFinishQuiz();
     };
 
-    socketService.on('QUESTION_START', handleQuestionStart);
     socketService.on('ANSWER_COLLECTED', handleAnswerCollected);
     socketService.on('QUESTION_RESULTS', handleQuestionResults);
     socketService.on('LEADERBOARD_UPDATE', handleLeaderboardUpdate);
+    socketService.on('COUNTDOWN_START', handleCountdownStart);
+    socketService.on('QUESTION_START', handleQuestionStart);
     socketService.on('GAME_FINISHED', handleGameFinished);
 
     return () => {
       isMounted = false;
-      socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('ANSWER_COLLECTED', handleAnswerCollected);
       socketService.off('QUESTION_RESULTS', handleQuestionResults);
       socketService.off('LEADERBOARD_UPDATE', handleLeaderboardUpdate);
+      socketService.off('COUNTDOWN_START', handleCountdownStart);
+      socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('GAME_FINISHED', handleGameFinished);
     };
-  }, [onFinishGame]);
-
-  const qObj = questionData?.question;
-  const qIndex = questionData?.question_index ?? 0;
-  const totalQ = questionData?.total_questions ?? 5;
-  const tier = questionData?.tier ?? 2;
-  const isBoss = questionData?.is_boss ?? false;
-
-  // LaTeX renderer
-  const renderedText = useMemo(() => {
-    const raw = qObj?.text || 'Загрузка вопроса...';
-    try {
-      if (raw.includes('$')) {
-        const parts = raw.split('$');
-        return parts.map((part: string, idx: number) => {
-          if (idx % 2 === 1) {
-            try {
-              const html = katex.renderToString(part, { throwOnError: false });
-              return (
-                <span
-                  key={idx}
-                  dangerouslySetInnerHTML={{ __html: html }}
-                  style={{ display: 'inline-block', margin: '0 2px' }}
-                />
-              );
-            } catch {
-              return <span key={idx}>${part}$</span>;
-            }
-          }
-          return <span key={idx}>{part}</span>;
-        });
-      }
-      return <span>{raw}</span>;
-    } catch {
-      return <span>{raw}</span>;
-    }
-  }, [qObj?.text]);
+  }, [onFinishQuiz]);
 
   // Actions
-  const handleRevealResults = () => {
-    haptics.notification('success');
+  const handleShowResults = () => {
+    haptics.impact('medium');
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'SHOW_RESULTS' });
     } else {
-      // Local fallback
-      setResultsData({
-        correct_option_id: 0,
-        explanation: qObj?.explanation || 'Ответ основан на базовом свойстве дробей.',
-        distribution: { '0': Math.max(1, answeredCount), '1': 0, '2': 0, '3': 0 },
-      });
-      setMode('results');
+      setPhase('results');
     }
   };
 
   const handleShowLeaderboard = () => {
-    haptics.impact('light');
+    haptics.impact('medium');
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'SHOW_LEADERBOARD' });
     } else {
-      setLeaderboardData({
-        top_players: [
-          { rank: 1, name: 'Маша К', score: 1350, streak: 2 },
-          { rank: 2, name: 'Иван К', score: 1100, streak: 1 },
-          { rank: 3, name: 'София Л', score: 850, streak: 1 },
-        ],
-        is_last_question: qIndex + 1 >= totalQ,
-        grove_energy: 35,
-      });
-      setMode('leaderboard');
+      setPhase('leaderboard');
     }
   };
 
-  const handleNextQuestion = () => {
-    haptics.notification('success');
+  const handleNextQuestionOrFinish = () => {
+    haptics.impact('medium');
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'NEXT_QUESTION' });
     } else {
-      if (qIndex + 1 >= totalQ) {
-        onFinishGame();
-      } else {
-        setMode('question');
-        setTimeRemaining(20);
-        setAnsweredCount(0);
-      }
+      onFinishQuiz();
     }
   };
 
-  const answerProgressPercent = totalStudents > 0
-    ? Math.min(100, Math.round((answeredCount / totalStudents) * 100))
-    : 0;
+  // Render question LaTeX if provided
+  const latexHtml = React.useMemo(() => {
+    if (!curQ?.latex) return null;
+    try {
+      return katex.renderToString(curQ.latex, { throwOnError: false, displayMode: true });
+    } catch {
+      return null;
+    }
+  }, [curQ?.latex]);
 
   return (
     <div style={styles.container}>
       {/* Top Header */}
       <header style={styles.header}>
-        <div style={styles.badgeRow}>
-          <div style={styles.questionBadge}>
-            Вопрос {qIndex + 1} из {totalQ}
-          </div>
-          {isBoss ? (
-            <div style={styles.bossBadge}>⚡ БОСС РАУНД</div>
-          ) : (
-            <div style={styles.tierBadge}>Tier {tier}</div>
-          )}
-          <div style={styles.pinBadge}>PIN {roomCode}</div>
+        <div style={styles.roomBadge}>Комната {roomCode}</div>
+
+        <div style={styles.questionBadge}>
+          <Sparkles size={14} color="#34D399" />
+          <span>
+            Вопрос {qIndex} из {totalQ}
+          </span>
         </div>
 
-        {/* Live Timer Indicator */}
-        <div style={styles.timerWrapper}>
-          <Clock size={16} color="#94A3B8" />
-          <span
-            style={{
-              ...styles.timerValue,
-              color: timeRemaining <= 5 ? '#EF4444' : '#FFFFFF',
-            }}
-          >
-            {timeRemaining} сек
+        <div style={styles.answeredBadge}>
+          <Users size={14} color="#60A5FA" />
+          <span>
+            {answeredCount} {totalStudents > 0 ? `из ${totalStudents}` : 'ответов'}
           </span>
         </div>
       </header>
 
-      {/* Mode: QUESTION */}
-      {mode === 'question' && (
-        <motion.div
-          key="mode_question"
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={styles.contentColumn}
-        >
-          {/* Question Box */}
-          <div style={styles.questionCard}>
-            <div style={styles.questionText}>{renderedText}</div>
-          </div>
+      {/* Main Content Area */}
+      <div style={styles.mainContent}>
+        {/* PHASE 1: QUESTION */}
+        {phase === 'question' && (
+          <motion.div
+            key="teacher_question"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={styles.card}
+          >
+            {isBoss && (
+              <div style={styles.bossPill}>
+                <Flame size={14} color="#EF4444" />
+                <span>Сложная задача повышенный балл</span>
+              </div>
+            )}
 
-          {/* Answer Progress Counter */}
-          <div style={styles.counterCard}>
-            <div style={styles.counterHeader}>
-              <span style={styles.counterTitle}>Ответы учеников</span>
-              <span style={styles.counterNumber}>
-                {answeredCount} из {totalStudents}
-              </span>
-            </div>
-            <div style={styles.progressTrack}>
-              <motion.div
-                style={styles.progressBar}
-                animate={{ width: `${answerProgressPercent}%` }}
-                transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            <h2 style={styles.questionText}>
+              {curQ?.text || 'Загрузка текста вопроса...'}
+            </h2>
+
+            {latexHtml && (
+              <div
+                style={styles.latexBox}
+                dangerouslySetInnerHTML={{ __html: latexHtml }}
               />
-            </div>
-          </div>
+            )}
 
-          {/* Options Grid (Teacher view highlights the correct answer) */}
-          <div style={styles.optionsGrid}>
-            {qObj?.options?.map((opt: any) => {
-              const colorInfo = COLOR_MAP[opt.color] || COLOR_MAP.blue;
-              const shapeIcon = SHAPE_MAP[opt.symbol] || '●';
-              const isCorrect = Boolean(opt.is_correct);
-
-              return (
-                <div
-                  key={opt.id}
-                  style={{
-                    ...styles.optionCard,
-                    backgroundColor: isCorrect ? '#065F46' : '#1E293B',
-                  }}
-                >
+            {/* Answer Options Grid */}
+            <div style={styles.optionsGrid}>
+              {curQ?.options?.map((opt: any, idx: number) => {
+                const isCorrect = Boolean(opt.is_correct);
+                return (
                   <div
+                    key={opt.id || idx}
                     style={{
-                      ...styles.shapeBadge,
-                      backgroundColor: colorInfo.bg,
-                      color: colorInfo.text,
+                      ...styles.optionCard,
+                      backgroundColor: isCorrect ? '#065F46' : '#0F172A',
                     }}
                   >
-                    {shapeIcon}
-                  </div>
-                  <span style={styles.optionText}>{opt.text}</span>
-                  {isCorrect && (
-                    <CheckCircle2
-                      size={18}
-                      color="#34D399"
-                      style={{ marginLeft: 'auto' }}
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Action Button */}
-          <div style={styles.footerAction}>
-            <TactileButton
-              theme={answeredCount >= totalStudents && totalStudents > 0 ? 'green' : 'yellow'}
-              size="lg"
-              fullWidth
-              onClick={handleRevealResults}
-              iconAfter={<ChevronRight size={20} />}
-            >
-              {answeredCount >= totalStudents && totalStudents > 0
-                ? 'Все ответили! Раскрыть результаты'
-                : 'Раскрыть результаты'}
-            </TactileButton>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Mode: RESULTS */}
-      {mode === 'results' && (
-        <motion.div
-          key="mode_results"
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          style={styles.contentColumn}
-        >
-          <div style={styles.resultsCard}>
-            <div style={styles.resultsHeader}>
-              <BarChart3 size={20} color="#34D399" />
-              <h3 style={styles.resultsTitle}>Распределение ответов класса</h3>
-            </div>
-
-            {/* Answer Distribution Bars */}
-            <div style={styles.distributionList}>
-              {qObj?.options?.map((opt: any) => {
-                const count = resultsData?.distribution?.[String(opt.id)] || 0;
-                const pct =
-                  answeredCount > 0 ? Math.round((count / answeredCount) * 100) : 0;
-                const isCorrect = Boolean(opt.is_correct);
-                const colorInfo = COLOR_MAP[opt.color] || COLOR_MAP.blue;
-                const shapeIcon = SHAPE_MAP[opt.symbol] || '●';
-
-                return (
-                  <div key={opt.id} style={styles.distributionRow}>
-                    <div style={styles.distribInfo}>
+                    <div style={styles.optionHeader}>
                       <span
                         style={{
-                          ...styles.distribShape,
-                          backgroundColor: colorInfo.bg,
+                          ...styles.optionLetter,
+                          backgroundColor: isCorrect ? '#10B981' : '#1E293B',
+                          color: '#FFFFFF',
                         }}
                       >
-                        {shapeIcon}
+                        {String.fromCharCode(65 + idx)}
                       </span>
-                      <span style={styles.distribText}>{opt.text}</span>
                       {isCorrect && (
-                        <span style={styles.correctPill}>Верный</span>
+                        <div style={styles.correctBadge}>
+                          <Check size={13} color="#34D399" />
+                          <span>Правильный</span>
+                        </div>
                       )}
-                      <span style={styles.distribCount}>
-                        {count} чел ({pct}%)
-                      </span>
                     </div>
+                    <span style={styles.optionText}>{opt.text}</span>
+                  </div>
+                );
+              })}
+            </div>
 
-                    <div style={styles.distribBarTrack}>
+            {/* Bottom Actions */}
+            <div style={styles.actionRow}>
+              <TactileButton
+                theme="green"
+                size="lg"
+                fullWidth
+                onClick={handleShowResults}
+                iconBefore={<BarChart2 size={18} />}
+              >
+                Показать результаты раунда
+              </TactileButton>
+            </div>
+          </motion.div>
+        )}
+
+        {/* PHASE 2: RESULTS */}
+        {phase === 'results' && (
+          <motion.div
+            key="teacher_results"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            style={styles.card}
+          >
+            <div style={styles.cardHeader}>
+              <BarChart2 size={20} color="#34D399" />
+              <h3 style={styles.cardTitle}>Распределение ответов класса</h3>
+            </div>
+
+            {/* Distribution bars */}
+            <div style={styles.distributionList}>
+              {curQ?.options?.map((opt: any, idx: number) => {
+                const count = resultsData?.distribution?.[String(opt.id)] || 0;
+                const isCorrect = Boolean(opt.is_correct || resultsData?.correct_option_id === opt.id);
+                return (
+                  <div key={opt.id || idx} style={styles.distRow}>
+                    <div style={styles.distLabelRow}>
+                      <span style={styles.distLetter}>{String.fromCharCode(65 + idx)}. {opt.text}</span>
+                      <span style={styles.distCount}>{count} чел</span>
+                    </div>
+                    <div style={styles.distBarBg}>
                       <div
                         style={{
-                          ...styles.distribBarFill,
-                          width: `${pct}%`,
-                          backgroundColor: isCorrect ? '#10B981' : '#64748B',
+                          ...styles.distBarFill,
+                          width: `${Math.min(100, count * 25)}%`,
+                          backgroundColor: isCorrect ? '#10B981' : '#3B82F6',
                         }}
                       />
                     </div>
@@ -388,7 +295,6 @@ export default function TeacherLiveGame({
               })}
             </div>
 
-            {/* Sprint Mascot Explanation */}
             {resultsData?.explanation && (
               <div style={styles.explanationBox}>
                 <Sparkles size={16} color="#F59E0B" style={{ flexShrink: 0, marginTop: 2 }} />
@@ -397,102 +303,78 @@ export default function TeacherLiveGame({
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Action Button */}
-          <div style={styles.footerAction}>
-            <TactileButton
-              theme="blue"
-              size="lg"
-              fullWidth
-              onClick={handleShowLeaderboard}
-              iconAfter={<Trophy size={20} />}
-            >
-              Таблица лидеров
-            </TactileButton>
-          </div>
-        </motion.div>
-      )}
+            <div style={styles.actionRow}>
+              <TactileButton
+                theme="yellow"
+                size="lg"
+                fullWidth
+                onClick={handleShowLeaderboard}
+                iconBefore={<Trophy size={18} />}
+              >
+                Показать рейтинг участников
+              </TactileButton>
+            </div>
+          </motion.div>
+        )}
 
-      {/* Mode: LEADERBOARD */}
-      {mode === 'leaderboard' && (
-        <motion.div
-          key="mode_leaderboard"
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={styles.contentColumn}
-        >
-          <div style={styles.leaderboardCard}>
-            <div style={styles.resultsHeader}>
+        {/* PHASE 3: LEADERBOARD */}
+        {phase === 'leaderboard' && (
+          <motion.div
+            key="teacher_leaderboard"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={styles.card}
+          >
+            <div style={styles.cardHeader}>
               <Trophy size={22} color="#F59E0B" />
-              <h3 style={styles.resultsTitle}>Лидеры раунда</h3>
+              <h3 style={styles.cardTitle}>Лидеры викторины</h3>
             </div>
 
             <div style={styles.leaderList}>
               {leaderboardData?.top_players?.map((p: any, idx: number) => {
                 const medals = ['🥇', '🥈', '🥉'];
                 const medal = medals[idx] || `${idx + 1}`;
-
                 return (
                   <div key={p.id || idx} style={styles.leaderRow}>
                     <span style={styles.leaderRank}>{medal}</span>
                     <span style={styles.leaderName}>{p.name}</span>
-                    <div style={styles.leaderScoreGroup}>
-                      <span style={styles.leaderScore}>{p.score} очк</span>
-                      {p.streak > 1 && (
-                        <span style={styles.leaderStreak}>
-                          <Flame size={14} color="#F97316" /> {p.streak}
-                        </span>
-                      )}
-                    </div>
+                    <span style={styles.leaderScore}>{p.score} очков</span>
                   </div>
                 );
               })}
             </div>
 
-            {/* Class Grove Energy Progress */}
-            {leaderboardData?.grove_energy !== undefined && (
-              <div style={styles.groveEnergyBox}>
-                <span style={styles.groveEnergyLabel}>
-                  🌱 Рост Классной Рощи: {leaderboardData.grove_energy}%
-                </span>
-                <div style={styles.groveEnergyTrack}>
-                  <div
-                    style={{
-                      ...styles.groveEnergyFill,
-                      width: `${leaderboardData.grove_energy}%`,
-                    }}
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+            <div style={styles.actionRow}>
+              <TactileButton
+                theme="green"
+                size="lg"
+                fullWidth
+                onClick={handleNextQuestionOrFinish}
+                iconAfter={<ArrowRight size={18} />}
+              >
+                {isLastQuestion ? 'Завершить игру и открыть отчёт' : 'Следующий вопрос'}
+              </TactileButton>
+            </div>
+          </motion.div>
+        )}
+      </div>
 
-          {/* Action Button */}
-          <div style={styles.footerAction}>
-            {leaderboardData?.is_last_question || qIndex + 1 >= totalQ ? (
-              <TactileButton
-                theme="green"
-                size="lg"
-                fullWidth
-                onClick={onFinishGame}
-                iconAfter={<CheckCircle2 size={20} />}
-              >
-                Завершить викторину и отчёт
-              </TactileButton>
-            ) : (
-              <TactileButton
-                theme="green"
-                size="lg"
-                fullWidth
-                onClick={handleNextQuestion}
-                iconAfter={<ChevronRight size={20} />}
-              >
-                Следующий вопрос ({qIndex + 2} из {totalQ})
-              </TactileButton>
-            )}
-          </div>
-        </motion.div>
+      {/* Fullscreen Countdown Overlay */}
+      {countdown !== null && (
+        <div style={styles.countdownOverlay}>
+          <motion.div
+            key={countdown}
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 1.4, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+            style={styles.countdownNumber}
+          >
+            {countdown}
+          </motion.div>
+          <span style={styles.countdownLabel}>Следующий вопрос</span>
+        </div>
       )}
     </div>
   );
@@ -505,7 +387,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: 'transparent',
-    padding: '12px 14px 92px',
+    padding: '14px 14px 92px',
     boxSizing: 'border-box',
     overflowY: 'auto',
   },
@@ -514,159 +396,129 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 12,
+    marginBottom: 14,
   },
-  badgeRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    flexWrap: 'wrap',
+  roomBadge: {
+    backgroundColor: '#1E293B',
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: 800,
+    borderRadius: 8,
+    padding: '5px 10px',
   },
   questionBadge: {
-    backgroundColor: '#1E293B',
-    color: '#34D399',
-    fontSize: 12,
-    fontWeight: 800,
-    borderRadius: 8,
-    padding: '4px 10px',
-  },
-  tierBadge: {
-    backgroundColor: '#0F172A',
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: 700,
-    borderRadius: 8,
-    padding: '4px 8px',
-  },
-  bossBadge: {
-    backgroundColor: '#7C2D12',
-    color: '#FDBA74',
-    fontSize: 11,
-    fontWeight: 800,
-    borderRadius: 8,
-    padding: '4px 8px',
-  },
-  pinBadge: {
-    backgroundColor: '#0F172A',
-    color: '#CBD5E1',
-    fontSize: 11,
-    fontWeight: 700,
-    borderRadius: 8,
-    padding: '4px 8px',
-  },
-  timerWrapper: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#1E293B',
-    borderRadius: 8,
-    padding: '4px 10px',
-  },
-  timerValue: {
-    fontSize: 13,
-    fontWeight: 800,
-  },
-  contentColumn: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    width: '100%',
-  },
-  questionCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 20,
-    padding: '18px 16px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 100,
-    textAlign: 'center',
-  },
-  questionText: {
-    fontSize: 17,
-    fontWeight: 800,
     color: '#FFFFFF',
-    lineHeight: 1.4,
-  },
-  counterCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: '12px 14px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  counterHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  counterTitle: {
     fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-  },
-  counterNumber: {
-    fontSize: 14,
-    color: '#FFFFFF',
     fontWeight: 800,
-  },
-  progressTrack: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 4,
-  },
-  optionsGrid: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
-  },
-  optionCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 14,
-    padding: '12px 14px',
-  },
-  shapeBadge: {
-    width: 28,
-    height: 28,
     borderRadius: 8,
+    padding: '5px 12px',
+  },
+  answeredBadge: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 14,
-    fontWeight: 800,
-    flexShrink: 0,
-  },
-  optionText: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: '#FFFFFF',
-  },
-  resultsCard: {
+    gap: 6,
     backgroundColor: '#1E293B',
-    borderRadius: 20,
-    padding: '16px',
+    color: '#60A5FA',
+    fontSize: 12,
+    fontWeight: 800,
+    borderRadius: 8,
+    padding: '5px 10px',
+  },
+  mainContent: {
+    width: '100%',
     display: 'flex',
     flexDirection: 'column',
     gap: 14,
   },
-  resultsHeader: {
+  card: {
+    backgroundColor: '#1E293B',
+    borderRadius: 20,
+    padding: '18px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
+  },
+  bossPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#7F1D1D',
+    borderRadius: 8,
+    padding: '4px 10px',
+    color: '#F87171',
+    fontSize: 11,
+    fontWeight: 800,
+    alignSelf: 'flex-start',
+  },
+  questionText: {
+    fontSize: 18,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    lineHeight: 1.35,
+  },
+  latexBox: {
+    padding: '6px 0',
+    color: '#FCD34D',
+    fontSize: 18,
+    fontWeight: 700,
+  },
+  optionsGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 10,
+    marginTop: 4,
+  },
+  optionCard: {
+    borderRadius: 14,
+    padding: '12px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  optionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  optionLetter: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 12,
+    fontWeight: 800,
+  },
+  correctBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: 800,
+  },
+  optionText: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontWeight: 700,
+    lineHeight: 1.3,
+  },
+  actionRow: {
+    marginTop: 8,
+  },
+  cardHeader: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
   },
-  resultsTitle: {
-    fontSize: 15,
+  cardTitle: {
+    fontSize: 16,
     fontWeight: 800,
     color: '#FFFFFF',
     margin: 0,
@@ -676,75 +528,47 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 10,
   },
-  distributionRow: {
+  distRow: {
     display: 'flex',
     flexDirection: 'column',
     gap: 4,
   },
-  distribInfo: {
+  distLabelRow: {
     display: 'flex',
-    alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     fontSize: 13,
-  },
-  distribShape: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
-    color: '#FFFFFF',
-    fontSize: 10,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  distribText: {
     fontWeight: 700,
-    color: '#FFFFFF',
+    color: '#E2E8F0',
   },
-  correctPill: {
-    backgroundColor: '#065F46',
+  distLetter: {
+    flex: 1,
+  },
+  distCount: {
     color: '#34D399',
-    fontSize: 10,
     fontWeight: 800,
-    padding: '2px 6px',
-    borderRadius: 4,
   },
-  distribCount: {
-    marginLeft: 'auto',
-    color: '#94A3B8',
-    fontWeight: 700,
-  },
-  distribBarTrack: {
-    width: '100%',
-    height: 6,
+  distBarBg: {
+    height: 8,
     backgroundColor: '#0F172A',
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
   },
-  distribBarFill: {
+  distBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
     transition: 'width 0.4s ease',
   },
   explanationBox: {
     backgroundColor: '#0F172A',
     borderRadius: 12,
-    padding: '10px 12px',
+    padding: '12px',
     display: 'flex',
     gap: 8,
   },
   explanationText: {
-    fontSize: 12,
-    color: '#CBD5E1',
+    fontSize: 13,
+    color: '#E2E8F0',
     lineHeight: 1.4,
-  },
-  leaderboardCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 20,
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 14,
   },
   leaderList: {
     display: 'flex',
@@ -756,7 +580,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     backgroundColor: '#0F172A',
     borderRadius: 12,
-    padding: '10px 12px',
+    padding: '10px 14px',
     gap: 10,
   },
   leaderRank: {
@@ -769,49 +593,35 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#FFFFFF',
     flex: 1,
   },
-  leaderScoreGroup: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-  },
   leaderScore: {
     fontSize: 14,
     fontWeight: 800,
     color: '#34D399',
   },
-  leaderStreak: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 2,
-    fontSize: 12,
-    fontWeight: 800,
-    color: '#F97316',
-  },
-  groveEnergyBox: {
+  countdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    backdropFilter: 'blur(8px)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 6,
-    marginTop: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999,
   },
-  groveEnergyLabel: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: 700,
+  countdownNumber: {
+    fontSize: 84,
+    fontWeight: 900,
+    color: '#F59E0B',
+    lineHeight: 1,
+    marginBottom: 10,
   },
-  groveEnergyTrack: {
-    width: '100%',
-    height: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  groveEnergyFill: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 4,
-    transition: 'width 0.4s ease',
-  },
-  footerAction: {
-    marginTop: 4,
+  countdownLabel: {
+    fontSize: 18,
+    fontWeight: 800,
+    color: '#FFFFFF',
   },
 };

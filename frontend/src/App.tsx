@@ -14,6 +14,7 @@ import TeacherCreateQuiz from './pages/TeacherCreateQuiz';
 import TeacherLobby from './pages/TeacherLobby';
 import TeacherGapReport from './pages/TeacherGapReport';
 import TeacherLiveGame from './pages/TeacherLiveGame';
+import StudentRoundWait from './pages/StudentRoundWait';
 import SleepScreen from './pages/SleepScreen';
 import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
@@ -23,9 +24,10 @@ type SubScreenType =
   | null
   | 'student_waiting'
   | 'student_game'
-  | 'teacher_live_game'
+  | 'teacher_game'
   | 'feedback_correct'
   | 'feedback_wrong'
+  | 'student_round_wait'
   | 'sleep_screen';
 
 export default function App() {
@@ -47,7 +49,7 @@ export default function App() {
     const handleQuestionStart = (data: any) => {
       setCurrentQuestionData(data);
       if (role === 'teacher') {
-        setSubScreen('teacher_live_game');
+        setSubScreen('teacher_game');
       } else {
         setSubScreen('student_game');
       }
@@ -59,10 +61,10 @@ export default function App() {
     };
 
     const handleGameFinished = () => {
-      setSubScreen(null);
       if (role === 'teacher') {
         setTab('stats');
       } else {
+        setSubScreen(null);
         setTab('leaderboard');
       }
     };
@@ -93,18 +95,6 @@ export default function App() {
 
   // Render content according to active Tab & Role
   const renderTabContent = () => {
-    if (subScreen === 'teacher_live_game') {
-      return (
-        <TeacherLiveGame
-          roomCode={activePin}
-          initialQuestionData={currentQuestionData}
-          onFinishGame={() => {
-            setSubScreen(null);
-            setTab('stats');
-          }}
-        />
-      );
-    }
     if (subScreen === 'student_waiting') {
       return (
         <StudentWaitingLobby
@@ -158,13 +148,25 @@ export default function App() {
         />
       );
     }
+    if (subScreen === 'teacher_game') {
+      return (
+        <TeacherLiveGame
+          roomCode={activePin}
+          initialQuestionData={currentQuestionData}
+          onFinishQuiz={() => {
+            setSubScreen(null);
+            setTab('stats');
+          }}
+        />
+      );
+    }
     if (subScreen === 'feedback_correct') {
       return (
         <FeedbackStreak
           isCorrect={true}
           points={personalAnswerResult?.points_awarded || 750}
           streak={personalAnswerResult?.streak || 3}
-          onContinue={() => setSubScreen(null)}
+          onContinue={() => setSubScreen('student_round_wait')}
         />
       );
     }
@@ -175,7 +177,25 @@ export default function App() {
           points={0}
           streak={0}
           correctAnswer={personalAnswerResult?.correct_option_text || '5/6'}
-          onContinue={() => setSubScreen(null)}
+          onContinue={() => setSubScreen('student_round_wait')}
+        />
+      );
+    }
+    if (subScreen === 'student_round_wait') {
+      return (
+        <StudentRoundWait
+          roomCode={activePin}
+          playerName={studentName}
+          playerAvatar={studentAvatar}
+          personalResult={personalAnswerResult}
+          onNextQuestion={(qData) => {
+            setCurrentQuestionData(qData);
+            setSubScreen('student_game');
+          }}
+          onGameFinished={() => {
+            setSubScreen(null);
+            setTab('leaderboard');
+          }}
         />
       );
     }
@@ -198,7 +218,7 @@ export default function App() {
                 setActivePin(payload.pin);
                 setStudentName(payload.name);
                 setStudentAvatar(payload.avatar);
-                socketService.connect(payload.pin, payload.joinData.session_token).catch(() => {});
+                socketService.connect(payload.pin, payload.joinData.session_token).catch(() => { });
                 setSubScreen('student_waiting');
               }}
               onGoToGrove={() => setTab('grove')}
@@ -252,7 +272,10 @@ export default function App() {
                 setTeacherToken(token);
               }}
               onStartQuiz={() => {
-                setSubScreen('teacher_live_game');
+                if (socketService.isConnected()) {
+                  socketService.send('TEACHER_ACTION', { action: 'START_GAME' });
+                }
+                setSubScreen('teacher_game');
               }}
             />
           );
@@ -343,101 +366,103 @@ export default function App() {
         {/* ========================================================
             TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Icon only)
            ======================================================== */}
-        <div style={styles.dockWrapper}>
-          <nav style={styles.bottomNavDock}>
-            {/* Tab 1: Домой */}
-            {(() => {
-              const isActive = tab === 'home' && !subScreen;
-              return (
-                <button
-                  onClick={() => handleTabChange('home')}
-                  style={styles.navBtn}
-                  title="Домой"
-                >
-                  <div
-                    style={{
-                      ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
-                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
-                    }}
+        {!subScreen && (
+          <div style={styles.dockWrapper}>
+            <nav style={styles.bottomNavDock}>
+              {/* Tab 1: Домой */}
+              {(() => {
+                const isActive = tab === 'home' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('home')}
+                    style={styles.navBtn}
+                    title="Домой"
                   >
-                    <Home size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
-                  </div>
-                </button>
-              );
-            })()}
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <Home size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
 
-            {/* Tab 2: Роща */}
-            {(() => {
-              const isActive = tab === 'grove' && !subScreen;
-              return (
-                <button
-                  onClick={() => handleTabChange('grove')}
-                  style={styles.navBtn}
-                  title="Роща"
-                >
-                  <div
-                    style={{
-                      ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
-                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
-                    }}
+              {/* Tab 2: Роща */}
+              {(() => {
+                const isActive = tab === 'grove' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('grove')}
+                    style={styles.navBtn}
+                    title="Роща"
                   >
-                    <Sprout size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
-                  </div>
-                </button>
-              );
-            })()}
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <Sprout size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
 
-            {/* Tab 3: Рейтинг / Лобби */}
-            {(() => {
-              const isActive = tab === 'leaderboard' && !subScreen;
-              return (
-                <button
-                  onClick={() => handleTabChange('leaderboard')}
-                  style={styles.navBtn}
-                  title={role === 'teacher' ? 'Лобби' : 'Рейтинг'}
-                >
-                  <div
-                    style={{
-                      ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
-                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
-                    }}
+              {/* Tab 3: Рейтинг / Лобби */}
+              {(() => {
+                const isActive = tab === 'leaderboard' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('leaderboard')}
+                    style={styles.navBtn}
+                    title={role === 'teacher' ? 'Лобби' : 'Рейтинг'}
                   >
-                    <Crown size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
-                  </div>
-                </button>
-              );
-            })()}
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <Crown size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
 
-            {/* Tab 4: Статистика / Отчёт */}
-            {(() => {
-              const isActive = tab === 'stats' && !subScreen;
-              return (
-                <button
-                  onClick={() => handleTabChange('stats')}
-                  style={styles.navBtn}
-                  title={role === 'teacher' ? 'Отчёт' : 'Статистика'}
-                >
-                  <div
-                    style={{
-                      ...styles.navIconCircle,
-                      backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
-                      border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                      boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
-                    }}
+              {/* Tab 4: Статистика / Отчёт */}
+              {(() => {
+                const isActive = tab === 'stats' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('stats')}
+                    style={styles.navBtn}
+                    title={role === 'teacher' ? 'Отчёт' : 'Статистика'}
                   >
-                    <BarChart2 size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
-                  </div>
-                </button>
-              );
-            })()}
-          </nav>
-        </div>
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <BarChart2 size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
+            </nav>
+          </div>
+        )}
       </div>
 
       {/* ========================================================
@@ -506,6 +531,16 @@ export default function App() {
           <button
             onClick={() => {
               setRole('student');
+              setSubScreen('student_round_wait');
+            }}
+            style={styles.devBtn}
+          >
+            ⏳ Ожидание раунда (Ученик)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
               setTab('leaderboard');
               setSubScreen(null);
             }}
@@ -547,6 +582,16 @@ export default function App() {
             style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
           >
             🧑‍🏫 Лобби учителя (PIN)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setSubScreen('teacher_game');
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            🎮 Игра Live (Учитель)
           </button>
 
           <button
