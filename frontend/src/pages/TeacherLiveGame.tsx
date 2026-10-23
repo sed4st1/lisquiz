@@ -11,6 +11,7 @@ import {
   Flame,
   Check,
   Sprout,
+  Clock,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { socketService } from '../services/socketService';
@@ -57,18 +58,36 @@ export default function TeacherLiveGame({
   const [leaderboardData, setLeaderboardData] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  // Sync state if initialQuestionData updates from parent
-  useEffect(() => {
-    if (initialQuestionData) {
-      setQuestionData(initialQuestionData);
-    }
-  }, [initialQuestionData]);
-
   const curQ = questionData?.question || initialQuestionData?.question || DEFAULT_TEACHER_QUESTION;
   const qIndex = (questionData?.question_index ?? initialQuestionData?.question_index ?? 0) + 1;
   const totalQ = questionData?.total_questions ?? initialQuestionData?.total_questions ?? 3;
   const isBoss = Boolean(questionData?.is_boss);
   const isLastQuestion = qIndex >= totalQ;
+
+  const initialTimeLimit = questionData?.time_limit_sec || initialQuestionData?.time_limit_sec || curQ?.time_limit_sec || 20;
+  const [timeLeft, setTimeLeft] = useState<number>(initialTimeLimit);
+
+  // Synchronized timer for the teacher matching the students' clock
+  useEffect(() => {
+    if (phase !== 'question') return;
+    const initialSec = questionData?.time_limit_sec || initialQuestionData?.time_limit_sec || curQ?.time_limit_sec || 20;
+    setTimeLeft(initialSec);
+
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [phase, curQ?.id, questionData?.time_limit_sec]);
+
+  // Inactive until all answered (or time is up)
+  const allAnswered = (totalStudents > 0 && answeredCount >= totalStudents) || timeLeft === 0;
 
   // Listen to WebSocket events
   useEffect(() => {
@@ -210,6 +229,20 @@ export default function TeacherLiveGame({
             {answeredCount} {totalStudents > 0 ? `из ${totalStudents}` : 'ответов'}
           </span>
         </div>
+
+        {/* Live Timer Pill in Teacher Header */}
+        <div
+          style={{
+            ...styles.timerBadge,
+            borderColor: timeLeft <= 5 ? '#EF4444' : timeLeft <= 8 ? '#F59E0B' : 'rgba(255, 255, 255, 0.12)',
+            color: timeLeft <= 5 ? '#EF4444' : timeLeft <= 8 ? '#F59E0B' : '#34D399',
+            backgroundColor: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.2)' : '#1E293B',
+          }}
+          title="Время учеников на ответ"
+        >
+          <Clock size={13} color={timeLeft <= 5 ? '#EF4444' : timeLeft <= 8 ? '#F59E0B' : '#34D399'} />
+          <span>{timeLeft > 0 ? `${timeLeft}с` : '0с'}</span>
+        </div>
       </header>
 
       {/* Main Content Area */}
@@ -222,7 +255,7 @@ export default function TeacherLiveGame({
             animate={{ opacity: 1, y: 0 }}
             style={styles.card}
           >
-            {/* Category badge & Boss Pill */}
+            {/* Category badge & Boss Pill & Timer */}
             <div style={styles.cardTopRow}>
               <div style={styles.categoryBadge}>
                 <img
@@ -238,6 +271,20 @@ export default function TeacherLiveGame({
                   <span>Сложная задача (х2 очков)</span>
                 </div>
               )}
+
+              {/* Timer indicator inside question card */}
+              <div
+                style={{
+                  ...styles.cardTimerBox,
+                  borderColor: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(255, 255, 255, 0.12)',
+                  backgroundColor: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.15)' : '#0F172A',
+                }}
+              >
+                <Clock size={13} color={timeLeft <= 5 ? '#EF4444' : '#F59E0B'} />
+                <span style={{ ...styles.cardTimerText, color: timeLeft <= 5 ? '#EF4444' : '#FFFFFF' }}>
+                  {timeLeft > 0 ? `Осталось ${timeLeft}с` : 'Время вышло!'}
+                </span>
+              </div>
             </div>
 
             <h2 style={styles.questionText}>
@@ -281,8 +328,8 @@ export default function TeacherLiveGame({
               })}
             </div>
 
-            {/* Bottom Actions */}
-            <div style={styles.actionRow}>
+            {/* Bottom Actions: Show Results & Next Level / Next Question */}
+            <div style={styles.actionRowColumn}>
               <TactileButton
                 theme="green"
                 size="lg"
@@ -292,6 +339,28 @@ export default function TeacherLiveGame({
               >
                 Показать результаты раунда
               </TactileButton>
+
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <TactileButton
+                  theme={allAnswered ? 'orange' : 'secondary'}
+                  size="lg"
+                  fullWidth
+                  disabled={!allAnswered}
+                  onClick={handleNextQuestionOrFinish}
+                  iconAfter={<ArrowRight size={18} />}
+                >
+                  {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
+                </TactileButton>
+
+                {!allAnswered && (
+                  <div style={styles.waitingNotice}>
+                    <Clock size={13} color="#F59E0B" />
+                    <span>
+                      Кнопка активируется, когда все ответят ({answeredCount} из {totalStudents > 0 ? totalStudents : 1} ответили)
+                    </span>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         )}
@@ -514,6 +583,35 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 8,
     padding: '5px 10px',
   },
+  timerBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#1E293B',
+    fontSize: 12,
+    fontWeight: 800,
+    borderRadius: 8,
+    padding: '5px 10px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    transition: 'all 0.25s ease',
+  },
+  cardTimerBox: {
+    marginLeft: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#0F172A',
+    borderRadius: 999,
+    padding: '4px 10px',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    transition: 'all 0.25s ease',
+  },
+  cardTimerText: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    fontVariantNumeric: 'tabular-nums',
+  },
   mainContent: {
     width: '100%',
     display: 'flex',
@@ -631,6 +729,20 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
+  },
+  waitingNotice: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '7px 10px',
+    borderRadius: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    border: '1px solid rgba(245, 158, 11, 0.3)',
+    color: '#FCD34D',
+    fontSize: 11.5,
+    fontWeight: 700,
+    textAlign: 'center' as const,
   },
   cardHeader: {
     display: 'flex',
