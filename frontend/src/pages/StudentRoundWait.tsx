@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import confetti from 'canvas-confetti';
 import {
   Sparkles,
   Flame,
@@ -8,9 +9,12 @@ import {
   BarChart2,
   Clock,
   Heart,
+  Sprout,
+  Check,
 } from 'lucide-react';
 import { socketService } from '../services/socketService';
 import { haptics } from '../services/haptics';
+import { TactileButton } from '../components/TactileButton';
 
 export interface StudentRoundWaitProps {
   roomCode: string;
@@ -26,7 +30,14 @@ export interface StudentRoundWaitProps {
   onGameFinished: () => void;
 }
 
-type StudentRoundMode = 'waiting' | 'results' | 'leaderboard';
+type StudentRoundMode = 'waiting' | 'results' | 'leaderboard' | 'finished';
+
+const SHAPE_THEMES = [
+  { symbol: '▲', color: '#EF4444' },
+  { symbol: '◆', color: '#3B82F6' },
+  { symbol: '●', color: '#F59E0B' },
+  { symbol: '■', color: '#10B981' },
+];
 
 export default function StudentRoundWait({
   roomCode,
@@ -39,6 +50,26 @@ export default function StudentRoundWait({
   const [resultsData, setResultsData] = useState<any>(null);
   const [leaderboardData, setLeaderboardData] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+
+  const isCorrect = personalResult?.is_correct ?? true;
+  const points = personalResult?.points_awarded ?? 550;
+  const streak = personalResult?.streak ?? 1;
+  const totalScore = personalResult?.total_score ?? points;
+
+  // Celebratory confetti on mount if correct
+  useEffect(() => {
+    if (personalResult?.is_correct) {
+      try {
+        confetti({
+          particleCount: 100,
+          spread: 70,
+          origin: { y: 0.5 },
+          colors: ['#FF7A00', '#10B981', '#FFD700', '#3B82F6'],
+          disableForReducedMotion: true,
+        });
+      } catch {}
+    }
+  }, [personalResult?.is_correct]);
 
   useEffect(() => {
     let isMounted = true;
@@ -83,7 +114,15 @@ export default function StudentRoundWait({
     const handleGameFinished = () => {
       if (!isMounted) return;
       haptics.notification('success');
-      onGameFinished();
+      try {
+        confetti({
+          particleCount: 160,
+          spread: 90,
+          origin: { y: 0.45 },
+          colors: ['#F59E0B', '#10B981', '#FF7A00', '#60A5FA', '#EC4899'],
+        });
+      } catch {}
+      setMode('finished');
     };
 
     socketService.on('QUESTION_RESULTS', handleQuestionResults);
@@ -100,12 +139,7 @@ export default function StudentRoundWait({
       socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('GAME_FINISHED', handleGameFinished);
     };
-  }, [onNextQuestion, onGameFinished]);
-
-  const isCorrect = personalResult?.is_correct ?? true;
-  const points = personalResult?.points_awarded ?? 550;
-  const streak = personalResult?.streak ?? 1;
-  const totalScore = personalResult?.total_score ?? points;
+  }, [onNextQuestion]);
 
   return (
     <div style={styles.container}>
@@ -153,7 +187,7 @@ export default function StudentRoundWait({
             <p style={styles.statusSubtitle}>
               {isCorrect
                 ? `Отличная работа! +${points} очков в копилку`
-                : 'Не расстраивайся, разберём правильный ответ!'}
+                : 'Не расстраивайся, сейчас разберём правильный ответ!'}
             </p>
           </div>
 
@@ -197,6 +231,48 @@ export default function StudentRoundWait({
               <h3 style={styles.cardTitle}>Как ответил наш класс</h3>
             </div>
 
+            {/* Answer distribution breakdown */}
+            {resultsData?.distribution && (
+              <div style={styles.distList}>
+                {Object.entries(resultsData.distribution).map(([key, val], idx) => {
+                  const count = Number(val) || 0;
+                  const theme = SHAPE_THEMES[idx % SHAPE_THEMES.length];
+                  const total = Object.values(resultsData.distribution).reduce(
+                    (acc: number, c: any) => acc + Number(c),
+                    0
+                  ) as number;
+                  const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+                  const isCorrectOpt = String(resultsData?.correct_option_id) === String(key);
+
+                  return (
+                    <div key={key} style={styles.distRow}>
+                      <div style={styles.distLabelRow}>
+                        <div style={styles.distSymbolBadge}>
+                          <span style={{ color: theme.color, fontWeight: 900 }}>{theme.symbol}</span>
+                          <span>Вариант {idx + 1}</span>
+                          {isCorrectOpt && (
+                            <span style={styles.distCorrectTag}>
+                              <Check size={11} color="#34D399" /> Верно
+                            </span>
+                          )}
+                        </div>
+                        <span style={styles.distCountText}>{count} чел ({pct}%)</span>
+                      </div>
+                      <div style={styles.distBarBg}>
+                        <div
+                          style={{
+                            ...styles.distBarFill,
+                            width: `${pct}%`,
+                            backgroundColor: isCorrectOpt ? '#10B981' : theme.color,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Explanation Note */}
             {resultsData?.explanation && (
               <div style={styles.explanationBox}>
@@ -209,7 +285,7 @@ export default function StudentRoundWait({
 
             <div style={styles.waitingNextPill}>
               <Clock size={16} color="#94A3B8" />
-              <span>Учитель переходит к таблице лидеров...</span>
+              <span>Учитель открывает таблицу лидеров...</span>
             </div>
           </div>
         </motion.div>
@@ -241,6 +317,7 @@ export default function StudentRoundWait({
                     style={{
                       ...styles.leaderRow,
                       backgroundColor: isMe ? '#065F46' : '#0F172A',
+                      border: isMe ? '1.5px solid #34D399' : 'none',
                     }}
                   >
                     <span style={styles.leaderRank}>{medal}</span>
@@ -256,6 +333,57 @@ export default function StudentRoundWait({
             <div style={styles.waitingNextPill}>
               <Sparkles size={16} color="#34D399" />
               <span>Приготовьтесь к следующему вопросу!</span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Mode: FINISHED (Podium & Final Summary) */}
+      {mode === 'finished' && (
+        <motion.div
+          key="finished_mode"
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          style={styles.contentColumn}
+        >
+          <div style={styles.finishCard}>
+            <div style={styles.trophyWrapper}>
+              <Trophy size={54} color="#F59E0B" />
+            </div>
+
+            <h2 style={styles.finishTitle}>Викторина завершена!</h2>
+            <p style={styles.finishSub}>
+              Ты отлично справился и помог классу вырастить Древо Мудрости!
+            </p>
+
+            <div style={styles.finishStatsGrid}>
+              <div style={styles.finishStatBox}>
+                <span style={styles.finishStatLabel}>Всего набрано</span>
+                <span style={styles.finishStatValue}>{totalScore} очков</span>
+              </div>
+              <div style={styles.finishStatBox}>
+                <span style={styles.finishStatLabel}>Лучший стрик</span>
+                <span style={{ ...styles.finishStatValue, color: '#FF7A00' }}>
+                  {streak} подряд 🔥
+                </span>
+              </div>
+            </div>
+
+            {/* Class Grove Energy contribution */}
+            <div style={styles.groveFinishPill}>
+              <Sprout size={18} color="#34D399" />
+              <span>Вклад в Рощу: +15% к здоровью класса</span>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <TactileButton
+                onClick={onGameFinished}
+                theme="green"
+                size="lg"
+                fullWidth
+              >
+                Вернуться в класс
+              </TactileButton>
             </div>
           </div>
         </motion.div>
@@ -351,7 +479,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   statusTitle: {
     fontSize: 20,
-    fontWeight: 800,
+    fontWeight: 900,
     color: '#FFFFFF',
     margin: '0 0 6px 0',
   },
@@ -359,24 +487,24 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     color: '#94A3B8',
     margin: 0,
-    lineHeight: 1.4,
+    fontWeight: 600,
   },
   mascotWaitCard: {
     backgroundColor: '#1E293B',
     borderRadius: 20,
-    padding: '18px 16px',
+    padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   speechBubble: {
     backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: '12px 14px',
+    borderRadius: 12,
+    padding: '10px 14px',
     display: 'flex',
     gap: 8,
     fontSize: 13,
+    fontWeight: 700,
     color: '#CBD5E1',
     lineHeight: 1.4,
     width: '100%',
@@ -410,6 +538,58 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     color: '#FFFFFF',
     margin: 0,
+  },
+  distList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  distRow: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  distLabelRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: 13,
+  },
+  distSymbolBadge: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    color: '#E2E8F0',
+    fontWeight: 700,
+  },
+  distCorrectTag: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#065F46',
+    color: '#34D399',
+    fontSize: 11,
+    padding: '2px 6px',
+    borderRadius: 6,
+    fontWeight: 800,
+    marginLeft: 4,
+  },
+  distCountText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  distBarBg: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  distBarFill: {
+    height: '100%',
+    borderRadius: 4,
+    transition: 'width 0.5s ease',
   },
   explanationBox: {
     backgroundColor: '#0F172A',
@@ -461,6 +641,77 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
     fontWeight: 800,
     color: '#34D399',
+  },
+  finishCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: '28px 18px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: 12,
+  },
+  trophyWrapper: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  finishTitle: {
+    fontSize: 22,
+    fontWeight: 900,
+    color: '#FFFFFF',
+    margin: 0,
+  },
+  finishSub: {
+    fontSize: 13.5,
+    color: '#94A3B8',
+    margin: 0,
+    lineHeight: 1.4,
+  },
+  finishStatsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)',
+    gap: 10,
+    width: '100%',
+    margin: '10px 0',
+  },
+  finishStatBox: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    padding: '14px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+  },
+  finishStatLabel: {
+    fontSize: 11.5,
+    color: '#94A3B8',
+    fontWeight: 700,
+  },
+  finishStatValue: {
+    fontSize: 17,
+    fontWeight: 900,
+    color: '#34D399',
+  },
+  groveFinishPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: '10px 14px',
+    fontSize: 13,
+    fontWeight: 700,
+    color: '#34D399',
+    width: '100%',
+    boxSizing: 'border-box',
+    justifyContent: 'center',
   },
   countdownOverlay: {
     position: 'absolute',

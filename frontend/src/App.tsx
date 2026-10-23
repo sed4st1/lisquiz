@@ -48,6 +48,7 @@ export default function App() {
   useEffect(() => {
     const handleQuestionStart = (data: any) => {
       setCurrentQuestionData(data);
+      setPersonalAnswerResult(null);
       if (role === 'teacher') {
         setSubScreen('teacher_game');
       } else {
@@ -57,15 +58,12 @@ export default function App() {
 
     const handleAnswerResult = (data: any) => {
       setPersonalAnswerResult(data);
-      setSubScreen(data.is_correct ? 'feedback_correct' : 'feedback_wrong');
     };
 
     const handleGameFinished = () => {
       if (role === 'teacher') {
-        setTab('stats');
-      } else {
         setSubScreen(null);
-        setTab('leaderboard');
+        setTab('stats');
       }
     };
 
@@ -111,17 +109,30 @@ export default function App() {
     }
     if (subScreen === 'student_game') {
       const qIndex = currentQuestionData?.question_index ?? 0;
-      const totalQ = currentQuestionData?.total_questions ?? 10;
+      const totalQ = currentQuestionData?.total_questions ?? 3;
       const qObj = currentQuestionData?.question;
-      const options = qObj?.options?.map((opt: any) => ({
+      const shapeMap: Record<number, 'triangle' | 'diamond' | 'circle' | 'square'> = {
+        0: 'triangle',
+        1: 'diamond',
+        2: 'circle',
+        3: 'square',
+      };
+      const colorMap: Record<number, 'red' | 'blue' | 'yellow' | 'green'> = {
+        0: 'red',
+        1: 'blue',
+        2: 'yellow',
+        3: 'green',
+      };
+      const options = qObj?.options?.map((opt: any, idx: number) => ({
         id: `opt_${opt.id}`,
         text: opt.text,
-        color: opt.color || 'blue',
-        shape: opt.symbol || 'circle',
+        color: opt.color || colorMap[idx] || 'blue',
+        shape: opt.symbol || shapeMap[idx] || 'circle',
       })) || undefined;
 
       return (
         <StudentGameQuestion
+          key={`q_${qIndex}_${qObj?.id || 0}`}
           questionNumber={qIndex + 1}
           totalQuestions={totalQ}
           questionText={qObj?.text}
@@ -131,7 +142,7 @@ export default function App() {
           is_boss={currentQuestionData?.is_boss || false}
           timeLimitSec={currentQuestionData?.time_limit_sec || 25}
           onBack={() => setSubScreen(null)}
-          onAnswerSubmit={(optionId, isCorrect, responseTimeMs, tabBlurred) => {
+          onAnswerSubmit={(optionId, _isCorrect, responseTimeMs, tabBlurred) => {
             const parsed = parseInt(optionId.replace('opt_', ''), 10);
             const rawId = isNaN(parsed) ? 0 : parsed;
             if (socketService.isConnected()) {
@@ -141,9 +152,9 @@ export default function App() {
                 time_taken_sec: responseTimeMs / 1000,
                 tab_blurred: tabBlurred,
               });
-            } else {
-              setSubScreen(isCorrect ? 'feedback_correct' : 'feedback_wrong');
             }
+            // Transition directly to student_round_wait, keeping in sync with teacher
+            setSubScreen('student_round_wait');
           }}
         />
       );
@@ -160,23 +171,13 @@ export default function App() {
         />
       );
     }
-    if (subScreen === 'feedback_correct') {
+    if (subScreen === 'feedback_correct' || subScreen === 'feedback_wrong') {
       return (
         <FeedbackStreak
-          isCorrect={true}
+          isCorrect={subScreen === 'feedback_correct'}
           points={personalAnswerResult?.points_awarded || 750}
-          streak={personalAnswerResult?.streak || 3}
-          onContinue={() => setSubScreen('student_round_wait')}
-        />
-      );
-    }
-    if (subScreen === 'feedback_wrong') {
-      return (
-        <FeedbackStreak
-          isCorrect={false}
-          points={0}
-          streak={0}
-          correctAnswer={personalAnswerResult?.correct_option_text || '5/6'}
+          streak={personalAnswerResult?.streak || 1}
+          correctAnswer={personalAnswerResult?.correct_option_text}
           onContinue={() => setSubScreen('student_round_wait')}
         />
       );
@@ -190,6 +191,7 @@ export default function App() {
           personalResult={personalAnswerResult}
           onNextQuestion={(qData) => {
             setCurrentQuestionData(qData);
+            setPersonalAnswerResult(null);
             setSubScreen('student_game');
           }}
           onGameFinished={() => {

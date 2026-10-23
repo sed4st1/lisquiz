@@ -24,6 +24,13 @@ export interface TeacherLiveGameProps {
 
 type TeacherPhase = 'question' | 'results' | 'leaderboard';
 
+const TEACHER_OPTION_THEMES = [
+  { color: 'red', shape: 'triangle', symbol: '▲', bg: '#EF4444', shadow: '#B91C1C' },
+  { color: 'blue', shape: 'diamond', symbol: '◆', bg: '#3B82F6', shadow: '#1D4ED8' },
+  { color: 'yellow', shape: 'circle', symbol: '●', bg: '#F59E0B', shadow: '#B45309' },
+  { color: 'green', shape: 'square', symbol: '■', bg: '#10B981', shadow: '#047857' },
+];
+
 const DEFAULT_TEACHER_QUESTION = {
   id: 1,
   text: 'Чему равна сумма 1/4 + 2/4?',
@@ -217,12 +224,23 @@ export default function TeacherLiveGame({
             animate={{ opacity: 1, y: 0 }}
             style={styles.card}
           >
-            {isBoss && (
-              <div style={styles.bossPill}>
-                <Flame size={14} color="#EF4444" />
-                <span>Сложная задача повышенный балл</span>
+            {/* Category badge & Boss Pill */}
+            <div style={styles.cardTopRow}>
+              <div style={styles.categoryBadge}>
+                <img
+                  src="/assets/icons/icon_calc.svg"
+                  alt="Калькулятор"
+                  style={{ width: 14, height: 14 }}
+                />
+                <span style={styles.categoryText}>Математика</span>
               </div>
-            )}
+              {isBoss && (
+                <div style={styles.bossPill}>
+                  <Flame size={14} color="#EF4444" fill="#EF4444" />
+                  <span>Сложная задача (х2 очков)</span>
+                </div>
+              )}
+            </div>
 
             <h2 style={styles.questionText}>
               {curQ.text}
@@ -235,36 +253,31 @@ export default function TeacherLiveGame({
               />
             )}
 
-            {/* Answer Options Grid */}
+            {/* Answer Options Grid - matching StudentGameQuestion's 2x2 buttons! */}
             <div style={styles.optionsGrid}>
               {curQ.options?.map((opt: any, idx: number) => {
+                const theme = TEACHER_OPTION_THEMES[idx % TEACHER_OPTION_THEMES.length];
                 const isCorrect = Boolean(opt.is_correct);
                 return (
                   <div
                     key={opt.id ?? idx}
                     style={{
-                      ...styles.optionCard,
-                      backgroundColor: isCorrect ? '#065F46' : '#0F172A',
+                      ...styles.teacherOptionCard,
+                      backgroundColor: theme.bg,
+                      boxShadow: `0 4px 0 ${theme.shadow}`,
+                      border: isCorrect ? '3px solid #FFFFFF' : 'none',
                     }}
                   >
-                    <div style={styles.optionHeader}>
-                      <span
-                        style={{
-                          ...styles.optionLetter,
-                          backgroundColor: isCorrect ? '#10B981' : '#1E293B',
-                          color: '#FFFFFF',
-                        }}
-                      >
-                        {String.fromCharCode(65 + idx)}
-                      </span>
-                      {isCorrect && (
-                        <div style={styles.correctBadge}>
-                          <Check size={13} color="#34D399" />
-                          <span>Правильный</span>
-                        </div>
-                      )}
+                    <div style={styles.teacherOptionShape}>
+                      {theme.symbol}
                     </div>
-                    <span style={styles.optionText}>{opt.text}</span>
+                    <span style={styles.teacherOptionText}>{opt.text}</span>
+                    {isCorrect && (
+                      <div style={styles.teacherCorrectPill}>
+                        <Check size={13} color="#065F46" strokeWidth={3} />
+                        <span>Верный</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -298,9 +311,10 @@ export default function TeacherLiveGame({
               <h3 style={styles.cardTitle}>Распределение ответов класса</h3>
             </div>
 
-            {/* Distribution bars */}
+            {/* Distribution bars matching colors and shapes */}
             <div style={styles.distributionList}>
               {curQ.options?.map((opt: any, idx: number) => {
+                const theme = TEACHER_OPTION_THEMES[idx % TEACHER_OPTION_THEMES.length];
                 const count = resultsData?.distribution?.[String(opt.id)] ?? resultsData?.distribution?.[opt.id] ?? 0;
                 const isCorrect = Boolean(opt.is_correct || resultsData?.correct_option_id === opt.id);
                 const totalVotes = Object.values(resultsData?.distribution || {}).reduce(
@@ -312,7 +326,15 @@ export default function TeacherLiveGame({
                 return (
                   <div key={opt.id ?? idx} style={styles.distRow}>
                     <div style={styles.distLabelRow}>
-                      <span style={styles.distLetter}>{String.fromCharCode(65 + idx)}. {opt.text}</span>
+                      <div style={styles.distLabelShapeGroup}>
+                        <span style={{ color: theme.bg, fontWeight: 900, fontSize: 16 }}>{theme.symbol}</span>
+                        <span style={styles.distLetter}>{opt.text}</span>
+                        {isCorrect && (
+                          <span style={styles.distCorrectTag}>
+                            <Check size={11} color="#34D399" strokeWidth={3} /> Верный ответ
+                          </span>
+                        )}
+                      </div>
                       <span style={styles.distCount}>{count} чел ({pct}%)</span>
                     </div>
                     <div style={styles.distBarBg}>
@@ -320,7 +342,7 @@ export default function TeacherLiveGame({
                         style={{
                           ...styles.distBarFill,
                           width: `${pct}%`,
-                          backgroundColor: isCorrect ? '#10B981' : '#3B82F6',
+                          backgroundColor: isCorrect ? '#10B981' : theme.bg,
                         }}
                       />
                     </div>
@@ -356,13 +378,13 @@ export default function TeacherLiveGame({
         {phase === 'leaderboard' && (
           <motion.div
             key="teacher_leaderboard"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
             style={styles.card}
           >
             <div style={styles.cardHeader}>
-              <Trophy size={22} color="#F59E0B" />
-              <h3 style={styles.cardTitle}>Лидеры викторины</h3>
+              <Trophy size={20} color="#F59E0B" />
+              <h3 style={styles.cardTitle}>Лидеры викторины (Раунд {qIndex})</h3>
             </div>
 
             <div style={styles.leaderList}>
@@ -393,20 +415,20 @@ export default function TeacherLiveGame({
 
             <div style={styles.actionRow}>
               <TactileButton
-                theme="green"
+                theme="orange"
                 size="lg"
                 fullWidth
                 onClick={handleNextQuestionOrFinish}
                 iconAfter={<ArrowRight size={18} />}
               >
-                {isLastQuestion ? 'Завершить игру и открыть отчёт' : 'Следующий вопрос'}
+                {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
               </TactileButton>
             </div>
           </motion.div>
         )}
       </div>
 
-      {/* Fullscreen Countdown Overlay */}
+      {/* Countdown overlay between rounds */}
       {countdown !== null && (
         <div style={styles.countdownOverlay}>
           <motion.div
@@ -419,7 +441,7 @@ export default function TeacherLiveGame({
           >
             {countdown}
           </motion.div>
-          <span style={styles.countdownLabel}>Следующий вопрос</span>
+          <span style={styles.countdownLabel}>Следующий вопрос!</span>
         </div>
       )}
     </div>
@@ -442,7 +464,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   roomBadge: {
     backgroundColor: '#1E293B',
@@ -488,20 +510,38 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 14,
   },
+  cardTopRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#0F172A',
+    borderRadius: 999,
+    padding: '4px 10px',
+  },
+  categoryText: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#94A3B8',
+  },
   bossPill: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#7F1D1D',
-    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.22)',
+    border: '1px solid #EF4444',
+    borderRadius: 999,
     padding: '4px 10px',
     color: '#F87171',
     fontSize: 11,
     fontWeight: 800,
-    alignSelf: 'flex-start',
   },
   questionText: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: 800,
     color: '#FFFFFF',
     margin: 0,
@@ -515,45 +555,55 @@ const styles: Record<string, React.CSSProperties> = {
   },
   optionsGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(2, 1fr)',
     gap: 10,
     marginTop: 4,
   },
-  optionCard: {
-    borderRadius: 14,
-    padding: '12px 14px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 6,
-  },
-  optionHeader: {
+  teacherOptionCard: {
+    borderRadius: 16,
+    padding: '16px 14px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
+    position: 'relative',
+    minHeight: 68,
+    boxSizing: 'border-box',
+    transition: 'all 0.15s ease',
   },
-  optionLetter: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
+  teacherOptionShape: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 12,
-    fontWeight: 800,
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontWeight: 900,
+    flexShrink: 0,
   },
-  correctBadge: {
+  teacherOptionText: {
+    fontSize: 17,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    flex: 1,
+    lineHeight: 1.25,
+  },
+  teacherCorrectPill: {
+    position: 'absolute',
+    top: 6,
+    right: 8,
     display: 'flex',
     alignItems: 'center',
-    gap: 4,
-    color: '#34D399',
-    fontSize: 11,
+    gap: 3,
+    backgroundColor: '#FFFFFF',
+    color: '#065F46',
+    borderRadius: 999,
+    padding: '2px 8px',
+    fontSize: 10.5,
     fontWeight: 800,
-  },
-  optionText: {
-    fontSize: 13,
-    color: '#FFFFFF',
-    fontWeight: 700,
-    lineHeight: 1.3,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
   },
   actionRow: {
     marginTop: 8,
@@ -582,16 +632,37 @@ const styles: Record<string, React.CSSProperties> = {
   distLabelRow: {
     display: 'flex',
     justifyContent: 'space-between',
+    alignItems: 'center',
     fontSize: 13,
     fontWeight: 700,
     color: '#E2E8F0',
   },
-  distLetter: {
+  distLabelShapeGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
     flex: 1,
+  },
+  distCorrectTag: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#065F46',
+    color: '#34D399',
+    fontSize: 11,
+    padding: '2px 6px',
+    borderRadius: 6,
+    fontWeight: 800,
+    marginLeft: 4,
+  },
+  distLetter: {
+    fontWeight: 700,
+    color: '#FFFFFF',
   },
   distCount: {
     color: '#34D399',
     fontWeight: 800,
+    fontSize: 12.5,
   },
   distBarBg: {
     height: 8,
