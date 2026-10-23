@@ -14,6 +14,7 @@ from pathlib import Path
 # Добавляем backend в sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import pytest
 from app.services.bank_service import bank_service
 from app.services.ai_service import ai_service
 from app.models.schemas import QuizCreateRequest
@@ -87,6 +88,7 @@ def test_anti_cheat_variants():
     assert len(local_indices) >= 2, "Вопрос должен появляться на разных номерах у разных учеников!"
     print("✅ Античит-генератор успешно перемешивает и порядок вопросов, и кнопки ответов!")
 
+@pytest.mark.asyncio
 async def test_ai_service_cache_first():
     print("\n--- 4. Тест Cache-First выдачи через AIService ---")
     req = QuizCreateRequest(

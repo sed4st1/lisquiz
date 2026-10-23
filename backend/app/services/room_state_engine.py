@@ -377,11 +377,11 @@ class RoomStateEngine:
             if tier == 3 or is_boss or cur_q.difficulty == "hard":
                 tier = 3
                 is_boss = True
-                cur_q.time_limit_sec = 40
-            elif tier == 1 or cur_q.time_limit_sec <= 15 or cur_q.difficulty == "easy":
+                cur_q.time_limit_sec = cur_q.time_limit_sec or 40
+            elif tier == 1 or (cur_q.time_limit_sec and cur_q.time_limit_sec <= 20) or cur_q.difficulty == "easy":
                 tier = 1
                 is_boss = False
-                cur_q.time_limit_sec = 15
+                cur_q.time_limit_sec = cur_q.time_limit_sec or 15
             else:
                 tier = 2
                 is_boss = False
@@ -414,7 +414,8 @@ class RoomStateEngine:
             return 0, 0, 0
 
         new_streak = current_streak + 1
-        base_score = 500
+        tier = getattr(question, "tier", 1) or 1
+        base_score = 500 if tier == 1 else (750 if tier == 2 else 1000)
         streak_bonus = min(new_streak * 50, 250)
 
         # Подсчет слов для порога чтения t_read
@@ -475,19 +476,14 @@ class RoomStateEngine:
             time_floor = adaptive_engine.calculate_time_floor(cur_q.text, options_dict)
             is_rapid, effort_weight = adaptive_engine.evaluate_response_effort(sub.time_taken_sec, time_floor)
 
-            # Расчёт адаптивных очков через adaptive_engine.calculate_points(is_correct, tier, time_taken_sec, is_rapid)
-            points = adaptive_engine.calculate_points(
-                is_correct,
-                tier,
-                sub.time_taken_sec,
-                is_rapid,
-                time_limit_sec=time_limit,
-                streak=player.streak,
+            # Двухфазная модель скоринга (День 4 ТЗ): база + скорость + стрик
+            points, new_streak, speed_bonus = self.calculate_score(
+                question=cur_q,
+                time_taken_sec=sub.time_taken_sec,
+                is_correct=is_correct,
+                current_streak=player.streak,
+                tab_blurred=sub.tab_blurred,
             )
-
-            new_streak = (player.streak + 1) if is_correct else 0
-            base_pts = 500 if tier == 1 else (750 if tier == 2 else 1000)
-            speed_bonus = max(0, points - base_pts) if (is_correct and not is_rapid) else 0
 
             player.score += points
             player.streak = new_streak

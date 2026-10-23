@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { Check, ChevronRight, Flame } from 'lucide-react';
+import { Check, ChevronRight, Flame, Sparkles } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { JuicyScoreCounter } from '../components/JuicyScoreCounter';
 import { TactileButton } from '../components/TactileButton';
+import StudentRedemptionModal from '../components/StudentRedemptionModal';
 
 export interface FeedbackStreakProps {
   isCorrect: boolean;
@@ -26,9 +27,13 @@ export default function FeedbackStreak({
   onContinue,
 }: FeedbackStreakProps) {
   const [progress, setProgress] = useState(100);
+  const [isRedemptionOpen, setIsRedemptionOpen] = useState(false);
+  const [recoveredPoints, setRecoveredPoints] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (isRedemptionOpen) return;
+
     if (isCorrect) {
       haptics.notification('success');
       if (streak > 1) {
@@ -49,7 +54,7 @@ export default function FeedbackStreak({
       haptics.notification('error');
     }
 
-    const duration = 3500;
+    const duration = isCorrect ? 3500 : 7000;
     const intervalTime = 40;
     const step = (intervalTime / duration) * 100;
 
@@ -65,7 +70,7 @@ export default function FeedbackStreak({
       window.clearInterval(interval);
       window.clearTimeout(timer);
     };
-  }, [isCorrect, streak, onContinue]);
+  }, [isCorrect, streak, onContinue, isRedemptionOpen]);
 
   return (
     <div ref={containerRef} style={styles.container}>
@@ -158,6 +163,59 @@ export default function FeedbackStreak({
           </div>
         )}
 
+        {/* Duolingo-Style Redemption Card if wrong */}
+        {!isCorrect && (
+          <div style={{ width: '100%', margin: '8px 0' }}>
+            {recoveredPoints ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  backgroundColor: '#064E3B',
+                  borderRadius: 14,
+                  padding: '10px 14px',
+                  color: '#6EE7B7',
+                  fontWeight: 800,
+                  fontSize: 13,
+                }}
+              >
+                <Sparkles size={16} color="#34D399" />
+                <span>Очки спасены: +{recoveredPoints} б в копилку!</span>
+              </div>
+            ) : (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => {
+                  haptics.impact('medium');
+                  setIsRedemptionOpen(true);
+                }}
+                style={{
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  backgroundColor: '#D97706',
+                  border: 'none',
+                  borderRadius: 14,
+                  padding: '12px 16px',
+                  color: '#FFFFFF',
+                  fontSize: 13.5,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  touchAction: 'manipulation',
+                }}
+              >
+                <Sparkles size={16} color="#FFFFFF" />
+                <span>Работа над ошибками (+60% баллов)</span>
+              </motion.button>
+            )}
+          </div>
+        )}
+
         {/* Bottom Next Question Card */}
         <div style={styles.nextQuestionCard} onClick={onContinue}>
           <div style={styles.nextQuestionInfo}>
@@ -180,6 +238,13 @@ export default function FeedbackStreak({
             Далее
           </TactileButton>
         </div>
+
+        {/* Redemption Modal */}
+        <StudentRedemptionModal
+          isOpen={isRedemptionOpen}
+          onClose={() => setIsRedemptionOpen(false)}
+          onPointsRestored={(pts) => setRecoveredPoints(pts)}
+        />
 
         {/* Countdown Progress Track */}
         <div style={styles.progressTrack}>

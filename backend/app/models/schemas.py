@@ -52,7 +52,7 @@ class QuizVariant(BaseModel):
 
 
 class Quiz(BaseModel):
-    id: str
+    id: Optional[str] = None
     title: str
     subject: str
     grade: int

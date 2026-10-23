@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Home, Sprout, Crown, BarChart2, Wrench, X, Flame, Droplets, Sparkles } from 'lucide-react';
 
 // Pages
 import ClassGrove from './pages/ClassGrove';
 import StudentHome from './pages/StudentHome';
+import StudentWaitingLobby from './pages/StudentWaitingLobby';
 import StudentLeaderboard from './pages/StudentLeaderboard';
 import StudentStats from './pages/StudentStats';
 import StudentGameQuestion from './pages/StudentGameQuestion';
@@ -14,10 +15,12 @@ import TeacherLobby from './pages/TeacherLobby';
 import TeacherGapReport from './pages/TeacherGapReport';
 import SleepScreen from './pages/SleepScreen';
 import { haptics } from './services/haptics';
+import { socketService } from './services/socketService';
 
 type TabType = 'home' | 'grove' | 'leaderboard' | 'stats';
 type SubScreenType =
   | null
+  | 'student_waiting'
   | 'student_game'
   | 'feedback_correct'
   | 'feedback_wrong'
@@ -28,6 +31,46 @@ export default function App() {
   const [tab, setTab] = useState<TabType>('grove');
   const [subScreen, setSubScreen] = useState<SubScreenType>(null);
   const [isMobileDevOpen, setIsMobileDevOpen] = useState(false);
+
+  // Live session state
+  const [activePin, setActivePin] = useState<string>('482915');
+  const [teacherToken, setTeacherToken] = useState<string>('');
+  const [studentName, setStudentName] = useState<string>('Иван К');
+  const [studentAvatar, setStudentAvatar] = useState<string>('fox_smart');
+  const [currentQuestionData, setCurrentQuestionData] = useState<any>(null);
+  const [personalAnswerResult, setPersonalAnswerResult] = useState<any>(null);
+
+  // Listen to incoming WebSocket events
+  useEffect(() => {
+    const handleQuestionStart = (data: any) => {
+      setCurrentQuestionData(data);
+      setSubScreen('student_game');
+    };
+
+    const handleAnswerResult = (data: any) => {
+      setPersonalAnswerResult(data);
+      setSubScreen(data.is_correct ? 'feedback_correct' : 'feedback_wrong');
+    };
+
+    const handleGameFinished = () => {
+      if (role === 'teacher') {
+        setTab('stats');
+      } else {
+        setSubScreen(null);
+        setTab('leaderboard');
+      }
+    };
+
+    socketService.on('QUESTION_START', handleQuestionStart);
+    socketService.on('PERSONAL_ANSWER_RESULT', handleAnswerResult);
+    socketService.on('GAME_FINISHED', handleGameFinished);
+
+    return () => {
+      socketService.off('QUESTION_START', handleQuestionStart);
+      socketService.off('PERSONAL_ANSWER_RESULT', handleAnswerResult);
+      socketService.off('GAME_FINISHED', handleGameFinished);
+    };
+  }, [role]);
 
   const handleRoleSwitch = (newRole: 'teacher' | 'student') => {
     haptics.impact('light');
@@ -44,11 +87,55 @@ export default function App() {
 
   // Render content according to active Tab & Role
   const renderTabContent = () => {
-    // If a sub-screen is actively invoked (e.g. game in progress or celebration)
+    if (subScreen === 'student_waiting') {
+      return (
+        <StudentWaitingLobby
+          roomCode={activePin}
+          playerName={studentName}
+          playerAvatar={studentAvatar}
+          onGameStart={() => setSubScreen('student_game')}
+          onLeaveRoom={() => {
+            socketService.disconnect();
+            setSubScreen(null);
+          }}
+        />
+      );
+    }
     if (subScreen === 'student_game') {
+      const qIndex = currentQuestionData?.question_index ?? 0;
+      const totalQ = currentQuestionData?.total_questions ?? 10;
+      const qObj = currentQuestionData?.question;
+      const options = qObj?.options?.map((opt: any) => ({
+        id: `opt_${opt.id}`,
+        text: opt.text,
+        color: opt.color || 'blue',
+        shape: opt.symbol || 'circle',
+      })) || undefined;
+
       return (
         <StudentGameQuestion
+          questionNumber={qIndex + 1}
+          totalQuestions={totalQ}
+          questionText={qObj?.text}
+          latex={qObj?.latex}
+          options={options}
+          tier={currentQuestionData?.tier || 2}
+          is_boss={currentQuestionData?.is_boss || false}
+          timeLimitSec={currentQuestionData?.time_limit_sec || 25}
           onBack={() => setSubScreen(null)}
+          onAnswerSubmit={(optionId, isCorrect, responseTimeMs, tabBlurred) => {
+            const rawId = parseInt(optionId.replace('opt_', ''), 10) || 0;
+            if (socketService.isConnected()) {
+              socketService.send('SUBMIT_ANSWER', {
+                question_id: qObj?.id || 1,
+                option_id: rawId,
+                time_taken_sec: responseTimeMs / 1000,
+                tab_blurred: tabBlurred,
+              });
+            } else {
+              setSubScreen(isCorrect ? 'feedback_correct' : 'feedback_wrong');
+            }
+          }}
           onAnswer={(isCorrect) => setSubScreen(isCorrect ? 'feedback_correct' : 'feedback_wrong')}
         />
       );
@@ -57,8 +144,8 @@ export default function App() {
       return (
         <FeedbackStreak
           isCorrect={true}
-          points={750}
-          streak={3}
+          points={personalAnswerResult?.points_awarded || 750}
+          streak={personalAnswerResult?.streak || 3}
           onContinue={() => setSubScreen(null)}
         />
       );
@@ -69,7 +156,7 @@ export default function App() {
           isCorrect={false}
           points={0}
           streak={0}
-          correctAnswer="5/6"
+          correctAnswer={personalAnswerResult?.correct_option_text || '5/6'}
           onContinue={() => setSubScreen(null)}
         />
       );
@@ -89,9 +176,12 @@ export default function App() {
         case 'home':
           return (
             <StudentHome
-              onJoinGame={(pin) => {
-                console.log('Student entered PIN:', pin);
-                setSubScreen('student_game');
+              onJoinGame={(payload) => {
+                setActivePin(payload.pin);
+                setStudentName(payload.name);
+                setStudentAvatar(payload.avatar);
+                socketService.connect(payload.pin, payload.joinData.session_token).catch(() => {});
+                setSubScreen('student_waiting');
               }}
               onGoToGrove={() => setTab('grove')}
             />
@@ -117,7 +207,13 @@ export default function App() {
         case 'home':
           return (
             <TeacherCreateQuiz
-              onQuizCreated={() => setTab('leaderboard')}
+              onQuizCreated={(roomData: any) => {
+                if (roomData) {
+                  setActivePin(roomData.room_code);
+                  setTeacherToken(roomData.teacher_token);
+                }
+                setTab('leaderboard');
+              }}
             />
           );
         case 'grove':
@@ -131,7 +227,18 @@ export default function App() {
         case 'leaderboard':
           return (
             <TeacherLobby
-              onStartQuiz={() => setSubScreen('student_game')}
+              pin={activePin}
+              teacherToken={teacherToken}
+              onRoomReady={(pin, token) => {
+                setActivePin(pin);
+                setTeacherToken(token);
+              }}
+              onStartQuiz={() => {
+                if (socketService.isConnected()) {
+                  socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
+                }
+                setSubScreen('student_game');
+              }}
             />
           );
         case 'stats':

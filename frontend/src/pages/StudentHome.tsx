@@ -2,9 +2,17 @@ import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { LogIn, Sparkles, Flame, Droplets } from 'lucide-react';
 import { haptics } from '../services/haptics';
+import { roomApi, JoinRoomResponse } from '../services/roomApi';
+
+export interface JoinRoomPayload {
+  pin: string;
+  joinData: JoinRoomResponse;
+  name: string;
+  avatar: string;
+}
 
 interface StudentHomeProps {
-  onJoinGame?: (pin: string) => void;
+  onJoinGame?: (payload: JoinRoomPayload) => void;
   onGoToGrove?: () => void;
 }
 
@@ -20,8 +28,9 @@ const AVATARS = [
 export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProps) {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [selectedAvatar, setSelectedAvatar] = useState('fox_smart');
-  const [studentName] = useState('Иван К.');
+  const [studentName] = useState('Иван К');
   const [isJoining, setIsJoining] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const handleDigitChange = (index: number, val: string) => {
@@ -30,6 +39,7 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
     newDigits[index] = char;
     setDigits(newDigits);
     haptics.selection();
+    setErrorMsg(null);
 
     if (char && index < 5) {
       inputRefs.current[index + 1]?.focus();
@@ -48,20 +58,32 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
     if (!pasted) return;
     const newDigits = Array.from({ length: 6 }, (_, i) => pasted[i] || '');
     setDigits(newDigits);
+    setErrorMsg(null);
     inputRefs.current[Math.min(pasted.length, 5)]?.focus();
   };
 
   const fullPin = digits.join('');
   const canJoin = fullPin.length === 6;
 
-  const handleJoin = () => {
-    if (!canJoin) return;
+  const handleJoin = async () => {
+    if (!canJoin || isJoining) return;
     haptics.notification('success');
     setIsJoining(true);
-    setTimeout(() => {
+    setErrorMsg(null);
+
+    try {
+      const joinData = await roomApi.joinRoom(fullPin, studentName, selectedAvatar);
       setIsJoining(false);
-      onJoinGame?.(fullPin);
-    }, 500);
+      onJoinGame?.({
+        pin: fullPin,
+        joinData,
+        name: studentName,
+        avatar: selectedAvatar,
+      });
+    } catch (err: any) {
+      setIsJoining(false);
+      setErrorMsg(err.message || 'Комната с таким кодом не найдена');
+    }
   };
 
   return (
@@ -130,6 +152,12 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
             );
           })}
         </div>
+
+        {errorMsg && (
+          <div style={{ color: '#EF4444', fontSize: 12, fontWeight: 700, textAlign: 'center', marginTop: 4 }}>
+            {errorMsg}
+          </div>
+        )}
 
         {/* Avatar Picker Chips */}
         <div style={styles.avatarSection}>

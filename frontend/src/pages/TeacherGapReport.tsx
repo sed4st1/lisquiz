@@ -14,6 +14,7 @@ import {
   EyeOff,
   Zap,
   Lightbulb,
+  Download,
 } from 'lucide-react';
 import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
 
@@ -249,6 +250,51 @@ export default function TeacherGapReport({
   const displayedQuestions =
     filterMode === 'weak' ? weakQuestions : questions;
 
+  const handleExportCSV = () => {
+    const rows = [
+      ['№', 'Тема вопроса', 'Текст вопроса', 'Верных ответов (%)', 'Всего ответов', 'Верно ответили', 'Частая ошибка'],
+      ...questions.map((q) => [
+        q.questionNumber,
+        q.topic,
+        `"${q.text.replace(/"/g, '""')}"`,
+        `${q.correctPercentage}%`,
+        q.totalAnswers,
+        q.correctAnswers,
+        `"${(q.commonMistake || '').replace(/"/g, '""')}"`,
+      ]),
+      [],
+      ['Частые когнитивные ошибки класса (Misconceptions)'],
+      ['Код', 'Формулировка ошибки', 'Учеников', 'Доля класса (%)', 'Педагогический совет'],
+      ...topMisconceptions.map((m) => [
+        m.misc_id,
+        `"${m.title.replace(/"/g, '""')}"`,
+        m.occurrences,
+        `${m.pct_of_class}%`,
+        `"${(m.correction_hint || '').replace(/"/g, '""')}"`,
+      ]),
+      [],
+      ['Аудит честности (Cheating Telemetry)'],
+      ['Ученик', 'Сворачиваний окна (Blur)', 'Быстрых кликов (Guess)', 'Всего ответов', 'Уровень риска'],
+      ...cheatingAuditLog.map((c) => [
+        c.student_name,
+        c.blur_count,
+        c.rapid_guess_count,
+        c.total_answers,
+        c.risk_level,
+      ]),
+    ];
+
+    const csvContent = '\uFEFF' + rows.map((e) => e.join(';')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `lisquiz_gap_report_${grade}кл.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSendTasks = () => {
     setIsSent(true);
     const weakTopicsList = weakQuestions.map((q) => q.topic);
@@ -265,10 +311,33 @@ export default function TeacherGapReport({
       <div style={styles.innerWrapper}>
         {/* Navigation & Header */}
         <header style={styles.header}>
-          <h1 style={styles.headerTitle}>Отчёт по викторине</h1>
-          <p style={styles.subtitle}>
-            {quizTitle}, {topic} ({grade} класс)
-          </p>
+          <div>
+            <h1 style={styles.headerTitle}>Отчёт по викторине</h1>
+            <p style={styles.subtitle}>
+              {quizTitle}, {topic} ({grade} класс)
+            </p>
+          </div>
+
+          <button
+            onClick={handleExportCSV}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#1E293B',
+              color: '#34D399',
+              border: 'none',
+              borderRadius: 12,
+              padding: '8px 12px',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+            title="Экспорт в Excel / CSV для электронного журнала"
+          >
+            <Download size={15} color="#34D399" />
+            <span>Экспорт CSV</span>
+          </button>
         </header>
 
         {/* Mascot Insight Banner */}
