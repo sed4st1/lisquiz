@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
@@ -26,10 +26,10 @@ export interface TeacherLiveGameProps {
 type TeacherPhase = 'question' | 'results' | 'leaderboard';
 
 const TEACHER_OPTION_THEMES = [
-  { color: 'red', shape: 'triangle', symbol: '▲', bg: '#EF4444', shadow: '#B91C1C' },
-  { color: 'blue', shape: 'diamond', symbol: '◆', bg: '#3B82F6', shadow: '#1D4ED8' },
-  { color: 'yellow', shape: 'circle', symbol: '●', bg: '#F59E0B', shadow: '#B45309' },
-  { color: 'green', shape: 'square', symbol: '■', bg: '#10B981', shadow: '#047857' },
+  { color: 'red' as const, shape: 'triangle' as const, symbol: '▲', bg: '#EF4444', shadow: '#B91C1C' },
+  { color: 'blue' as const, shape: 'diamond' as const, symbol: '◆', bg: '#3B82F6', shadow: '#1D4ED8' },
+  { color: 'yellow' as const, shape: 'circle' as const, symbol: '●', bg: '#F59E0B', shadow: '#B45309' },
+  { color: 'green' as const, shape: 'square' as const, symbol: '■', bg: '#10B981', shadow: '#047857' },
 ];
 
 const DEFAULT_TEACHER_QUESTION = {
@@ -61,16 +61,16 @@ export default function TeacherLiveGame({
   const curQ = questionData?.question || initialQuestionData?.question || DEFAULT_TEACHER_QUESTION;
   const qIndex = (questionData?.question_index ?? initialQuestionData?.question_index ?? 0) + 1;
   const totalQ = questionData?.total_questions ?? initialQuestionData?.total_questions ?? 3;
-  const isBoss = Boolean(questionData?.is_boss);
+  const isBoss = Boolean(questionData?.is_boss || curQ?.tier === 3);
   const isLastQuestion = qIndex >= totalQ;
 
-  const initialTimeLimit = questionData?.time_limit_sec || initialQuestionData?.time_limit_sec || curQ?.time_limit_sec || 20;
+  const initialTimeLimit = isBoss ? 40 : (questionData?.time_limit_sec || initialQuestionData?.time_limit_sec || curQ?.time_limit_sec || (curQ?.tier === 1 ? 15 : 25));
   const [timeLeft, setTimeLeft] = useState<number>(initialTimeLimit);
 
   // Synchronized timer for the teacher matching the students' clock
   useEffect(() => {
     if (phase !== 'question') return;
-    const initialSec = questionData?.time_limit_sec || initialQuestionData?.time_limit_sec || curQ?.time_limit_sec || 20;
+    const initialSec = isBoss ? 40 : (questionData?.time_limit_sec || initialQuestionData?.time_limit_sec || curQ?.time_limit_sec || (curQ?.tier === 1 ? 15 : 25));
     setTimeLeft(initialSec);
 
     const timer = setInterval(() => {
@@ -84,7 +84,7 @@ export default function TeacherLiveGame({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [phase, curQ?.id, questionData?.time_limit_sec]);
+  }, [phase, curQ?.id, questionData?.time_limit_sec, isBoss]);
 
   // Inactive until all answered (or time is up)
   const allAnswered = (totalStudents > 0 && answeredCount >= totalStudents) || timeLeft === 0;
@@ -201,7 +201,7 @@ export default function TeacherLiveGame({
   };
 
   // Render question LaTeX if provided
-  const latexHtml = React.useMemo(() => {
+  const latexHtml = useMemo(() => {
     if (!curQ?.latex) return null;
     try {
       return katex.renderToString(curQ.latex, { throwOnError: false, displayMode: true });
@@ -212,38 +212,71 @@ export default function TeacherLiveGame({
 
   return (
     <div style={styles.container}>
-      {/* Top Header */}
+      {/* Top Header: Logo badge, Title, Student count */}
       <header style={styles.header}>
-        <div style={styles.roomBadge}>Комната {roomCode}</div>
+        <div style={styles.headerLeft}>
+          <div style={styles.logoBadge}>
+            <img
+              src="/assets/icons/icon_sprout.svg"
+              alt="Росток"
+              style={{ width: 18, height: 18 }}
+            />
+          </div>
 
-        <div style={styles.questionBadge}>
+          <div style={styles.headerTitles}>
+            <span style={styles.brandTitle}>Lisquiz • Учитель</span>
+            <span style={styles.brandSub}>
+              Комната {roomCode} • 7А, Математика
+            </span>
+          </div>
+        </div>
+
+        <div style={styles.playerCountPill}>
+          <Users size={14} color="#D1D5DB" />
+          <span>
+            {answeredCount} из {totalStudents > 0 ? totalStudents : 1}
+          </span>
+        </div>
+      </header>
+
+      {/* Segmented Glowing Progress Bar */}
+      <div style={styles.segmentedProgressRow}>
+        {Array.from({ length: totalQ }, (_, i) => i + 1).map((seg) => {
+          const isFilled = seg <= qIndex;
+          return (
+            <div key={seg} style={styles.progressSegment}>
+              <div
+                style={{
+                  ...styles.segmentFill,
+                  width: isFilled ? '100%' : '0%',
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Question Number Pill and Boss Badge */}
+      <div style={styles.timerRow}>
+        <div style={styles.questionNumPill}>
           <Sparkles size={14} color="#34D399" />
           <span>
             Вопрос {qIndex} из {totalQ}
           </span>
         </div>
 
-        <div style={styles.answeredBadge}>
-          <Users size={14} color="#60A5FA" />
-          <span>
-            {answeredCount} {totalStudents > 0 ? `из ${totalStudents}` : 'ответов'}
-          </span>
-        </div>
-
-        {/* Live Timer Pill in Teacher Header */}
-        <div
-          style={{
-            ...styles.timerBadge,
-            borderColor: timeLeft <= 5 ? '#EF4444' : timeLeft <= 8 ? '#F59E0B' : 'rgba(255, 255, 255, 0.12)',
-            color: timeLeft <= 5 ? '#EF4444' : timeLeft <= 8 ? '#F59E0B' : '#34D399',
-            backgroundColor: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.2)' : '#1E293B',
-          }}
-          title="Время учеников на ответ"
-        >
-          <Clock size={13} color={timeLeft <= 5 ? '#EF4444' : timeLeft <= 8 ? '#F59E0B' : '#34D399'} />
-          <span>{timeLeft > 0 ? `${timeLeft}с` : '0с'}</span>
-        </div>
-      </header>
+        {isBoss && (
+          <motion.div
+            initial={{ scale: 0.85, opacity: 0 }}
+            animate={{ scale: [1, 1.05, 1], opacity: 1 }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+            style={styles.bossPill}
+          >
+            <Flame size={14} color="#EF4444" fill="#EF4444" />
+            <span>Сложная задача (х2 очков)</span>
+          </motion.div>
+        )}
+      </div>
 
       {/* Main Content Area */}
       <div style={styles.mainContent}>
@@ -253,82 +286,214 @@ export default function TeacherLiveGame({
             key="teacher_question"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            style={styles.card}
+            transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+            style={{ width: '100%', display: 'flex', flexDirection: 'column' }}
           >
-            {/* Category badge & Boss Pill & Timer */}
-            <div style={styles.cardTopRow}>
-              <div style={styles.categoryBadge}>
-                <img
-                  src="/assets/icons/icon_calc.svg"
-                  alt="Калькулятор"
-                  style={{ width: 14, height: 14 }}
-                />
-                <span style={styles.categoryText}>Математика</span>
-              </div>
-              {isBoss && (
-                <div style={styles.bossPill}>
-                  <Flame size={14} color="#EF4444" fill="#EF4444" />
-                  <span>Сложная задача (х2 очков)</span>
-                </div>
-              )}
-
-              {/* Timer indicator inside question card */}
-              <div
-                style={{
-                  ...styles.cardTimerBox,
-                  borderColor: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.5)' : 'rgba(255, 255, 255, 0.12)',
-                  backgroundColor: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.15)' : '#0F172A',
-                }}
-              >
-                <Clock size={13} color={timeLeft <= 5 ? '#EF4444' : '#F59E0B'} />
-                <span style={{ ...styles.cardTimerText, color: timeLeft <= 5 ? '#EF4444' : '#FFFFFF' }}>
-                  {timeLeft > 0 ? `Осталось ${timeLeft}с` : 'Время вышло!'}
+            {/* Question Card with Timer Notch Cutout */}
+            <div style={styles.questionCardWrapper}>
+              {/* Circular Countdown Timer Nestled in Top-Right Notch */}
+              <div style={styles.circularTimerWrapper}>
+                <svg viewBox="0 0 54 54" style={styles.timerSvg}>
+                  <circle
+                    cx="27"
+                    cy="27"
+                    r="23"
+                    fill="rgba(10, 18, 36, 0.95)"
+                    stroke="rgba(255, 255, 255, 0.16)"
+                    strokeWidth="3.5"
+                  />
+                  <circle
+                    cx="27"
+                    cy="27"
+                    r="23"
+                    fill="transparent"
+                    stroke={
+                      isBoss
+                        ? timeLeft <= 8
+                          ? '#EF4444'
+                          : '#F97316'
+                        : timeLeft <= 3
+                        ? '#EF4444'
+                        : '#F59E0B'
+                    }
+                    strokeWidth="3.5"
+                    strokeDasharray={144.5}
+                    strokeDashoffset={144.5 * (1 - Math.max(0, timeLeft) / (initialTimeLimit || 25))}
+                    strokeLinecap="round"
+                    style={{
+                      filter:
+                        timeLeft <= (isBoss ? 8 : 3)
+                          ? 'drop-shadow(0 0 8px #EF4444)'
+                          : isBoss
+                          ? 'drop-shadow(0 0 8px #F97316)'
+                          : 'drop-shadow(0 0 8px #F59E0B)',
+                      transform: 'rotate(-90deg)',
+                      transformOrigin: '50% 50%',
+                      transition: 'stroke-dashoffset 0.8s ease, stroke 0.3s ease',
+                    }}
+                  />
+                </svg>
+                <span
+                  style={{
+                    ...styles.timerText,
+                    color: (isBoss && timeLeft <= 8) || timeLeft <= 3 ? '#EF4444' : '#FFFFFF',
+                  }}
+                >
+                  {timeLeft}
                 </span>
+              </div>
+
+              {/* The Card Body */}
+              <div style={styles.questionCard}>
+                <div style={styles.categoryBadge}>
+                  <div style={styles.categoryIconCircle}>
+                    <img
+                      src="/assets/icons/icon_calc.svg"
+                      alt="Калькулятор"
+                      style={{ width: 14, height: 14 }}
+                    />
+                  </div>
+                  <span style={styles.categoryText}>Математика</span>
+                </div>
+
+                <h2 style={styles.questionHeading}>{curQ.text}</h2>
+
+                {latexHtml && (
+                  <div
+                    style={styles.latexBox}
+                    dangerouslySetInnerHTML={{ __html: latexHtml }}
+                  />
+                )}
               </div>
             </div>
 
-            <h2 style={styles.questionText}>
-              {curQ.text}
-            </h2>
-
-            {latexHtml && (
-              <div
-                style={styles.latexBox}
-                dangerouslySetInnerHTML={{ __html: latexHtml }}
-              />
-            )}
-
-            {/* Answer Options Grid - matching StudentGameQuestion's 2x2 buttons! */}
-            <div style={styles.optionsGrid}>
+            {/* 2x2 Tactile Answer Buttons Grid (Matching Student Layout) */}
+            <div style={styles.answersGrid}>
               {curQ.options?.map((opt: any, idx: number) => {
                 const theme = TEACHER_OPTION_THEMES[idx % TEACHER_OPTION_THEMES.length];
                 const isCorrect = Boolean(opt.is_correct);
+                const textLen = opt.text?.length || 0;
+                const fontSize = textLen <= 4 ? 24 : textLen <= 10 ? 20 : textLen <= 22 ? 16 : 14;
+
+                let optLatexHtml: string | null = null;
+                if (opt.latex) {
+                  try {
+                    optLatexHtml = katex.renderToString(opt.latex, { throwOnError: false, displayMode: false });
+                  } catch {
+                    optLatexHtml = null;
+                  }
+                }
+
                 return (
                   <div
                     key={opt.id ?? idx}
                     style={{
-                      ...styles.teacherOptionCard,
-                      backgroundColor: theme.bg,
-                      boxShadow: `0 4px 0 ${theme.shadow}`,
-                      border: isCorrect ? '3px solid #FFFFFF' : 'none',
+                      position: 'relative',
+                      width: '100%',
+                      minHeight: 88,
+                      display: 'flex',
                     }}
                   >
-                    <div style={styles.teacherOptionShape}>
-                      {theme.symbol}
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: '100%',
+                        minHeight: 88,
+                        backgroundColor: theme.bg,
+                        border: 'none',
+                        borderBottom: `5px solid ${theme.shadow}`,
+                        borderRadius: 22,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '10px 12px',
+                        boxShadow: isCorrect
+                          ? `0 0 28px rgba(16, 185, 129, 0.85), 0 6px 16px rgba(0, 0, 0, 0.45)`
+                          : '0 6px 16px rgba(0, 0, 0, 0.35)',
+                        outline: isCorrect ? '3.5px solid #FFFFFF' : 'none',
+                        outlineOffset: 2,
+                        userSelect: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      {/* Subtle Foliage Motif in Background */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          borderRadius: 20,
+                          overflow: 'hidden',
+                          pointerEvents: 'none',
+                          opacity: 0.12,
+                          backgroundImage:
+                            'radial-gradient(circle at 10% 20%, rgba(255, 255, 255, 0.8) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(0, 0, 0, 0.6) 0%, transparent 40%)',
+                        }}
+                      />
+
+                      {/* Geometric Shape at Top */}
+                      <span
+                        style={{
+                          fontSize: 22,
+                          color: 'rgba(255, 255, 255, 0.92)',
+                          lineHeight: 1,
+                          marginBottom: 4,
+                          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4))',
+                        }}
+                      >
+                        {theme.symbol}
+                      </span>
+
+                      {/* Answer Text */}
+                      {opt.text && (
+                        <span
+                          style={{
+                            color: '#FFFFFF',
+                            fontWeight: fontSize > 16 ? 900 : 700,
+                            fontSize,
+                            textAlign: 'center',
+                            lineHeight: 1.25,
+                            letterSpacing: '0.01em',
+                            textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
+                            wordBreak: 'break-word',
+                            maxWidth: '100%',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {opt.text}
+                        </span>
+                      )}
+
+                      {optLatexHtml && (
+                        <span
+                          style={{
+                            color: '#FFFFFF',
+                            fontSize: 22,
+                            fontWeight: 900,
+                            textAlign: 'center',
+                            textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)',
+                          }}
+                          dangerouslySetInnerHTML={{ __html: optLatexHtml }}
+                        />
+                      )}
+
+                      {/* Highlight Badge for Correct Answer */}
+                      {isCorrect && (
+                        <div style={styles.teacherCorrectPill}>
+                          <Check size={12} color="#FFFFFF" strokeWidth={3} />
+                          <span>Верный</span>
+                        </div>
+                      )}
                     </div>
-                    <span style={styles.teacherOptionText}>{opt.text}</span>
-                    {isCorrect && (
-                      <div style={styles.teacherCorrectPill}>
-                        <Check size={13} color="#065F46" strokeWidth={3} />
-                        <span>Верный</span>
-                      </div>
-                    )}
                   </div>
                 );
               })}
             </div>
 
-            {/* Bottom Actions: Show Results & Next Level / Next Question */}
+            {/* Teacher Control Actions Immediately Below 2x2 Grid */}
             <div style={styles.actionRowColumn}>
               <TactileButton
                 theme="green"
@@ -352,12 +517,17 @@ export default function TeacherLiveGame({
                   {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
                 </TactileButton>
 
-                {!allAnswered && (
+                {!allAnswered ? (
                   <div style={styles.waitingNotice}>
                     <Clock size={13} color="#F59E0B" />
                     <span>
                       Кнопка активируется, когда все ответят ({answeredCount} из {totalStudents > 0 ? totalStudents : 1} ответили)
                     </span>
+                  </div>
+                ) : (
+                  <div style={styles.allAnsweredNotice}>
+                    <Check size={13} color="#34D399" strokeWidth={3} />
+                    <span>Все ученики ответили! Можно переходить дальше.</span>
                   </div>
                 )}
               </div>
@@ -417,6 +587,7 @@ export default function TeacherLiveGame({
                 );
               })}
             </div>
+
             {/* Buttons immediately under round results */}
             <div style={styles.actionRowColumn}>
               <TactileButton
@@ -537,212 +708,291 @@ export default function TeacherLiveGame({
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
+    position: 'relative',
     width: '100%',
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: 'transparent',
-    padding: '14px 14px 92px',
+    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
+    backgroundPosition: 'center top',
+    backgroundSize: 'cover',
+    backgroundRepeat: 'no-repeat',
+    padding: '12px 14px 24px',
     boxSizing: 'border-box',
     overflowY: 'auto',
+    overflowX: 'hidden',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 16,
+    marginBottom: 4,
+    zIndex: 4,
   },
-  roomBadge: {
-    backgroundColor: '#1E293B',
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: 800,
-    borderRadius: 8,
-    padding: '5px 10px',
-  },
-  questionBadge: {
+  headerLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#1E293B',
+    gap: 8,
+  },
+  logoBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(16, 185, 129, 0.35)',
+    border: '1.5px solid rgba(16, 185, 129, 0.6)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    boxShadow: '0 0 12px rgba(16, 185, 129, 0.4)',
+  },
+  headerTitles: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  brandTitle: {
+    fontSize: 15,
+    fontWeight: 800,
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: 800,
-    borderRadius: 8,
-    padding: '5px 12px',
+    lineHeight: 1.1,
   },
-  answeredBadge: {
+  brandSub: {
+    fontSize: 11,
+    color: '#D1D5DB',
+    fontWeight: 600,
+  },
+  playerCountPill: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E293B',
-    color: '#60A5FA',
-    fontSize: 12,
-    fontWeight: 800,
-    borderRadius: 8,
-    padding: '5px 10px',
-  },
-  timerBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#1E293B',
-    fontSize: 12,
-    fontWeight: 800,
-    borderRadius: 8,
-    padding: '5px 10px',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
-    transition: 'all 0.25s ease',
-  },
-  cardTimerBox: {
-    marginLeft: 'auto',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#0F172A',
+    backgroundColor: 'rgba(17, 24, 39, 0.65)',
+    border: '1px solid rgba(255, 255, 255, 0.18)',
+    backdropFilter: 'blur(10px)',
+    WebkitBackdropFilter: 'blur(10px)',
     borderRadius: 999,
-    padding: '4px 10px',
-    border: '1px solid rgba(255, 255, 255, 0.12)',
-    transition: 'all 0.25s ease',
+    padding: '5px 12px',
+    fontSize: 12,
+    fontWeight: 700,
+    color: '#FFFFFF',
   },
-  cardTimerText: {
+  segmentedProgressRow: {
+    display: 'flex',
+    gap: 6,
+    width: '100%',
+    margin: '4px 0 6px',
+    zIndex: 4,
+  },
+  progressSegment: {
+    flex: 1,
+    height: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  segmentFill: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    boxShadow: '0 0 10px #10B981',
+    borderRadius: 999,
+    transition: 'width 0.4s ease',
+  },
+  timerRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    margin: '2px 0 6px',
+    zIndex: 4,
+  },
+  questionNumPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(14, 25, 45, 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
+    borderRadius: 999,
+    padding: '5px 14px',
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: '#E5E7EB',
+  },
+  bossPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '4px 10px',
+    borderRadius: 20,
+    backgroundColor: 'rgba(239, 68, 68, 0.22)',
+    border: '1.5px solid #EF4444',
+    color: '#F87171',
     fontSize: 12,
     fontWeight: 800,
-    color: '#FFFFFF',
-    fontVariantNumeric: 'tabular-nums',
+    boxShadow: '0 0 14px rgba(239, 68, 68, 0.45)',
   },
   mainContent: {
     width: '100%',
     display: 'flex',
     flexDirection: 'column',
-    gap: 14,
+    gap: 12,
+    position: 'relative',
+    zIndex: 4,
   },
-  card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 20,
-    padding: '18px 16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 14,
+  questionCardWrapper: {
+    position: 'relative',
+    width: '100%',
+    margin: '2px 0 10px',
+    zIndex: 4,
   },
-  cardTopRow: {
+  circularTimerWrapper: {
+    position: 'absolute',
+    top: -12,
+    right: 8,
+    width: 54,
+    height: 54,
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 6,
+  },
+  timerSvg: {
+    position: 'absolute',
+    inset: 0,
+    width: '100%',
+    height: '100%',
+  },
+  timerText: {
+    fontSize: 17,
+    fontWeight: 900,
+    color: '#FFFFFF',
+    zIndex: 1,
+  },
+  questionCard: {
+    position: 'relative',
+    zIndex: 3,
+    backgroundColor: 'rgba(14, 30, 58, 0.94)',
+    border: '1.5px solid rgba(255, 255, 255, 0.18)',
+    borderRadius: 24,
+    padding: '16px 20px',
+    paddingRight: 68,
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    flexDirection: 'column',
     gap: 8,
+    maskImage: 'radial-gradient(circle 38px at calc(100% - 35px) 15px, transparent 0, transparent 38px, black 39px)',
+    WebkitMaskImage: 'radial-gradient(circle 38px at calc(100% - 35px) 15px, transparent 0, transparent 38px, black 39px)',
   },
   categoryBadge: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#0F172A',
+    gap: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+    border: '1px solid rgba(59, 130, 246, 0.35)',
     borderRadius: 999,
-    padding: '4px 10px',
+    padding: '3px 10px',
+    width: 'fit-content',
+  },
+  categoryIconCircle: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: 700,
-    color: '#94A3B8',
+    color: '#93C5FD',
   },
-  bossPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(239, 68, 68, 0.22)',
-    border: '1px solid #EF4444',
-    borderRadius: 999,
-    padding: '4px 10px',
-    color: '#F87171',
-    fontSize: 11,
-    fontWeight: 800,
-  },
-  questionText: {
-    fontSize: 19,
+  questionHeading: {
+    fontSize: 17,
     fontWeight: 800,
     color: '#FFFFFF',
     margin: 0,
     lineHeight: 1.35,
+    letterSpacing: '-0.3px',
   },
   latexBox: {
-    padding: '6px 0',
-    color: '#FCD34D',
-    fontSize: 18,
+    padding: '4px 0',
+    color: '#FDE047',
+    fontSize: 20,
     fontWeight: 700,
   },
-  optionsGrid: {
+  answersGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(2, 1fr)',
     gap: 10,
-    marginTop: 4,
-  },
-  teacherOptionCard: {
-    borderRadius: 16,
-    padding: '16px 14px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
+    width: '100%',
     position: 'relative',
-    minHeight: 68,
-    boxSizing: 'border-box',
-    transition: 'all 0.15s ease',
-  },
-  teacherOptionShape: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.25)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontWeight: 900,
-    flexShrink: 0,
-  },
-  teacherOptionText: {
-    fontSize: 17,
-    fontWeight: 800,
-    color: '#FFFFFF',
-    flex: 1,
-    lineHeight: 1.25,
+    zIndex: 3,
+    marginBottom: 6,
   },
   teacherCorrectPill: {
     position: 'absolute',
-    top: 6,
+    top: 7,
     right: 8,
     display: 'flex',
     alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FFFFFF',
-    color: '#065F46',
+    gap: 4,
+    backgroundColor: '#10B981',
+    color: '#FFFFFF',
     borderRadius: 999,
-    padding: '2px 8px',
-    fontSize: 10.5,
+    padding: '2.5px 8px',
+    fontSize: 11,
     fontWeight: 800,
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-  },
-  actionRow: {
-    marginTop: 8,
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
+    border: '1.5px solid #FFFFFF',
+    zIndex: 2,
   },
   actionRowColumn: {
-    marginTop: 10,
+    marginTop: 6,
     display: 'flex',
     flexDirection: 'column',
     gap: 8,
+    zIndex: 3,
   },
   waitingNotice: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    padding: '7px 10px',
-    borderRadius: 12,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    border: '1px solid rgba(245, 158, 11, 0.3)',
+    padding: '8px 12px',
+    borderRadius: 14,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    border: '1px solid rgba(245, 158, 11, 0.35)',
     color: '#FCD34D',
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: 700,
     textAlign: 'center' as const,
+  },
+  allAnsweredNotice: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '8px 12px',
+    borderRadius: 14,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    border: '1px solid rgba(16, 185, 129, 0.35)',
+    color: '#34D399',
+    fontSize: 12,
+    fontWeight: 700,
+    textAlign: 'center' as const,
+  },
+  card: {
+    backgroundColor: 'rgba(14, 30, 58, 0.94)',
+    border: '1.5px solid rgba(255, 255, 255, 0.18)',
+    borderRadius: 24,
+    padding: '18px 16px',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 14,
   },
   cardHeader: {
     display: 'flex',
@@ -812,8 +1062,9 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'width 0.4s ease',
   },
   explanationBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
     padding: '12px',
     display: 'flex',
     gap: 8,
@@ -829,8 +1080,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   emptyLeaderBox: {
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    borderRadius: 14,
     padding: '16px',
     color: '#94A3B8',
     fontSize: 13,
@@ -840,8 +1091,9 @@ const styles: Record<string, React.CSSProperties> = {
   leaderRow: {
     display: 'flex',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 14,
     padding: '10px 14px',
     gap: 10,
   },
@@ -864,8 +1116,9 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#0F172A',
-    borderRadius: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    border: '1px solid rgba(52, 211, 153, 0.3)',
+    borderRadius: 14,
     padding: '10px 14px',
     fontSize: 12.5,
     fontWeight: 700,
