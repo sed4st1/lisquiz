@@ -128,3 +128,46 @@ async def test_multi_question_seamless_flow():
     assert gap_report is not None
     assert gap_report.total_participants == 1
     assert gap_report.class_accuracy_percent == 100
+
+
+@pytest.mark.asyncio
+async def test_direct_next_question_from_results():
+    """
+    Проверка требования пользователя: переход к следующему вопросу
+    сразу со страницы результатов раунда (REVEAL_RESULTS -> COUNTDOWN),
+    минуя показ лидерборда, без выбрасывания участников.
+    """
+    quiz = Quiz(
+        id="88",
+        title="Тест прямого перехода",
+        subject="Математика",
+        topic="Дроби",
+        grade=5,
+        questions=[
+            Question(id=1, text="Вопрос 1", options=[AnswerOption(id=1, text="А", is_correct=True)], time_limit_sec=10),
+            Question(id=2, text="Вопрос 2", options=[AnswerOption(id=2, text="Б", is_correct=True)], time_limit_sec=10),
+        ],
+    )
+
+    room, teacher_token = await room_state_engine.create_room(quiz)
+    player, student_token = await room_state_engine.join_room(room.room_code, name="Даша")
+
+    await room_state_engine.start_game(room.room_code)
+    await room_state_engine.start_question(room.room_code, 0)
+    assert room.status.value == "question"
+
+    # Учитель открывает результаты раунда
+    await room_state_engine.reveal_results(room.room_code)
+    assert room.status.value == "reveal_results"
+
+    # Нажатие «Следующий вопрос» прямо из результатов:
+    # должно успешно перевести комнату в COUNTDOWN, а затем в QUESTION (вопрос 2)
+    nxt = await room_state_engine.next_question(room.room_code)
+    assert nxt["has_next"] is True
+    assert nxt["question_index"] == 1
+    assert room.status.value == "countdown"
+
+    await room_state_engine.start_question(room.room_code, 1)
+    assert room.status.value == "question"
+    assert room.current_question_index == 1
+

@@ -123,11 +123,25 @@ export default function App() {
         2: 'yellow',
         3: 'green',
       };
+      const normalizeColor = (c: any, idx: number): 'red' | 'blue' | 'yellow' | 'green' => {
+        if (c === 'red' || c === 'orange') return 'red';
+        if (c === 'blue') return 'blue';
+        if (c === 'yellow') return 'yellow';
+        if (c === 'green') return 'green';
+        return colorMap[idx % 4] || 'blue';
+      };
+      const normalizeShape = (s: any, idx: number): 'triangle' | 'diamond' | 'circle' | 'square' => {
+        if (s === 'triangle') return 'triangle';
+        if (s === 'diamond') return 'diamond';
+        if (s === 'circle') return 'circle';
+        if (s === 'square') return 'square';
+        return shapeMap[idx % 4] || 'circle';
+      };
       const options = qObj?.options?.map((opt: any, idx: number) => ({
         id: `opt_${opt.id}`,
         text: opt.text,
-        color: opt.color || colorMap[idx] || 'blue',
-        shape: opt.symbol || shapeMap[idx] || 'circle',
+        color: normalizeColor(opt.color, idx),
+        shape: normalizeShape(opt.symbol || opt.shape, idx),
       })) || undefined;
 
       return (

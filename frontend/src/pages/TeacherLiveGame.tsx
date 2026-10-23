@@ -348,16 +348,7 @@ export default function TeacherLiveGame({
                 );
               })}
             </div>
-
-            {resultsData?.explanation && (
-              <div style={styles.explanationBox}>
-                <Sparkles size={16} color="#F59E0B" style={{ flexShrink: 0, marginTop: 2 }} />
-                <div style={styles.explanationText}>
-                  <strong>Методическое пояснение:</strong> {resultsData.explanation}
-                </div>
-              </div>
-            )}
-
+            {/* Buttons immediately under round results */}
             <div style={styles.actionRowColumn}>
               <TactileButton
                 theme="orange"
@@ -379,6 +370,15 @@ export default function TeacherLiveGame({
                 Показать рейтинг участников
               </TactileButton>
             </div>
+
+            {resultsData?.explanation && (
+              <div style={styles.explanationBox}>
+                <Sparkles size={16} color="#F59E0B" style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={styles.explanationText}>
+                  <strong>Методическое пояснение:</strong> {resultsData.explanation}
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -421,7 +421,7 @@ export default function TeacherLiveGame({
               <span>Энергия Рощи класса: +15% к здоровью дерева</span>
             </div>
 
-            <div style={styles.actionRow}>
+            <div style={styles.actionRowColumn}>
               <TactileButton
                 theme="orange"
                 size="lg"
@@ -430,6 +430,16 @@ export default function TeacherLiveGame({
                 iconAfter={<ArrowRight size={18} />}
               >
                 {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
+              </TactileButton>
+
+              <TactileButton
+                theme="secondary"
+                size="md"
+                fullWidth
+                onClick={() => setPhase('results')}
+                iconBefore={<BarChart2 size={18} />}
+              >
+                Вернуться к результатам раунда
               </TactileButton>
             </div>
           </motion.div>

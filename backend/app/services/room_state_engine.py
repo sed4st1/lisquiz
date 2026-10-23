@@ -34,10 +34,10 @@ class InvalidStateTransitionError(Exception):
 # Допустимые переходы конечного автомата жизненного цикла комнаты
 VALID_TRANSITIONS: Dict[RoomStatus, List[RoomStatus]] = {
     RoomStatus.LOBBY: [RoomStatus.COUNTDOWN, RoomStatus.FINISHED],
-    RoomStatus.COUNTDOWN: [RoomStatus.QUESTION, RoomStatus.FINISHED],
-    RoomStatus.QUESTION: [RoomStatus.REVEAL_RESULTS, RoomStatus.LEADERBOARD, RoomStatus.FINISHED],
+    RoomStatus.COUNTDOWN: [RoomStatus.QUESTION, RoomStatus.REVEAL_RESULTS, RoomStatus.LEADERBOARD, RoomStatus.FINISHED],
+    RoomStatus.QUESTION: [RoomStatus.REVEAL_RESULTS, RoomStatus.LEADERBOARD, RoomStatus.COUNTDOWN, RoomStatus.FINISHED],
     RoomStatus.REVEAL_RESULTS: [RoomStatus.LEADERBOARD, RoomStatus.COUNTDOWN, RoomStatus.FINISHED],
-    RoomStatus.LEADERBOARD: [RoomStatus.COUNTDOWN, RoomStatus.FINISHED],
+    RoomStatus.LEADERBOARD: [RoomStatus.COUNTDOWN, RoomStatus.REVEAL_RESULTS, RoomStatus.FINISHED],
     RoomStatus.FINISHED: [RoomStatus.LOBBY, RoomStatus.COUNTDOWN],
 }
 
@@ -227,6 +227,9 @@ class RoomStateEngine:
         room = await self.get_room(room_code)
         if not room:
             raise ValueError(f"Комната {room_code} не найдена")
+
+        if room.status == new_status:
+            return room.status
 
         allowed = VALID_TRANSITIONS.get(room.status, [])
         if new_status not in allowed:

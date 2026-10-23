@@ -24,7 +24,7 @@ DEMO_DEFAULT_QUIZ = Quiz(
             time_limit_sec=20,
             topic="Сложение дробей",
             options=[
-                AnswerOption(id=0, text="3/4", is_correct=True, symbol="triangle", color="orange"),
+                AnswerOption(id=0, text="3/4", is_correct=True, symbol="triangle", color="red"),
                 AnswerOption(id=1, text="3/8", is_correct=False, symbol="diamond", color="blue"),
                 AnswerOption(id=2, text="2/4", is_correct=False, symbol="circle", color="yellow"),
                 AnswerOption(id=3, text="1/2", is_correct=False, symbol="square", color="green"),
@@ -37,7 +37,7 @@ DEMO_DEFAULT_QUIZ = Quiz(
             time_limit_sec=20,
             topic="Понятие правильной дроби",
             options=[
-                AnswerOption(id=0, text="Числитель меньше знаменателя", is_correct=True, symbol="triangle", color="orange"),
+                AnswerOption(id=0, text="Числитель меньше знаменателя", is_correct=True, symbol="triangle", color="red"),
                 AnswerOption(id=1, text="Числитель больше знаменателя", is_correct=False, symbol="diamond", color="blue"),
                 AnswerOption(id=2, text="Числитель равен знаменателю", is_correct=False, symbol="circle", color="yellow"),
                 AnswerOption(id=3, text="Знаменатель равен 0", is_correct=False, symbol="square", color="green"),
@@ -50,7 +50,7 @@ DEMO_DEFAULT_QUIZ = Quiz(
             time_limit_sec=20,
             topic="Основное свойство дроби",
             options=[
-                AnswerOption(id=0, text="3/4", is_correct=True, symbol="triangle", color="orange"),
+                AnswerOption(id=0, text="3/4", is_correct=True, symbol="triangle", color="red"),
                 AnswerOption(id=1, text="1/2", is_correct=False, symbol="diamond", color="blue"),
                 AnswerOption(id=2, text="2/3", is_correct=False, symbol="circle", color="yellow"),
                 AnswerOption(id=3, text="4/5", is_correct=False, symbol="square", color="green"),

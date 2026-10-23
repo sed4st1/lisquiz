@@ -168,6 +168,10 @@ async def websocket_room_endpoint(
                                 "COUNTDOWN_START",
                                 {"countdown_sec": 3, "total_questions": len(room.quiz.questions), "question_index": 0},
                             )
+                            async def _delayed_start_0(rc: str):
+                                await asyncio.sleep(3.0)
+                                await broadcast_question(rc, 0)
+                            asyncio.create_task(_delayed_start_0(room_code))
 
                         elif action == "START_QUESTION":
                             q_idx = int(data.get("question_index", room.current_question_index))
@@ -194,6 +198,10 @@ async def websocket_room_endpoint(
                                         "total_questions": len(room.quiz.questions),
                                     },
                                 )
+                                async def _delayed_start_next(rc: str, idx: int):
+                                    await asyncio.sleep(3.0)
+                                    await broadcast_question(rc, idx)
+                                asyncio.create_task(_delayed_start_next(room_code, next_idx))
                             else:
                                 gap_rep = await room_state_engine.generate_gap_report(room_code)
                                 await ws_manager.broadcast_room(
