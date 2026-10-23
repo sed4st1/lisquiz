@@ -61,9 +61,14 @@ export default function App() {
     };
 
     const handleGameFinished = () => {
+      haptics.notification('success');
       if (role === 'teacher') {
         setSubScreen(null);
         setTab('stats');
+      } else {
+        socketService.disconnect();
+        setSubScreen(null);
+        setTab('grove');
       }
     };
 
@@ -155,7 +160,15 @@ export default function App() {
           tier={currentQuestionData?.tier || 2}
           is_boss={currentQuestionData?.is_boss || false}
           timeLimitSec={currentQuestionData?.time_limit_sec || 25}
+          answeredCount={currentQuestionData?.answered_count ?? 0}
+          totalStudents={currentQuestionData?.total_players ?? 0}
           onBack={() => setSubScreen(null)}
+          onGameFinished={() => {
+            haptics.notification('success');
+            socketService.disconnect();
+            setSubScreen(null);
+            setTab('grove');
+          }}
           onAnswerSubmit={(optionId, _isCorrect, responseTimeMs, tabBlurred) => {
             const parsed = parseInt(optionId.replace('opt_', ''), 10);
             const rawId = isNaN(parsed) ? 0 : parsed;

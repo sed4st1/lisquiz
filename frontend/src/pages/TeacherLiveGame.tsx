@@ -53,7 +53,7 @@ export default function TeacherLiveGame({
   const [questionData, setQuestionData] = useState<any>(initialQuestionData);
   const [phase, setPhase] = useState<TeacherPhase>('question');
   const [answeredCount, setAnsweredCount] = useState<number>(0);
-  const [totalStudents, setTotalStudents] = useState<number>(0);
+  const [totalStudents, setTotalStudents] = useState<number>(initialQuestionData?.total_players ?? 0);
   const [resultsData, setResultsData] = useState<any>(null);
   const [leaderboardData, setLeaderboardData] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -145,7 +145,10 @@ export default function TeacherLiveGame({
       if (!isMounted) return;
       haptics.notification('success');
       setQuestionData(data);
-      setAnsweredCount(0);
+      setAnsweredCount(typeof data.answered_count === 'number' ? data.answered_count : 0);
+      if (typeof data.total_players === 'number') {
+        setTotalStudents(data.total_players);
+      }
       setPhase('question');
       setCountdown(null);
     };
@@ -239,43 +242,42 @@ export default function TeacherLiveGame({
         </div>
       </header>
 
-      {/* Segmented Glowing Progress Bar */}
-      <div style={styles.segmentedProgressRow}>
-        {Array.from({ length: totalQ }, (_, i) => i + 1).map((seg) => {
-          const isFilled = seg <= qIndex;
-          return (
-            <div key={seg} style={styles.progressSegment}>
-              <div
-                style={{
-                  ...styles.segmentFill,
-                  width: isFilled ? '100%' : '0%',
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Question Number Pill and Boss Badge */}
-      <div style={styles.timerRow}>
-        <div style={styles.questionNumPill}>
-          <Sparkles size={14} color="#34D399" />
-          <span>
+      {/* Progress Section: Counter text directly above glowing dashes */}
+      <div style={styles.progressSection}>
+        <div style={styles.progressMetaRow}>
+          <span style={styles.progressCounterText}>
             Вопрос {qIndex} из {totalQ}
           </span>
+
+          {isBoss && (
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: [1, 1.05, 1], opacity: 1 }}
+              transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+              style={styles.bossMiniPill}
+            >
+              <Flame size={12} color="#EF4444" fill="#EF4444" />
+              <span>Сложная задача (х2 очков)</span>
+            </motion.div>
+          )}
         </div>
 
-        {isBoss && (
-          <motion.div
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: [1, 1.05, 1], opacity: 1 }}
-            transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
-            style={styles.bossPill}
-          >
-            <Flame size={14} color="#EF4444" fill="#EF4444" />
-            <span>Сложная задача (х2 очков)</span>
-          </motion.div>
-        )}
+        {/* Segmented Glowing Progress Bar */}
+        <div style={styles.segmentedProgressRow}>
+          {Array.from({ length: totalQ }, (_, i) => i + 1).map((seg) => {
+            const isFilled = seg <= qIndex;
+            return (
+              <div key={seg} style={styles.progressSegment}>
+                <div
+                  style={{
+                    ...styles.segmentFill,
+                    width: isFilled ? '100%' : '0%',
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Main Content Area */}
@@ -798,40 +800,38 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     transition: 'width 0.4s ease',
   },
-  timerRow: {
+  progressSection: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    zIndex: 4,
+  },
+  progressMetaRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    margin: '2px 0 6px',
-    zIndex: 4,
+    padding: '0 2px',
   },
-  questionNumPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(14, 25, 45, 0.85)',
-    border: '1px solid rgba(255, 255, 255, 0.16)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    borderRadius: 999,
-    padding: '5px 14px',
+  progressCounterText: {
     fontSize: 12.5,
-    fontWeight: 700,
+    fontWeight: 800,
     color: '#E5E7EB',
+    letterSpacing: '0.02em',
   },
-  bossPill: {
+  bossMiniPill: {
     display: 'flex',
     alignItems: 'center',
-    gap: 5,
-    padding: '4px 10px',
-    borderRadius: 20,
+    gap: 4,
+    padding: '2px 8px',
+    borderRadius: 999,
     backgroundColor: 'rgba(239, 68, 68, 0.22)',
-    border: '1.5px solid #EF4444',
+    border: '1px solid #EF4444',
     color: '#F87171',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 800,
-    boxShadow: '0 0 14px rgba(239, 68, 68, 0.45)',
+    boxShadow: '0 0 10px rgba(239, 68, 68, 0.35)',
   },
   mainContent: {
     width: '100%',

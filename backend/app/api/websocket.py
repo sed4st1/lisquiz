@@ -39,6 +39,7 @@ async def broadcast_question(room_code: str, q_idx: int):
     for opt in q_student["options"]:
         opt["is_correct"] = False
 
+    active_students = len([p for p in room.players.values() if p.connected])
     await ws_manager.broadcast_teacher(
         room_code,
         "QUESTION_START",
@@ -49,6 +50,8 @@ async def broadcast_question(room_code: str, q_idx: int):
             "tier": tier,
             "is_boss": is_boss,
             "time_limit_sec": time_limit_sec,
+            "total_players": active_students,
+            "answered_count": len(room.answered_player_ids),
         },
     )
     await ws_manager.broadcast_students(
@@ -61,6 +64,8 @@ async def broadcast_question(room_code: str, q_idx: int):
             "tier": tier,
             "is_boss": is_boss,
             "time_limit_sec": time_limit_sec,
+            "total_players": active_students,
+            "answered_count": len(room.answered_player_ids),
         },
     )
 

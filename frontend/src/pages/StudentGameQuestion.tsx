@@ -2,9 +2,10 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
-import { ChevronLeft, Users, Sparkles, Flame } from 'lucide-react';
+import { ChevronLeft, Users, Flame } from 'lucide-react';
 import AnswerButton from '../components/AnswerButton';
 import { haptics } from '../services/haptics';
+import { socketService } from '../services/socketService';
 import type { QuizOption } from '../types/quiz';
 
 export interface StudentGameQuestionProps {
@@ -19,10 +20,13 @@ export interface StudentGameQuestionProps {
   timeLimitSec?: number;
   tier?: number;
   is_boss?: boolean;
+  answeredCount?: number;
+  totalStudents?: number;
   onAnswer?: (isCorrect: boolean) => void;
   onAnswerSubmit?: (optionId: string, isCorrect: boolean, responseTimeMs: number, tabBlurred: boolean) => void;
   onTimeUp?: () => void;
   onBack?: () => void;
+  onGameFinished?: () => void;
 }
 
 const DEFAULT_OPTIONS: QuizOption[] = [
@@ -53,8 +57,8 @@ const DEFAULT_OPTIONS: QuizOption[] = [
 ];
 
 export default function StudentGameQuestion({
-  questionNumber = 3,
-  totalQuestions = 10,
+  questionNumber = 1,
+  totalQuestions = 3,
   subjectTitle = 'Математика',
   classNameTitle = '7А',
   questionText = 'Какой результат получится при сложении дробей 2/3 и 1/6?',
@@ -64,10 +68,13 @@ export default function StudentGameQuestion({
   timeLimitSec,
   tier = 2,
   is_boss = false,
+  answeredCount = 0,
+  totalStudents = 0,
   onAnswer,
   onAnswerSubmit,
   onTimeUp,
   onBack,
+  onGameFinished,
 }: StudentGameQuestionProps) {
   const isBossQuestion = Boolean(is_boss || tier === 3);
   const initialTimeLimit = isBossQuestion ? 40 : (timeLimitSec || (tier === 1 ? 15 : 25));
@@ -75,8 +82,45 @@ export default function StudentGameQuestion({
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [isRevealed, setIsRevealed] = useState<boolean>(false);
   const [timeLeft, setTimeLeft] = useState<number>(initialTimeLimit);
+  const [liveAnswered, setLiveAnswered] = useState<number>(answeredCount);
+  const [liveTotal, setLiveTotal] = useState<number>(totalStudents);
+
   const startTimeRef = useRef<number>(Date.now());
   const hasBlurredRef = useRef<boolean>(false);
+
+  // Sync props to live state
+  useEffect(() => {
+    setLiveAnswered(answeredCount);
+  }, [answeredCount]);
+
+  useEffect(() => {
+    setLiveTotal(totalStudents);
+  }, [totalStudents]);
+
+  // Real-time socket events for live player progress and game finish
+  useEffect(() => {
+    const handleAnswerCollected = (data: any) => {
+      if (typeof data.answered_count === 'number') {
+        setLiveAnswered(data.answered_count);
+      }
+      if (typeof data.total_players === 'number') {
+        setLiveTotal(data.total_players);
+      }
+    };
+
+    const handleFinished = () => {
+      haptics.notification('success');
+      onGameFinished?.();
+    };
+
+    socketService.on('ANSWER_COLLECTED', handleAnswerCollected);
+    socketService.on('GAME_FINISHED', handleFinished);
+
+    return () => {
+      socketService.off('ANSWER_COLLECTED', handleAnswerCollected);
+      socketService.off('GAME_FINISHED', handleFinished);
+    };
+  }, [onGameFinished]);
 
   // Silent anti-cheat: track window blur / tab switch silently without warning student
   useEffect(() => {
@@ -183,64 +227,60 @@ export default function StudentGameQuestion({
           </div>
         </div>
 
+        {/* Live Online Players Count Pill */}
         <div style={styles.playerCountPill}>
           <Users size={14} color="#D1D5DB" />
-          <span>28 из 30</span>
+          <span>
+            {liveAnswered > 0
+              ? `${liveAnswered} из ${liveTotal > 0 ? liveTotal : 1}`
+              : liveTotal > 0
+              ? `${liveTotal} онлайн`
+              : '1 онлайн'}
+          </span>
         </div>
       </header>
 
-      {/* Segmented Glowing Progress Bar */}
-      <div style={styles.segmentedProgressRow}>
-        {[1, 2, 3, 4].map((seg) => {
-          const isFilled = seg <= 2;
-          return (
-            <div key={seg} style={styles.progressSegment}>
-              <div
-                style={{
-                  ...styles.segmentFill,
-                  width: isFilled ? '100%' : '0%',
-                }}
-              />
-            </div>
-          );
-        })}
-      </div>
+      {/* Progress Section: Counter text directly above glowing dashes */}
+      <div style={styles.progressSection}>
+        <div style={styles.progressMetaRow}>
+          <span style={styles.progressCounterText}>
+            Вопрос {questionNumber} из {totalQuestions}
+          </span>
 
-      {/* Question Number Pill and Boss Badge */}
-      <div style={styles.timerRow}>
-        <div style={styles.questionNumPill}>
-          <Sparkles size={14} color="#34D399" />
-          <span>Вопрос {questionNumber} из {totalQuestions}</span>
+          {isBossQuestion && (
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: [1, 1.05, 1], opacity: 1 }}
+              transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
+              style={styles.bossMiniPill}
+            >
+              <Flame size={12} color="#EF4444" fill="#EF4444" />
+              <span>Сложная задача (х2 очков)</span>
+            </motion.div>
+          )}
         </div>
 
-        {isBossQuestion && (
-          <motion.div
-            initial={{ scale: 0.85, opacity: 0 }}
-            animate={{ scale: [1, 1.05, 1], opacity: 1 }}
-            transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '4px 10px',
-              borderRadius: 20,
-              backgroundColor: 'rgba(239, 68, 68, 0.22)',
-              border: '1.5px solid #EF4444',
-              color: '#F87171',
-              fontSize: 12,
-              fontWeight: 800,
-              boxShadow: '0 0 14px rgba(239, 68, 68, 0.45)',
-            }}
-          >
-            <Flame size={14} color="#EF4444" fill="#EF4444" />
-            <span>Сложная задача (х2 очков)</span>
-          </motion.div>
-        )}
+        {/* Dynamic Segmented Glowing Progress Dashes */}
+        <div style={styles.segmentedProgressRow}>
+          {Array.from({ length: totalQuestions }, (_, i) => i + 1).map((seg) => {
+            const isFilled = seg <= questionNumber;
+            return (
+              <div key={seg} style={styles.progressSegment}>
+                <div
+                  style={{
+                    ...styles.segmentFill,
+                    width: isFilled ? '100%' : '0%',
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Question Card with Timer Notch Cutout */}
       <motion.div
-        initial={{ y: 12, opacity: 0 }}
+        initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 350, damping: 26 }}
         style={styles.questionCardWrapper}
@@ -272,7 +312,7 @@ export default function StudentGameQuestion({
               }
               strokeWidth="3.5"
               strokeDasharray={144.5}
-              strokeDashoffset={144.5 * (1 - timeLeft / initialTimeLimit)}
+              strokeDashoffset={144.5 * (1 - Math.max(0, timeLeft) / (initialTimeLimit || 25))}
               strokeLinecap="round"
               style={{
                 filter:
@@ -287,7 +327,12 @@ export default function StudentGameQuestion({
               }}
             />
           </svg>
-          <span style={{ ...styles.timerText, color: isBossQuestion && timeLeft <= 8 ? '#EF4444' : '#FFFFFF' }}>
+          <span
+            style={{
+              ...styles.timerText,
+              color: (isBossQuestion && timeLeft <= 8) || timeLeft <= 3 ? '#EF4444' : '#FFFFFF',
+            }}
+          >
             {timeLeft}
           </span>
         </div>
@@ -346,7 +391,7 @@ export default function StudentGameQuestion({
       <div style={styles.bottomMascotArea}>
         <motion.div
           animate={{
-            y: [0, -4, 0],
+            y: [0, -3, 0],
           }}
           transition={{
             repeat: Infinity,
@@ -400,26 +445,24 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     position: 'relative',
     width: '100%',
-    height: '100%',
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-between',
     backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
     backgroundPosition: 'center top',
     backgroundSize: 'cover',
     backgroundRepeat: 'no-repeat',
-    padding: '12px 14px 10px',
+    padding: '12px 14px 16px',
     boxSizing: 'border-box',
     overflowY: 'auto',
     overflowX: 'hidden',
+    gap: 8,
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 4,
     zIndex: 4,
   },
   headerLeft: {
@@ -483,12 +526,43 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: '#FFFFFF',
   },
+  progressSection: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    zIndex: 4,
+  },
+  progressMetaRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    padding: '0 2px',
+  },
+  progressCounterText: {
+    fontSize: 12.5,
+    fontWeight: 800,
+    color: '#E5E7EB',
+    letterSpacing: '0.02em',
+  },
+  bossMiniPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '2px 8px',
+    borderRadius: 999,
+    backgroundColor: 'rgba(239, 68, 68, 0.22)',
+    border: '1px solid #EF4444',
+    color: '#F87171',
+    fontSize: 11,
+    fontWeight: 800,
+    boxShadow: '0 0 10px rgba(239, 68, 68, 0.35)',
+  },
   segmentedProgressRow: {
     display: 'flex',
-    gap: 6,
+    gap: 5,
     width: '100%',
-    margin: '4px 0 6px',
-    zIndex: 4,
   },
   progressSegment: {
     flex: 1,
@@ -504,32 +578,10 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     transition: 'width 0.4s ease',
   },
-  timerRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    margin: '2px 0 6px',
-    zIndex: 4,
-  },
-  questionNumPill: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(14, 25, 45, 0.85)',
-    border: '1px solid rgba(255, 255, 255, 0.16)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    borderRadius: 999,
-    padding: '5px 14px',
-    fontSize: 12.5,
-    fontWeight: 700,
-    color: '#E5E7EB',
-  },
   questionCardWrapper: {
     position: 'relative',
     width: '100%',
-    margin: '2px 0 10px',
+    marginTop: 2,
     zIndex: 4,
   },
   circularTimerWrapper: {
@@ -613,21 +665,22 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     position: 'relative',
     zIndex: 3,
-    marginBottom: 6,
+    marginTop: 2,
   },
   bottomMascotArea: {
     position: 'relative',
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'flex-start',
-    gap: 12,
-    height: 105,
-    paddingLeft: 6,
+    gap: 10,
+    marginTop: 4,
+    height: 90,
+    paddingLeft: 4,
     zIndex: 2,
   },
   groundedSprintWrapper: {
-    width: 95,
-    height: 105,
+    width: 80,
+    height: 90,
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'center',
@@ -646,12 +699,12 @@ const styles: Record<string, React.CSSProperties> = {
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
     borderRadius: 16,
-    padding: '8px 14px',
+    padding: '7px 13px',
     color: '#F9FAFB',
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: 800,
     boxShadow: '0 6px 20px rgba(0, 0, 0, 0.45)',
     whiteSpace: 'nowrap',
-    marginBottom: 20,
+    marginBottom: 16,
   },
 };
