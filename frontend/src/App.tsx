@@ -13,6 +13,7 @@ import FeedbackStreak from './pages/FeedbackStreak';
 import TeacherCreateQuiz from './pages/TeacherCreateQuiz';
 import TeacherLobby from './pages/TeacherLobby';
 import TeacherGapReport from './pages/TeacherGapReport';
+import TeacherLiveGame from './pages/TeacherLiveGame';
 import SleepScreen from './pages/SleepScreen';
 import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
@@ -22,6 +23,7 @@ type SubScreenType =
   | null
   | 'student_waiting'
   | 'student_game'
+  | 'teacher_live_game'
   | 'feedback_correct'
   | 'feedback_wrong'
   | 'sleep_screen';
@@ -44,7 +46,11 @@ export default function App() {
   useEffect(() => {
     const handleQuestionStart = (data: any) => {
       setCurrentQuestionData(data);
-      setSubScreen('student_game');
+      if (role === 'teacher') {
+        setSubScreen('teacher_live_game');
+      } else {
+        setSubScreen('student_game');
+      }
     };
 
     const handleAnswerResult = (data: any) => {
@@ -53,10 +59,10 @@ export default function App() {
     };
 
     const handleGameFinished = () => {
+      setSubScreen(null);
       if (role === 'teacher') {
         setTab('stats');
       } else {
-        setSubScreen(null);
         setTab('leaderboard');
       }
     };
@@ -87,6 +93,18 @@ export default function App() {
 
   // Render content according to active Tab & Role
   const renderTabContent = () => {
+    if (subScreen === 'teacher_live_game') {
+      return (
+        <TeacherLiveGame
+          roomCode={activePin}
+          initialQuestionData={currentQuestionData}
+          onFinishGame={() => {
+            setSubScreen(null);
+            setTab('stats');
+          }}
+        />
+      );
+    }
     if (subScreen === 'student_waiting') {
       return (
         <StudentWaitingLobby
@@ -234,10 +252,7 @@ export default function App() {
                 setTeacherToken(token);
               }}
               onStartQuiz={() => {
-                if (socketService.isConnected()) {
-                  socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
-                }
-                setSubScreen('student_game');
+                setSubScreen('teacher_live_game');
               }}
             />
           );

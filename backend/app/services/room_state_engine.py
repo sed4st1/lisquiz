@@ -631,6 +631,18 @@ class RoomStateEngine:
                 for opt in cur_q_copy.options:
                     opt.is_correct = False  # Скрываем до раунда ответов
 
+        player_list = [
+            {
+                "id": p.id,
+                "name": p.name,
+                "avatar": p.avatar,
+                "score": p.score,
+                "streak": p.streak,
+                "connected": p.connected,
+            }
+            for p in room.players.values()
+        ]
+
         return SyncState(
             room_code=room.room_code,
             status=room.status,
@@ -643,6 +655,7 @@ class RoomStateEngine:
             player_streak=player.streak if player else 0,
             blurred_count=player.blurred_count if player else 0,
             current_question=cur_q_copy,
+            players=player_list,
         )
 
     # ==========================================

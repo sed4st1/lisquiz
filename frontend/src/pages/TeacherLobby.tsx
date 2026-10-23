@@ -5,6 +5,7 @@ import {
   Check,
   Rocket,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
@@ -41,15 +42,6 @@ const AVATAR_MAP: Record<string, string> = {
   fox_detective: '/assets/avatars/students/raccoon.png',
 };
 
-const DEFAULT_MOCK_STUDENTS: ConnectedStudent[] = [
-  { id: 'mock_1', name: 'Маша К', avatar: 'hedgehog' },
-  { id: 'mock_2', name: 'Артём В', avatar: 'raccoon' },
-  { id: 'mock_3', name: 'София Л', avatar: 'owl' },
-  { id: 'mock_4', name: 'Дима С', avatar: 'bear' },
-  { id: 'mock_5', name: 'Полина Т', avatar: 'bunny' },
-  { id: 'mock_6', name: 'Кирилл М', avatar: 'squirrel' },
-];
-
 export default function TeacherLobby({
   pin: propPin,
   teacherToken: propToken,
@@ -59,7 +51,7 @@ export default function TeacherLobby({
   onRoomReady,
 }: TeacherLobbyProps) {
   const [activePin, setActivePin] = useState<string>(propPin || '');
-  const [students, setStudents] = useState<ConnectedStudent[]>(DEFAULT_MOCK_STUDENTS);
+  const [students, setStudents] = useState<ConnectedStudent[]>([]);
   const [copied, setCopied] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
@@ -98,7 +90,14 @@ export default function TeacherLobby({
 
         socketService.on('SYNC_STATE', (data: any) => {
           if (!isMounted) return;
-          if (data && data.players && Object.keys(data.players).length > 0) {
+          if (data && Array.isArray(data.players)) {
+            const list: ConnectedStudent[] = data.players.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              avatar: p.avatar,
+            }));
+            setStudents(list);
+          } else if (data && data.players && typeof data.players === 'object') {
             const list: ConnectedStudent[] = Object.values(data.players).map((p: any) => ({
               id: p.id,
               name: p.name,
@@ -134,6 +133,9 @@ export default function TeacherLobby({
               clearInterval(interval);
               if (isMounted) {
                 setCountdown(null);
+                if (socketService.isConnected()) {
+                  socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
+                }
                 onStartQuiz?.();
               }
             } else {
@@ -248,32 +250,44 @@ export default function TeacherLobby({
 
       {/* Students Avatar Grid */}
       <div style={styles.avatarsCard}>
-        <div style={styles.avatarGrid}>
-          {students.map((student, i) => (
-            <motion.div
-              key={student.id}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: i * 0.03, type: 'spring', stiffness: 500, damping: 22 }}
-              onClick={() => {
-                haptics.selection();
-                setSelectedStudentToKick(student);
-              }}
-              style={styles.avatarItem}
-              title="Нажмите чтобы исключить"
-            >
-              <div style={styles.avatarCircle}>
-                <img
-                  src={getAvatarSrc(student.avatar)}
-                  alt={student.name}
-                  style={styles.avatarImg}
-                />
-                <span style={styles.avatarOnlineDot} />
-              </div>
-              <span style={styles.avatarName}>{student.name}</span>
-            </motion.div>
-          ))}
-        </div>
+        {students.length === 0 ? (
+          <div style={styles.emptyContainer}>
+            <div style={styles.emptyPulseCircle}>
+              <Users size={26} color="#34D399" />
+            </div>
+            <p style={styles.emptyTitle}>Ждём подключения учеников...</p>
+            <p style={styles.emptySubtitle}>
+              Откройте Лисквиз в Сферуме и введите PIN-код выше
+            </p>
+          </div>
+        ) : (
+          <div style={styles.avatarGrid}>
+            {students.map((student, i) => (
+              <motion.div
+                key={student.id}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: i * 0.03, type: 'spring', stiffness: 500, damping: 22 }}
+                onClick={() => {
+                  haptics.selection();
+                  setSelectedStudentToKick(student);
+                }}
+                style={styles.avatarItem}
+                title="Нажмите чтобы исключить"
+              >
+                <div style={styles.avatarCircle}>
+                  <img
+                    src={getAvatarSrc(student.avatar)}
+                    alt={student.name}
+                    style={styles.avatarImg}
+                  />
+                  <span style={styles.avatarOnlineDot} />
+                </div>
+                <span style={styles.avatarName}>{student.name}</span>
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Launch Quiz Button */}
@@ -489,6 +503,37 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '14px',
     marginBottom: 14,
     zIndex: 3,
+  },
+  emptyContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '28px 12px',
+    textAlign: 'center',
+  },
+  emptyPulseCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#0F172A',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: '0 0 4px 0',
+  },
+  emptySubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    margin: 0,
+    maxWidth: 240,
+    lineHeight: 1.4,
   },
   avatarGrid: {
     display: 'grid',

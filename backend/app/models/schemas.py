@@ -137,6 +137,7 @@ class SyncState(BaseModel):
     player_streak: int
     blurred_count: int
     current_question: Optional[Question] = None
+    players: Optional[List[Dict[str, Any]]] = None
 
 
 class QuestionStat(BaseModel):
