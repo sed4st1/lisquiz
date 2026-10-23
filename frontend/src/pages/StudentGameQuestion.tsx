@@ -136,14 +136,11 @@ export default function StudentGameQuestion({
     const tabBlurred = hasBlurredRef.current;
 
     setSelectedOptionId(optionId);
-    if (isCorrect) {
-      haptics.impact('medium');
-    } else {
-      haptics.notification('error');
-    }
+    haptics.impact('medium');
 
-    onAnswerSubmit?.(optionId, isCorrect, responseTimeMs, tabBlurred);
-    if (onAnswer) {
+    if (onAnswerSubmit) {
+      onAnswerSubmit(optionId, isCorrect, responseTimeMs, tabBlurred);
+    } else if (onAnswer) {
       setTimeout(() => {
         onAnswer(isCorrect);
       }, 700);
@@ -151,13 +148,10 @@ export default function StudentGameQuestion({
   };
 
   const hasAnswered = selectedOptionId !== null;
-  const isCorrectAnswer = selectedOptionId === correctOptionId;
 
   // Mascot sprite determination
   const mascotSprite = hasAnswered
-    ? isCorrectAnswer
-      ? '/assets/mascot/sprint_celebrate.png'
-      : '/assets/mascot/sprint_thinking.png'
+    ? '/assets/mascot/sprint_thinking.png'
     : '/assets/mascot/sprint_idle.png';
 
   return (
@@ -382,33 +376,18 @@ export default function StudentGameQuestion({
             </motion.div>
           )}
 
-          {hasAnswered && isCorrectAnswer && (
+          {hasAnswered && (
             <motion.div
               initial={{ scale: 0.85, opacity: 0, y: 6 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               transition={{ type: 'spring', stiffness: 450, damping: 24 }}
               style={{
                 ...styles.speechBubble,
-                borderColor: 'rgba(16, 185, 129, 0.6)',
-                color: '#34D399',
+                borderColor: 'rgba(59, 130, 246, 0.6)',
+                color: '#93C5FD',
               }}
             >
-              Верно! Отличная работа!
-            </motion.div>
-          )}
-
-          {hasAnswered && !isCorrectAnswer && (
-            <motion.div
-              initial={{ scale: 0.85, opacity: 0, y: 6 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              transition={{ type: 'spring', stiffness: 450, damping: 24 }}
-              style={{
-                ...styles.speechBubble,
-                borderColor: 'rgba(239, 68, 68, 0.6)',
-                color: '#F87171',
-              }}
-            >
-              Почти! В следующий раз получится!
+              Ответ принят! Ждём результат...
             </motion.div>
           )}
         </AnimatePresence>

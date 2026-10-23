@@ -10,6 +10,7 @@ import {
   ArrowRight,
   Flame,
   Check,
+  Sprout,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { socketService } from '../services/socketService';
@@ -22,6 +23,19 @@ export interface TeacherLiveGameProps {
 }
 
 type TeacherPhase = 'question' | 'results' | 'leaderboard';
+
+const DEFAULT_TEACHER_QUESTION = {
+  id: 1,
+  text: 'Чему равна сумма 1/4 + 2/4?',
+  latex: '\\frac{1}{4} + \\frac{2}{4}',
+  options: [
+    { id: 0, text: '3/4', is_correct: true },
+    { id: 1, text: '3/8', is_correct: false },
+    { id: 2, text: '2/4', is_correct: false },
+    { id: 3, text: '1/2', is_correct: false },
+  ],
+  explanation: 'Складываем числители при одинаковом знаменателе: (1 + 2) / 4 = 3/4.',
+};
 
 export default function TeacherLiveGame({
   roomCode,
@@ -36,9 +50,16 @@ export default function TeacherLiveGame({
   const [leaderboardData, setLeaderboardData] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const curQ = questionData?.question;
-  const qIndex = (questionData?.question_index ?? 0) + 1;
-  const totalQ = questionData?.total_questions ?? 1;
+  // Sync state if initialQuestionData updates from parent
+  useEffect(() => {
+    if (initialQuestionData) {
+      setQuestionData(initialQuestionData);
+    }
+  }, [initialQuestionData]);
+
+  const curQ = questionData?.question || initialQuestionData?.question || DEFAULT_TEACHER_QUESTION;
+  const qIndex = (questionData?.question_index ?? initialQuestionData?.question_index ?? 0) + 1;
+  const totalQ = questionData?.total_questions ?? initialQuestionData?.total_questions ?? 3;
   const isBoss = Boolean(questionData?.is_boss);
   const isLastQuestion = qIndex >= totalQ;
 
@@ -74,6 +95,7 @@ export default function TeacherLiveGame({
     const handleCountdownStart = (data: any) => {
       if (!isMounted) return;
       const sec = data.countdown_sec || 3;
+      const nextIdx = typeof data.question_index === 'number' ? data.question_index : qIndex;
       setCountdown(sec);
 
       let cur = sec;
@@ -81,7 +103,12 @@ export default function TeacherLiveGame({
         cur -= 1;
         if (cur <= 0) {
           clearInterval(interval);
-          if (isMounted) setCountdown(null);
+          if (isMounted) {
+            setCountdown(null);
+            if (socketService.isConnected()) {
+              socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: nextIdx });
+            }
+          }
         } else {
           if (isMounted) setCountdown(cur);
         }
@@ -94,6 +121,7 @@ export default function TeacherLiveGame({
       setQuestionData(data);
       setAnsweredCount(0);
       setPhase('question');
+      setCountdown(null);
     };
 
     const handleGameFinished = () => {
@@ -118,7 +146,7 @@ export default function TeacherLiveGame({
       socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('GAME_FINISHED', handleGameFinished);
     };
-  }, [onFinishQuiz]);
+  }, [qIndex, onFinishQuiz]);
 
   // Actions
   const handleShowResults = () => {
@@ -197,7 +225,7 @@ export default function TeacherLiveGame({
             )}
 
             <h2 style={styles.questionText}>
-              {curQ?.text || 'Загрузка текста вопроса...'}
+              {curQ.text}
             </h2>
 
             {latexHtml && (
@@ -209,11 +237,11 @@ export default function TeacherLiveGame({
 
             {/* Answer Options Grid */}
             <div style={styles.optionsGrid}>
-              {curQ?.options?.map((opt: any, idx: number) => {
+              {curQ.options?.map((opt: any, idx: number) => {
                 const isCorrect = Boolean(opt.is_correct);
                 return (
                   <div
-                    key={opt.id || idx}
+                    key={opt.id ?? idx}
                     style={{
                       ...styles.optionCard,
                       backgroundColor: isCorrect ? '#065F46' : '#0F172A',
@@ -272,20 +300,26 @@ export default function TeacherLiveGame({
 
             {/* Distribution bars */}
             <div style={styles.distributionList}>
-              {curQ?.options?.map((opt: any, idx: number) => {
-                const count = resultsData?.distribution?.[String(opt.id)] || 0;
+              {curQ.options?.map((opt: any, idx: number) => {
+                const count = resultsData?.distribution?.[String(opt.id)] ?? resultsData?.distribution?.[opt.id] ?? 0;
                 const isCorrect = Boolean(opt.is_correct || resultsData?.correct_option_id === opt.id);
+                const totalVotes = Object.values(resultsData?.distribution || {}).reduce(
+                  (acc: number, val: any) => acc + Number(val),
+                  0
+                ) as number;
+                const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : (count > 0 ? 100 : 0);
+
                 return (
-                  <div key={opt.id || idx} style={styles.distRow}>
+                  <div key={opt.id ?? idx} style={styles.distRow}>
                     <div style={styles.distLabelRow}>
                       <span style={styles.distLetter}>{String.fromCharCode(65 + idx)}. {opt.text}</span>
-                      <span style={styles.distCount}>{count} чел</span>
+                      <span style={styles.distCount}>{count} чел ({pct}%)</span>
                     </div>
                     <div style={styles.distBarBg}>
                       <div
                         style={{
                           ...styles.distBarFill,
-                          width: `${Math.min(100, count * 25)}%`,
+                          width: `${pct}%`,
                           backgroundColor: isCorrect ? '#10B981' : '#3B82F6',
                         }}
                       />
@@ -332,17 +366,29 @@ export default function TeacherLiveGame({
             </div>
 
             <div style={styles.leaderList}>
-              {leaderboardData?.top_players?.map((p: any, idx: number) => {
-                const medals = ['🥇', '🥈', '🥉'];
-                const medal = medals[idx] || `${idx + 1}`;
-                return (
-                  <div key={p.id || idx} style={styles.leaderRow}>
-                    <span style={styles.leaderRank}>{medal}</span>
-                    <span style={styles.leaderName}>{p.name}</span>
-                    <span style={styles.leaderScore}>{p.score} очков</span>
-                  </div>
-                );
-              })}
+              {(!leaderboardData?.top_players || leaderboardData.top_players.length === 0) ? (
+                <div style={styles.emptyLeaderBox}>
+                  <span>Подсчёт результатов участников...</span>
+                </div>
+              ) : (
+                leaderboardData.top_players.map((p: any, idx: number) => {
+                  const medals = ['🥇', '🥈', '🥉'];
+                  const medal = medals[idx] || `${idx + 1}`;
+                  return (
+                    <div key={p.id || idx} style={styles.leaderRow}>
+                      <span style={styles.leaderRank}>{medal}</span>
+                      <span style={styles.leaderName}>{p.name}</span>
+                      <span style={styles.leaderScore}>{p.score} очков</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Class Grove Energy Growth Pill */}
+            <div style={styles.groveEnergyPill}>
+              <Sprout size={16} color="#34D399" />
+              <span>Энергия Рощи класса: +15% к здоровью дерева</span>
             </div>
 
             <div style={styles.actionRow}>
@@ -575,6 +621,15 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 8,
   },
+  emptyLeaderBox: {
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: '16px',
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: 700,
+    textAlign: 'center',
+  },
   leaderRow: {
     display: 'flex',
     alignItems: 'center',
@@ -596,6 +651,17 @@ const styles: Record<string, React.CSSProperties> = {
   leaderScore: {
     fontSize: 14,
     fontWeight: 800,
+    color: '#34D399',
+  },
+  groveEnergyPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: '10px 14px',
+    fontSize: 12.5,
+    fontWeight: 700,
     color: '#34D399',
   },
   countdownOverlay: {

@@ -132,10 +132,11 @@ export default function App() {
           timeLimitSec={currentQuestionData?.time_limit_sec || 25}
           onBack={() => setSubScreen(null)}
           onAnswerSubmit={(optionId, isCorrect, responseTimeMs, tabBlurred) => {
-            const rawId = parseInt(optionId.replace('opt_', ''), 10) || 0;
+            const parsed = parseInt(optionId.replace('opt_', ''), 10);
+            const rawId = isNaN(parsed) ? 0 : parsed;
             if (socketService.isConnected()) {
               socketService.send('SUBMIT_ANSWER', {
-                question_id: qObj?.id || 1,
+                question_id: qObj?.id ?? 1,
                 option_id: rawId,
                 time_taken_sec: responseTimeMs / 1000,
                 tab_blurred: tabBlurred,
@@ -144,7 +145,6 @@ export default function App() {
               setSubScreen(isCorrect ? 'feedback_correct' : 'feedback_wrong');
             }
           }}
-          onAnswer={(isCorrect) => setSubScreen(isCorrect ? 'feedback_correct' : 'feedback_wrong')}
         />
       );
     }
@@ -273,7 +273,7 @@ export default function App() {
               }}
               onStartQuiz={() => {
                 if (socketService.isConnected()) {
-                  socketService.send('TEACHER_ACTION', { action: 'START_GAME' });
+                  socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
                 }
                 setSubScreen('teacher_game');
               }}
