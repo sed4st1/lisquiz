@@ -16,7 +16,6 @@ import { socketService } from '../services/socketService';
 import { roomApi } from '../services/roomApi';
 import { quizStorage, SavedQuiz } from '../services/quizStorage';
 import QuizQuestionEditorModal from '../components/QuizQuestionEditorModal';
-import textbookPresets from '../services/textbook_presets.json';
 
 export interface ConnectedStudent {
   id: string;
@@ -60,23 +59,6 @@ const getSubjectIcon = (subj?: string) => {
   return '📚';
 };
 
-const PRESET_CLEAN_MAP: Record<string, { title: string; icon: string }> = {
-  quiz_tb_peryshkin_phys_7_p22: { title: 'Плотность', icon: '⚡' },
-  quiz_tb_vilenkin_math_6_p7: { title: 'Дроби', icon: '🔢' },
-  quiz_tb_merzlyak_math_6_p8: { title: 'Пропорции', icon: '📐' },
-  quiz_tb_makarychev_alg_7_p3: { title: 'Выражения', icon: '🔢' },
-  quiz_tb_atanasyan_geom_7_9_p2: { title: 'Отрезки', icon: '📐' },
-  quiz_tb_ladyzhenskaya_rus_6_p12: { title: 'Морфемика', icon: '📝' },
-};
-
-const PRESET_QUIZZES: SavedQuiz[] = (textbookPresets as SavedQuiz[]).map((p) => {
-  const meta = PRESET_CLEAN_MAP[p.id];
-  return {
-    ...p,
-    title: meta ? meta.title : p.title,
-  };
-});
-
 export default function TeacherLobby({
   pin: propPin,
   teacherToken: propToken,
@@ -96,19 +78,14 @@ export default function TeacherLobby({
   const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
   const [quizToDelete, setQuizToDelete] = useState<SavedQuiz | null>(null);
 
-  // Quizzes list: User custom quizzes + Clean preset templates
+  // Quizzes list: ONLY user quizzes loaded from DB
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>(() => quizStorage.getSavedQuizzes());
-
-  const allQuizzes: SavedQuiz[] = React.useMemo(() => {
-    const userOnly = savedQuizzes.filter((q) => !PRESET_CLEAN_MAP[q.id]);
-    return [...userOnly, ...PRESET_QUIZZES];
-  }, [savedQuizzes]);
-
   const [activeQuizId, setActiveQuizId] = useState<string>(() => {
-    return allQuizzes[0]?.id || '';
+    const list = quizStorage.getSavedQuizzes();
+    return list[0]?.id || '';
   });
 
-  const activeQuiz = allQuizzes.find((q) => q.id === activeQuizId) || allQuizzes[0];
+  const activeQuiz = savedQuizzes.find((q) => q.id === activeQuizId) || (savedQuizzes.length > 0 ? savedQuizzes[0] : null);
   const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -125,6 +102,12 @@ export default function TeacherLobby({
     quizStorage.syncFromDb().then((dbQuizzes) => {
       if (dbQuizzes && dbQuizzes.length > 0) {
         setSavedQuizzes(dbQuizzes);
+        if (!activeQuizId) {
+          setActiveQuizId(dbQuizzes[0].id);
+        }
+      } else {
+        setSavedQuizzes([]);
+        setActiveQuizId('');
       }
     });
   }, []);
@@ -536,12 +519,11 @@ export default function TeacherLobby({
         )}
       </div>
 
-      {/* Шаблоны викторин (Список прямоугольников #151f36 без обводки) */}
+      {/* Шаблоны викторин (Только из БД, списком прямоугольников #151f36 без обводки) */}
       <div style={styles.templatesSection}>
         <div style={styles.templatesHeader}>
           <div style={styles.templatesHeaderLeft}>
             <span style={styles.templatesSectionTitle}>Шаблоны викторин</span>
-            <span style={styles.templatesSubBadge}>{allQuizzes.length}</span>
           </div>
           <button
             type="button"
@@ -557,89 +539,103 @@ export default function TeacherLobby({
         </div>
 
         <div style={styles.templatesList}>
-          {allQuizzes.map((q) => {
-            const isSel = q.id === activeQuizId;
-            const isCustom = !PRESET_CLEAN_MAP[q.id];
-            const metaInfo = PRESET_CLEAN_MAP[q.id];
-            const icon = metaInfo?.icon || getSubjectIcon(q.subject);
-
-            return (
-              <motion.div
-                key={q.id}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleSelectQuiz(q)}
-                style={{
-                  ...styles.templateRect,
-                  backgroundColor: isSel ? '#1d2a4a' : '#151f36',
+          {savedQuizzes.length === 0 ? (
+            <div style={styles.emptyTemplatesBox}>
+              <span style={styles.emptyTemplatesText}>В базе данных пока нет созданных викторин</span>
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.impact('light');
+                  onNavigateToCreateQuiz ? onNavigateToCreateQuiz() : handleCreateNewQuizTemplate();
                 }}
+                style={styles.emptyCreateBtn}
               >
-                {/* Левая часть: Иконка + Название без воды + Мета */}
-                <div style={styles.rectLeft}>
-                  <div
-                    style={{
-                      ...styles.rectIconBox,
-                      backgroundColor: isSel ? 'rgba(255, 122, 0, 0.18)' : 'rgba(255, 255, 255, 0.05)',
-                    }}
-                  >
-                    <span style={styles.rectEmoji}>{icon}</span>
-                  </div>
+                + Создать викторину
+              </button>
+            </div>
+          ) : (
+            savedQuizzes.map((q) => {
+              const isSel = q.id === activeQuizId;
+              const icon = getSubjectIcon(q.subject);
 
-                  <div style={styles.rectTexts}>
+              return (
+                <motion.div
+                  key={q.id}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleSelectQuiz(q)}
+                  style={{
+                    ...styles.templateRect,
+                    backgroundColor: isSel ? '#1d2a4a' : '#151f36',
+                  }}
+                >
+                  {/* Левая часть: Иконка + Название без воды + Мета */}
+                  <div style={styles.rectLeft}>
                     <div
                       style={{
-                        ...styles.rectTitle,
-                        color: isSel ? '#FFFFFF' : '#E2E8F0',
+                        ...styles.rectIconBox,
+                        backgroundColor: isSel ? 'rgba(255, 122, 0, 0.18)' : 'rgba(255, 255, 255, 0.05)',
                       }}
                     >
-                      {q.title}
+                      <span style={styles.rectEmoji}>{icon}</span>
                     </div>
-                    <div style={styles.rectMeta}>
-                      {q.subject} • {q.grade} класс • {q.questions?.length || 0} вопр.
+
+                    <div style={styles.rectTexts}>
+                      <div
+                        style={{
+                          ...styles.rectTitle,
+                          color: isSel ? '#FFFFFF' : '#E2E8F0',
+                        }}
+                      >
+                        {q.title}
+                      </div>
+                      <div style={styles.rectMeta}>
+                        {q.subject} • {q.grade} класс • {q.questions?.length || 0} вопр.
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Правая часть: Управление для своих тестов + Радио-круг выбора */}
-                <div style={styles.rectRight}>
-                  {isCustom && !isSel && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 6 }}>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditQuiz(q);
-                        }}
-                        style={styles.rectActionBtn}
-                        title="Редактировать"
-                      >
-                        <Edit3 size={14} color="#94A3B8" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRequestDelete(q);
-                        }}
-                        style={styles.rectActionBtn}
-                        title="Удалить"
-                      >
-                        <Trash2 size={14} color="#EF4444" />
-                      </button>
+                  {/* Правая часть: Управление для тестов + Радио-круг выбора */}
+                  <div style={styles.rectRight}>
+                    {!isSel && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 6 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditQuiz(q);
+                          }}
+                          style={styles.rectActionBtn}
+                          title="Редактировать"
+                        >
+                          <Edit3 size={14} color="#94A3B8" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRequestDelete(q);
+                          }}
+                          style={styles.rectActionBtn}
+                          title="Удалить"
+                        >
+                          <Trash2 size={14} color="#EF4444" />
+                        </button>
+                      </div>
+                    )}
+
+                    <div
+                      style={{
+                        ...styles.rectRadioCircle,
+                        backgroundColor: isSel ? '#FF7A00' : 'rgba(255, 255, 255, 0.08)',
+                      }}
+                    >
+                      {isSel && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
                     </div>
-                  )}
-
-                  <div
-                    style={{
-                      ...styles.rectRadioCircle,
-                      backgroundColor: isSel ? '#FF7A00' : 'rgba(255, 255, 255, 0.08)',
-                    }}
-                  >
-                    {isSel && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
                   </div>
-                </div>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })
+          )}
         </div>
       </div>
 
@@ -647,13 +643,18 @@ export default function TeacherLobby({
       <div style={styles.stickyBottomBar}>
         <div style={{ width: '100%', pointerEvents: 'auto' }}>
           <TactileButton
-            theme="green"
+            theme={activeQuiz ? "green" : "secondary"}
             size="lg"
             fullWidth
+            disabled={!activeQuiz}
             onClick={handleStartGame}
             iconBefore={<Rocket size={20} />}
           >
-            {countdown !== null ? `Старт через ${countdown}...` : 'Начать викторину'}
+            {countdown !== null
+              ? `Старт через ${countdown}...`
+              : activeQuiz
+              ? 'Начать викторину'
+              : 'Сначала создайте викторину'}
           </TactileButton>
         </div>
       </div>
@@ -1032,13 +1033,31 @@ const styles: Record<string, React.CSSProperties> = {
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
-  templatesSubBadge: {
-    fontSize: 11,
+  emptyTemplatesBox: {
+    backgroundColor: '#151f36',
+    borderRadius: 14,
+    padding: '24px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    textAlign: 'center',
+  },
+  emptyTemplatesText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: 600,
+  },
+  emptyCreateBtn: {
+    backgroundColor: '#FF7A00',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: 10,
+    padding: '8px 16px',
+    fontSize: 13,
     fontWeight: 700,
-    color: '#60A5FA',
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    padding: '1px 7px',
-    borderRadius: 6,
+    cursor: 'pointer',
   },
   createTestBtn: {
     display: 'flex',
