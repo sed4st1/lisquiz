@@ -11,10 +11,7 @@ import {
   Flame,
   Check,
   Sprout,
-  Clock,
-  Bot,
 } from 'lucide-react';
-import { testHarness } from '../services/testHarness';
 import { TactileButton } from '../components/TactileButton';
 import { socketService } from '../services/socketService';
 import { haptics } from '../services/haptics';
@@ -92,8 +89,7 @@ export default function TeacherLiveGame({
     return () => clearInterval(timer);
   }, [phase, curQ?.id, questionData?.time_limit_sec, isBoss]);
 
-  // Inactive until all answered (or time is up)
-  const allAnswered = (totalStudents > 0 && answeredCount >= totalStudents) || timeLeft === 0;
+
 
   // Listen to WebSocket events
   useEffect(() => {
@@ -184,22 +180,6 @@ export default function TeacherLiveGame({
   }, [qIndex, onFinishQuiz]);
 
   // Actions
-  const [isSimulatingBots, setIsSimulatingBots] = useState(false);
-
-  const handleSimulateBotAnswers = async () => {
-    setIsSimulatingBots(true);
-    haptics.impact('light');
-    try {
-      const count = await testHarness.simulateBotAnswers(_roomCode, 0.75);
-      if (count > 0) {
-        setAnsweredCount((prev) => Math.max(prev + count, totalStudents > 0 ? totalStudents : count));
-      }
-    } catch (e) {
-      console.warn('Bot answer simulation error:', e);
-    } finally {
-      setIsSimulatingBots(false);
-    }
-  };
 
   const handleShowResults = () => {
     haptics.impact('medium');
@@ -514,22 +494,6 @@ export default function TeacherLiveGame({
 
             {/* Teacher Control Actions Immediately Below 2x2 Grid */}
             <div style={styles.actionRowColumn}>
-              {/* QA / Testing: Simulate Bot Answers */}
-              <button
-                type="button"
-                onClick={handleSimulateBotAnswers}
-                disabled={isSimulatingBots || allAnswered}
-                style={{
-                  ...styles.simulateBotsBtn,
-                  opacity: allAnswered ? 0.5 : 1,
-                  cursor: allAnswered ? 'default' : 'pointer',
-                }}
-                title="Ответить за всех подключенных ботов (75% верных)"
-              >
-                <Bot size={15} color="#93C5FD" />
-                <span>{isSimulatingBots ? 'Боты отвечают...' : `⚡ Симулировать ответы ботов (${answeredCount}/${totalStudents > 0 ? totalStudents : 'все'})`}</span>
-              </button>
-
               <TactileButton
                 theme="green"
                 size="lg"
@@ -540,32 +504,15 @@ export default function TeacherLiveGame({
                 Показать результаты раунда
               </TactileButton>
 
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <TactileButton
-                  theme={allAnswered ? 'orange' : 'secondary'}
-                  size="lg"
-                  fullWidth
-                  disabled={!allAnswered}
-                  onClick={handleNextQuestionOrFinish}
-                  iconAfter={<ArrowRight size={18} />}
-                >
-                  {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
-                </TactileButton>
-
-                {!allAnswered ? (
-                  <div style={styles.waitingNotice}>
-                    <Clock size={13} color="#F59E0B" />
-                    <span>
-                      Кнопка активируется, когда все ответят ({answeredCount} из {totalStudents > 0 ? totalStudents : 1} ответили)
-                    </span>
-                  </div>
-                ) : (
-                  <div style={styles.allAnsweredNotice}>
-                    <Check size={13} color="#34D399" strokeWidth={3} />
-                    <span>Все ученики ответили! Можно переходить дальше.</span>
-                  </div>
-                )}
-              </div>
+              <TactileButton
+                theme="orange"
+                size="lg"
+                fullWidth
+                onClick={handleNextQuestionOrFinish}
+                iconAfter={<ArrowRight size={18} />}
+              >
+                {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
+              </TactileButton>
             </div>
           </motion.div>
         )}

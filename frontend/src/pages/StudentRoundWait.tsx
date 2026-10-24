@@ -52,9 +52,10 @@ export default function StudentRoundWait({
   const [finishData, setFinishData] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const isCorrect = personalResult?.is_correct ?? true;
-  const points = personalResult?.points_awarded ?? 550;
-  const streak = personalResult?.streak ?? 1;
+  const hasAnswered = personalResult !== null && personalResult !== undefined;
+  const isCorrect = hasAnswered ? Boolean(personalResult?.is_correct) : false;
+  const points = personalResult?.points_awarded ?? 0;
+  const streak = personalResult?.streak ?? 0;
   const totalScore = personalResult?.total_score ?? points;
 
   // Celebratory confetti on mount if correct
@@ -173,10 +174,12 @@ export default function StudentRoundWait({
             <div
               style={{
                 ...styles.statusIconCircle,
-                backgroundColor: isCorrect ? '#065F46' : '#7F1D1D',
+                backgroundColor: !hasAnswered ? '#1E293B' : isCorrect ? '#065F46' : '#7F1D1D',
               }}
             >
-              {isCorrect ? (
+              {!hasAnswered ? (
+                <Clock size={30} color="#94A3B8" />
+              ) : isCorrect ? (
                 <CheckCircle2 size={32} color="#34D399" />
               ) : (
                 <Heart size={30} color="#F87171" />
@@ -184,10 +187,12 @@ export default function StudentRoundWait({
             </div>
 
             <h2 style={styles.statusTitle}>
-              {isCorrect ? 'Ответ зафиксирован!' : 'Ответ принят!'}
+              {!hasAnswered ? 'Ответ не выбран' : isCorrect ? 'Ответ зафиксирован!' : 'Ответ принят!'}
             </h2>
             <p style={styles.statusSubtitle}>
-              {isCorrect
+              {!hasAnswered
+                ? 'Ничего страшного, это не считается ошибкой!'
+                : isCorrect
                 ? `Отличная работа! +${points} очков в копилку`
                 : 'Не расстраивайся, сейчас разберём правильный ответ!'}
             </p>

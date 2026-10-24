@@ -120,7 +120,8 @@ export default function StudentQuizFinish({
     return higherScoreCount + 1;
   })();
 
-  const accuracy = Math.round((correctCount / Math.max(1, totalQuestions)) * 100);
+  const answeredCount = (correctCount || 0) + (wrongCount || 0);
+  const accuracy = answeredCount > 0 ? Math.round(((correctCount || 0) / answeredCount) * 100) : 100;
 
   return (
     <div style={styles.container}>
