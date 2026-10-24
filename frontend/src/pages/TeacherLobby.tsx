@@ -8,6 +8,7 @@ import {
   Plus,
   CheckCircle2,
   Trash2,
+  Edit3,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
@@ -15,6 +16,7 @@ import { socketService } from '../services/socketService';
 import { roomApi } from '../services/roomApi';
 import { quizStorage, SavedQuiz } from '../services/quizStorage';
 import QuizQuestionEditorModal from '../components/QuizQuestionEditorModal';
+import textbookPresets from '../services/textbook_presets.json';
 
 export interface ConnectedStudent {
   id: string;
@@ -58,6 +60,23 @@ const getSubjectIcon = (subj?: string) => {
   return '📚';
 };
 
+const PRESET_CLEAN_MAP: Record<string, { title: string; icon: string }> = {
+  quiz_tb_peryshkin_phys_7_p22: { title: 'Плотность', icon: '⚡' },
+  quiz_tb_vilenkin_math_6_p7: { title: 'Дроби', icon: '🔢' },
+  quiz_tb_merzlyak_math_6_p8: { title: 'Пропорции', icon: '📐' },
+  quiz_tb_makarychev_alg_7_p3: { title: 'Выражения', icon: '🔢' },
+  quiz_tb_atanasyan_geom_7_9_p2: { title: 'Отрезки', icon: '📐' },
+  quiz_tb_ladyzhenskaya_rus_6_p12: { title: 'Морфемика', icon: '📝' },
+};
+
+const PRESET_QUIZZES: SavedQuiz[] = (textbookPresets as SavedQuiz[]).map((p) => {
+  const meta = PRESET_CLEAN_MAP[p.id];
+  return {
+    ...p,
+    title: meta ? meta.title : p.title,
+  };
+});
+
 export default function TeacherLobby({
   pin: propPin,
   teacherToken: propToken,
@@ -77,14 +96,19 @@ export default function TeacherLobby({
   const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
   const [quizToDelete, setQuizToDelete] = useState<SavedQuiz | null>(null);
 
-  // Quizzes list (only user-created quizzes)
+  // Quizzes list: User custom quizzes + Clean preset templates
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>(() => quizStorage.getSavedQuizzes());
+
+  const allQuizzes: SavedQuiz[] = React.useMemo(() => {
+    const userOnly = savedQuizzes.filter((q) => !PRESET_CLEAN_MAP[q.id]);
+    return [...userOnly, ...PRESET_QUIZZES];
+  }, [savedQuizzes]);
+
   const [activeQuizId, setActiveQuizId] = useState<string>(() => {
-    const list = quizStorage.getSavedQuizzes();
-    const act = list.find((q) => q.is_active);
-    return act ? act.id : list[0]?.id || '';
+    return allQuizzes[0]?.id || '';
   });
-  const activeQuiz = savedQuizzes.find((q) => q.id === activeQuizId) || (savedQuizzes.length > 0 ? savedQuizzes[0] : null);
+
+  const activeQuiz = allQuizzes.find((q) => q.id === activeQuizId) || allQuizzes[0];
   const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -101,12 +125,6 @@ export default function TeacherLobby({
     quizStorage.syncFromDb().then((dbQuizzes) => {
       if (dbQuizzes && dbQuizzes.length > 0) {
         setSavedQuizzes(dbQuizzes);
-        if (!activeQuizId) {
-          setActiveQuizId(dbQuizzes[0].id);
-        }
-      } else {
-        setSavedQuizzes([]);
-        setActiveQuizId('');
       }
     });
   }, []);
@@ -518,113 +536,126 @@ export default function TeacherLobby({
         )}
       </div>
 
-      {/* Quiz Section in Lobby (Simple & Clean) */}
-      {activeQuiz ? (
-        <div style={styles.lobbyQuizCard}>
-          <div style={styles.lobbyQuizHeader}>
-            <span style={styles.lobbyQuizLabel}>Викторина для игры</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <button
-                type="button"
-                onClick={() => handleEditQuiz(activeQuiz)}
-                style={styles.lobbyChangeQuizBtn}
-                title="Редактировать вопросы"
-              >
-                Изменить
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  if (onNavigateToCreateQuiz) {
-                    onNavigateToCreateQuiz();
-                  } else {
-                    handleCreateNewQuizTemplate();
-                  }
-                }}
-                style={styles.lobbyChangeQuizBtn}
-              >
-                + Создать
-              </button>
-            </div>
+      {/* Шаблоны викторин (Компактные квадратики без воды) */}
+      <div style={styles.templatesSection}>
+        <div style={styles.templatesHeader}>
+          <div style={styles.templatesHeaderLeft}>
+            <span style={styles.templatesSectionTitle}>Шаблоны викторин</span>
+            <span style={styles.templatesSubBadge}>{allQuizzes.length} тем</span>
           </div>
-
-          <div style={styles.lobbyQuizMetaRow}>
-            <span style={styles.lobbyQuizBadge}>
-              {getSubjectIcon(activeQuiz.subject)} {activeQuiz.subject} • {activeQuiz.grade} кл
-            </span>
-            <span style={styles.lobbyQuizCount}>
-              {activeQuiz.questions?.length || 0} вопросов
-            </span>
-          </div>
-
-          <div style={styles.lobbyQuizTitle}>{activeQuiz.title}</div>
-
-          {savedQuizzes.length > 1 && (
-            <div style={styles.lobbyDropdownRow}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={styles.lobbyDropdownLabel}>Выбрать другой тест:</span>
-                <button
-                  type="button"
-                  onClick={() => handleRequestDelete(activeQuiz)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}
-                  title="Удалить выбранный тест"
-                >
-                  <Trash2 size={13} color="#EF4444" />
-                </button>
-              </div>
-              <select
-                value={activeQuizId}
-                onChange={(e) => {
-                  const q = savedQuizzes.find((x) => x.id === e.target.value);
-                  if (q) handleSelectQuiz(q);
-                }}
-                style={styles.lobbyDropdown}
-              >
-                {savedQuizzes.map((q) => (
-                  <option key={q.id} value={q.id}>
-                    {q.title} ({q.questions?.length || 0} вопр.)
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div style={styles.lobbyEmptyCard}>
-          <div style={styles.lobbyEmptyTexts}>
-            <div style={styles.lobbyEmptyTitle}>Викторина ещё не создана</div>
-            <div style={styles.lobbyEmptySub}>
-              Создайте викторину, чтобы запустить игру для класса
-            </div>
-          </div>
-          <TactileButton
-            theme="orange"
-            size="md"
-            fullWidth
+          <button
+            type="button"
             onClick={() => onNavigateToCreateQuiz?.()}
-            iconBefore={<Plus size={16} />}
+            style={styles.manageQuizzesLink}
           >
-            Создать викторину
-          </TactileButton>
+            Конструктор →
+          </button>
         </div>
-      )}
+
+        <div style={styles.squaresGrid}>
+          {/* Квадратик 0: Создать свой тест */}
+          <motion.div
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              haptics.impact('light');
+              onNavigateToCreateQuiz ? onNavigateToCreateQuiz() : handleCreateNewQuizTemplate();
+            }}
+            style={styles.createSquareTile}
+            title="Создать свой тест"
+          >
+            <div style={styles.createIconCircle}>
+              <Plus size={20} color="#60A5FA" />
+            </div>
+            <span style={styles.createSquareText}>Свой тест</span>
+          </motion.div>
+
+          {/* Квадратики 1..N: Шаблоны и квизы */}
+          {allQuizzes.map((q) => {
+            const isSel = q.id === activeQuizId;
+            const isCustom = !PRESET_CLEAN_MAP[q.id];
+            const metaInfo = PRESET_CLEAN_MAP[q.id];
+            const icon = metaInfo?.icon || getSubjectIcon(q.subject);
+
+            return (
+              <motion.div
+                key={q.id}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleSelectQuiz(q)}
+                style={{
+                  ...styles.squareTile,
+                  borderColor: isSel ? '#FF7A00' : '#233354',
+                  backgroundColor: isSel ? 'rgba(255, 122, 0, 0.16)' : '#111C35',
+                  boxShadow: isSel ? '0 0 14px rgba(255, 122, 0, 0.35)' : 'none',
+                }}
+              >
+                {/* Верхняя строка: Иконка + Чекмарк или Редактировать */}
+                <div style={styles.tileTopRow}>
+                  <span style={styles.tileEmoji}>{icon}</span>
+                  {isSel ? (
+                    <div style={styles.activeCheckBadge}>
+                      <Check size={11} color="#FFFFFF" strokeWidth={3} />
+                    </div>
+                  ) : isCustom ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditQuiz(q);
+                        }}
+                        style={styles.tileEditBtn}
+                        title="Редактировать"
+                      >
+                        <Edit3 size={11} color="#94A3B8" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRequestDelete(q);
+                        }}
+                        style={styles.tileEditBtn}
+                        title="Удалить"
+                      >
+                        <Trash2 size={11} color="#EF4444" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ width: 14 }} />
+                  )}
+                </div>
+
+                {/* Центр: Короткое понятное название без воды */}
+                <div
+                  style={{
+                    ...styles.tileTitle,
+                    color: isSel ? '#FFFFFF' : '#E2E8F0',
+                  }}
+                >
+                  {q.title}
+                </div>
+
+                {/* Низ: Класс и число вопросов */}
+                <div style={styles.tileMeta}>
+                  {q.grade} кл • {q.questions?.length || 0} в.
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Static Sticky Bottom Action Bar */}
       <div style={styles.stickyBottomBar}>
         <div style={{ width: '100%', pointerEvents: 'auto' }}>
           <TactileButton
-            theme={activeQuiz ? 'green' : 'secondary'}
+            theme="green"
             size="lg"
             fullWidth
-            disabled={!activeQuiz}
             onClick={handleStartGame}
             iconBefore={<Rocket size={20} />}
           >
-            {countdown !== null
-              ? `Старт через ${countdown}...`
-              : activeQuiz
-              ? 'Начать викторину'
-              : 'Сначала создайте викторину'}
+            {countdown !== null ? `Старт через ${countdown}...` : 'Начать викторину'}
           </TactileButton>
         </div>
       </div>
@@ -978,210 +1009,138 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  lobbyQuizCard: {
+  templatesSection: {
     backgroundColor: '#0B132B',
     borderRadius: 18,
-    padding: '14px 16px',
+    padding: '12px',
     border: '1.5px solid #1E293B',
     marginBottom: 12,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 8,
   },
-  lobbyQuizHeader: {
+  templatesHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 10,
+    padding: '0 2px',
   },
-  lobbyQuizLabel: {
+  templatesHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  templatesSectionTitle: {
     fontSize: 12,
-    fontWeight: 700,
+    fontWeight: 800,
     color: '#94A3B8',
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
-  lobbyChangeQuizBtn: {
+  templatesSubBadge: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: '#60A5FA',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    padding: '1px 6px',
+    borderRadius: 6,
+  },
+  manageQuizzesLink: {
     background: 'none',
     border: 'none',
     color: '#60A5FA',
     fontSize: 12,
     fontWeight: 700,
     cursor: 'pointer',
-    padding: '2px 6px',
+    padding: '2px 4px',
   },
-  lobbyQuizMetaRow: {
-    display: 'flex',
-    alignItems: 'center',
+  squaresGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
     gap: 8,
   },
-  lobbyQuizBadge: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: '#93C5FD',
-    backgroundColor: 'rgba(59, 130, 246, 0.18)',
-    padding: '2px 8px',
-    borderRadius: 6,
-  },
-  lobbyQuizCount: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: 600,
-  },
-  lobbyQuizTitle: {
-    fontSize: 15,
-    fontWeight: 800,
-    color: '#FFFFFF',
-    lineHeight: 1.3,
-  },
-  lobbyDropdownRow: {
+  createSquareTile: {
+    minHeight: 100,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    border: '1.5px dashed rgba(255, 255, 255, 0.22)',
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
-    marginTop: 4,
-    paddingTop: 8,
-    borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-  },
-  lobbyDropdownLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: 600,
-  },
-  lobbyDropdown: {
-    width: '100%',
-    padding: '8px 10px',
-    borderRadius: 10,
-    backgroundColor: '#1E293B',
-    border: '1px solid #334155',
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: 600,
-    outline: 'none',
-    cursor: 'pointer',
-  },
-  lobbyEmptyCard: {
-    backgroundColor: '#0B132B',
-    borderRadius: 18,
-    padding: '16px',
-    border: '1.5px dashed rgba(255, 255, 255, 0.15)',
-    marginBottom: 12,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    textAlign: 'center',
     alignItems: 'center',
-  },
-  lobbyEmptyTexts: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-  },
-  lobbyEmptyTitle: {
-    fontSize: 15,
-    fontWeight: 800,
-    color: '#FFFFFF',
-  },
-  lobbyEmptySub: {
-    fontSize: 12,
-    color: '#94A3B8',
-    lineHeight: 1.35,
-  },
-  mobileSquareTile: {
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
-    padding: '12px 10px',
-    border: '1.5px solid #1E293B',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    minHeight: 148,
+    justifyContent: 'center',
+    gap: 8,
     cursor: 'pointer',
-    position: 'relative',
-    transition: 'all 0.18s ease',
+    padding: '8px 4px',
     boxSizing: 'border-box',
   },
-  mobileSquareTileActive: {
-    borderColor: '#10B981',
-    backgroundColor: '#09211A',
-    boxShadow: '0 0 0 1.5px #10B981, 0 6px 20px rgba(16, 185, 129, 0.22)',
+  createIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 999,
+    backgroundColor: 'rgba(96, 165, 250, 0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tileTop: {
+  createSquareText: {
+    fontSize: 11.5,
+    fontWeight: 700,
+    color: '#93C5FD',
+    textAlign: 'center',
+  },
+  squareTile: {
+    minHeight: 100,
+    borderRadius: 14,
+    border: '1.5px solid',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '8px 6px',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    boxSizing: 'border-box',
+  },
+  tileTopRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+    padding: '0 2px',
   },
-  subjectPill: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: '#CBD5E1',
-    backgroundColor: '#1E293B',
-    padding: '2px 6px',
-    borderRadius: 6,
-    maxWidth: 90,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
+  tileEmoji: {
+    fontSize: 18,
+    lineHeight: 1,
   },
   activeCheckBadge: {
+    width: 17,
+    height: 17,
+    borderRadius: 999,
+    backgroundColor: '#FF7A00',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 20,
-    height: 20,
-    borderRadius: 999,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
   },
-  deleteMiniBtn: {
-    background: 'transparent',
+  tileEditBtn: {
+    background: 'none',
     border: 'none',
-    padding: 3,
+    padding: 2,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 6,
   },
-  tileCenter: {
-    margin: '8px 0',
-  },
-  tileTitleText: {
+  tileTitle: {
     fontSize: 12.5,
     fontWeight: 800,
-    color: '#FFFFFF',
-    lineHeight: 1.3,
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
+    textAlign: 'center',
+    lineHeight: 1.25,
+    margin: '4px 0',
+    wordBreak: 'break-word',
   },
-  tileSubtitle: {
-    fontSize: 10.5,
-    color: '#94A3B8',
+  tileMeta: {
+    fontSize: 10,
     fontWeight: 600,
-    marginTop: 4,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  tileBottom: {
-    width: '100%',
-    marginTop: 4,
-  },
-  bigTouchViewBtn: {
-    width: '100%',
-    height: 36, // Finger-friendly touch height >= 36px
-    backgroundColor: '#1E293B',
-    border: '1px solid #334155',
-    borderRadius: 10,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    color: '#E2E8F0',
-    fontSize: 11.5,
-    fontWeight: 700,
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
+    color: '#94A3B8',
+    textAlign: 'center',
   },
   // Fixed / Static Bottom Button (Transparent container, floating above bottom dock)
   stickyBottomBar: {
