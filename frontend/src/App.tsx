@@ -53,6 +53,7 @@ export default function App() {
   const [quizTitle, setQuizTitle] = useState<string>('Викторина по математике');
   const [leaderboardBoostPoints, setLeaderboardBoostPoints] = useState<number | null>(null);
   const [leaderboardBoostRank, setLeaderboardBoostRank] = useState<number | null>(null);
+  const [lastFinishedRoomCode, setLastFinishedRoomCode] = useState<string>('');
   const studentQuizStatsRef = useRef<{ correct: number; wrong: number; total: number; score: number }>({ correct: 0, wrong: 0, total: 3, score: 0 });
 
   // Listen to incoming WebSocket events
@@ -91,6 +92,7 @@ export default function App() {
     const handleGameFinished = (data: any) => {
       haptics.notification('success');
       if (role === 'teacher') {
+        setLastFinishedRoomCode(activePin);
         setSubScreen(null);
         setTab('stats');
       } else {
@@ -258,6 +260,7 @@ export default function App() {
           subject={quizSubject}
           classNameTitle={quizClass}
           onFinishQuiz={() => {
+            setLastFinishedRoomCode(activePin);
             setSubScreen(null);
             setTeacherToken('');
             setTab('stats');
@@ -439,7 +442,18 @@ export default function App() {
             />
           );
         case 'stats':
-          return <TeacherGapReport />;
+          return (
+            <TeacherGapReport
+              roomCode={lastFinishedRoomCode || activePin}
+              quizTitle={quizTitle}
+              topic={quizSubject}
+              grade={quizGrade}
+              onBackToLobby={() => {
+                setSubScreen(null);
+                setTab('leaderboard');
+              }}
+            />
+          );
       }
     }
 

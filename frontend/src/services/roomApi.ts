@@ -112,6 +112,19 @@ export const roomApi = {
     return res.json();
   },
 
+  async getGapReport(roomCode: string): Promise<any> {
+    const res = await fetch(`/api/rooms/${roomCode}/report`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Не удалось загрузить аналитический отчет');
+    }
+    return res.json();
+  },
+
+  getExportCsvUrl(roomCode: string): string {
+    return `/api/rooms/${roomCode}/export/csv`;
+  },
+
   async getPresetTextbookQuizzes(): Promise<any[]> {
     try {
       const res = await fetch('/api/ml2/textbooks/preset-quizzes');
