@@ -17,8 +17,8 @@ Lisquiz ML 2.0 — Remediation & Root-Cause Diagnostic Engine
 import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
-from app.services.skill_graph_service import skill_graph_service
-from app.services.adaptive_engine import adaptive_engine
+from .skill_graph_service import skill_graph_service
+from .adaptive_engine import adaptive_engine
 
 logger = logging.getLogger("lisquiz.remediation_engine")
 
@@ -383,7 +383,7 @@ class RemediationEngine:
         чтобы ученик не мог нажать верный ответ по памяти методом исключения!
         """
         try:
-            from app.services.sympy_math_engine import sympy_math_engine
+            from .sympy_math_engine import sympy_math_engine
             gen_map = {
                 "M6.FRAC.MUL": sympy_math_engine.generate_frac_mul,
                 "M6.PROP.SOLVE": sympy_math_engine.generate_prop_solve,

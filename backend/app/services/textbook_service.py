@@ -100,21 +100,46 @@ class TextbookService:
         Умная выборка заданий по параграфу учебника:
         1. Если есть привязка к DAG-навыку в pilot_skills.db -> берём проверенные канонические задачи.
         2. Иначе -> ищем в 6,313 задачах question_bank.db через полнотекстовый поиск FTS5.
-        3. Если задач недостаточно -> добираем генератором.
+        3. Если задач недостаточно -> добираем генератором (SymPy).
         """
-        para_info = self.find_paragraph(textbook_id, paragraph_num)
-        if not para_info:
+        tb = self.get_textbook(textbook_id)
+        if not tb:
             return {
-                "error": f"Параграф {paragraph_num} не найден в учебнике {textbook_id}",
+                "error": f"Учебник {textbook_id} не найден",
                 "questions": []
             }
 
+        para_info = self.find_paragraph(textbook_id, paragraph_num)
+        if not para_info:
+            # Fallback к первому доступному параграфу учебника
+            for section in tb.get("sections", []):
+                if section.get("paragraphs"):
+                    para_info = self.find_paragraph(textbook_id, section["paragraphs"][0]["num"])
+                    break
+            if not para_info:
+                para_info = {
+                    "textbook_id": tb["id"],
+                    "textbook_title": tb["title"],
+                    "chapter": "Глава 1",
+                    "paragraph_num": paragraph_num,
+                    "title": f"§ {paragraph_num}",
+                    "skill_id": None,
+                    "topic": tb.get("subject", "Предмет"),
+                    "keywords": [tb.get("subject", "")]
+                }
+
         skill_id = para_info.get("skill_id")
-        topic = para_info.get("topic")
+        topic = para_info.get("topic") or para_info.get("title")
         keywords = para_info.get("keywords", [])
-        tb = self.get_textbook(textbook_id)
         grade = tb.get("grade", 7)
         subject = tb.get("subject", "")
+
+        # Маппинг предметов для расширенного поиска в question_bank.db
+        bank_subjects = [subject]
+        if subject in ("Алгебра", "Геометрия"):
+            bank_subjects.append("Математика")
+        elif subject == "Математика":
+            bank_subjects.extend(["Алгебра", "Геометрия"])
 
         questions = []
 
@@ -146,17 +171,44 @@ class TextbookService:
         # 2. Если нужно больше — добираем из question_bank.db через FTS5
         if len(questions) < limit:
             remaining = limit - len(questions)
-            query = topic if topic else (keywords[0] if keywords else "")
-            bank_items = bank_service.search_questions(
-                query=query,
-                subject=subject,
-                grade=grade,
-                limit=remaining * 2
-            )
-            for q in bank_items:
+            candidates = []
+
+            for b_subj in bank_subjects:
+                if len(candidates) >= remaining:
+                    break
+                # Поиск с фильтром класса
+                if topic:
+                    candidates.extend(bank_service.search_questions(query=topic, subject=b_subj, grade=grade, limit=remaining * 2))
+                if len(candidates) < remaining and keywords:
+                    for kw in keywords:
+                        more = bank_service.search_questions(query=kw, subject=b_subj, grade=grade, limit=remaining)
+                        candidates.extend(more)
+                        if len(candidates) >= remaining:
+                            break
+
+                # Если не найдено с фильтром класса — ищем без привязки к классу
+                if len(candidates) < remaining:
+                    if topic:
+                        candidates.extend(bank_service.search_questions(query=topic, subject=b_subj, grade=None, limit=remaining * 2))
+                    if len(candidates) < remaining and keywords:
+                        for kw in keywords:
+                            more = bank_service.search_questions(query=kw, subject=b_subj, grade=None, limit=remaining)
+                            candidates.extend(more)
+                            if len(candidates) >= remaining:
+                                break
+
+            # Если всё ещё не хватает — берём по теме из банка
+            if len(candidates) < remaining:
+                topic_match = topic or (keywords[0] if keywords else "Общая")
+                for b_subj in bank_subjects:
+                    more = bank_service.get_questions_by_topic(subject=b_subj, grade=grade, topic=topic_match, count=remaining)
+                    candidates.extend(more)
+                    if len(candidates) >= remaining:
+                        break
+
+            for q in candidates:
                 if len(questions) >= limit:
                     break
-                # Предотвращаем дублирование
                 if any(existing["text"] == q.text for existing in questions):
                     continue
                 q_dict = q.model_dump()
@@ -166,10 +218,47 @@ class TextbookService:
                 q_dict["source"] = "question_bank_fts5"
                 questions.append(q_dict)
 
+        # 3. Добор через SymPy STEM-генератор Ивана
+        if len(questions) < limit and subject in ("Математика", "Алгебра", "Физика"):
+            try:
+                from .sympy_math_engine import sympy_math_engine
+                needed = limit - len(questions)
+                if subject in ("Математика", "Алгебра"):
+                    stem_items = sympy_math_engine.generate_pilot_corpus(skills=["M6.FRAC.MUL", "M6.PROP.SOLVE"], per_skill=needed)
+                else:
+                    stem_items = sympy_math_engine.generate_pilot_corpus(skills=["P7.DENS.CALC", "P7.ARCH.COND"], per_skill=needed)
+                
+                for s_item in stem_items:
+                    if len(questions) >= limit:
+                        break
+                    s_opts = [
+                        {"id": opt["opt_idx"], "text": opt["text"], "is_correct": opt.get("opt_idx") == s_item.get("correct_idx")}
+                        for opt in s_item.get("options", [])
+                    ]
+                    questions.append({
+                        "id": abs(hash(s_item["item_id"])) % 1000000,
+                        "canonical_id": s_item["item_id"],
+                        "text": s_item["stem"],
+                        "options": s_opts,
+                        "explanation": s_item.get("explanation", ""),
+                        "tier": 2,
+                        "is_boss": False,
+                        "time_limit_sec": 25,
+                        "source": "sympy_stem_engine"
+                    })
+            except Exception as se:
+                logger.warning("Sympy STEM fallback error: %s", se)
+
+        # Отмечаем последний вопрос как Босс-вопрос (Tier 3 🔥)
+        if len(questions) >= 3:
+            questions[-1]["tier"] = 3
+            questions[-1]["is_boss"] = True
+            questions[-1]["time_limit_sec"] = 35
+
         return {
             "textbook_id": textbook_id,
             "textbook_title": tb["title"],
-            "paragraph_num": paragraph_num,
+            "paragraph_num": para_info["paragraph_num"],
             "paragraph_title": para_info["title"],
             "chapter": para_info["chapter"],
             "topic": topic,
@@ -177,6 +266,59 @@ class TextbookService:
             "count": len(questions),
             "questions": questions[:limit]
         }
+
+    def get_preset_textbook_quizzes(self) -> List[Dict[str, Any]]:
+        """
+        Возвращает 6 готовых к запуску проверенных викторин по главным учебникам РФ.
+        Каждая викторина полностью укомплектована реальными вопросами из базы Ивана.
+        """
+        presets_config = [
+            ("peryshkin_phys_7", 22, "Физика", 7, "§ 22. Расчет массы и плотности", "Пёрышкин А.В."),
+            ("vilenkin_math_6", 7, "Математика", 6, "§ 7. Сложение и вычитание дробей", "Виленкин Н.Я."),
+            ("merzlyak_math_6", 8, "Математика", 6, "§ 8. Отношения и пропорции", "Мерзляк А.Г."),
+            ("makarychev_alg_7", 3, "Алгебра", 7, "§ 3. Выражения с переменными", "Макарычев Ю.Н."),
+            ("atanasyan_geom_7_9", 2, "Геометрия", 7, "§ 2. Измерение отрезков", "Атанасян Л.С."),
+            ("ladyzhenskaya_rus_6", 12, "Русский язык", 6, "§ 12. Морфемика и словообразование", "Ладыженская Т.А."),
+        ]
+        res = []
+        for tb_id, p_num, subj, grade, title, author in presets_config:
+            q_res = self.get_questions_by_paragraph(tb_id, p_num, limit=5)
+            q_list = q_res.get("questions", [])
+            formatted_questions = []
+            for idx, q in enumerate(q_list):
+                formatted_questions.append({
+                    "id": idx + 1,
+                    "text": q["text"],
+                    "explanation": q.get("explanation", ""),
+                    "time_limit_sec": q.get("time_limit_sec", 20),
+                    "tier": q.get("tier", 1 if idx == 0 else (3 if idx == len(q_list) - 1 else 2)),
+                    "is_boss": q.get("is_boss", idx == len(q_list) - 1),
+                    "topic": q_res.get("topic", title),
+                    "options": [
+                        {
+                            "id": o["id"],
+                            "text": o["text"],
+                            "is_correct": bool(o.get("is_correct")),
+                        }
+                        for o in q.get("options", [])
+                    ]
+                })
+
+            res.append({
+                "id": f"quiz_tb_{tb_id}_p{p_num}",
+                "textbook_id": tb_id,
+                "paragraph_num": p_num,
+                "title": f"{author}: {title}",
+                "subject": subj,
+                "grade": grade,
+                "topic": title,
+                "author": author,
+                "group_label": f"{author.split()[0]} {grade} кл",
+                "is_active": tb_id == "peryshkin_phys_7",
+                "questions": formatted_questions,
+                "count": len(formatted_questions),
+            })
+        return res
 
 
 textbook_service = TextbookService()

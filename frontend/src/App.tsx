@@ -1,291 +1,1084 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { Home, Sprout, Crown, BarChart2, Wrench, X, Flame, Droplets, Sparkles } from 'lucide-react';
 
 // Pages
-import TeacherCreateQuiz from './pages/TeacherCreateQuiz';
-import TeacherLobby from './pages/TeacherLobby';
-import StudentJoin from './pages/StudentJoin';
+import ClassGrove from './pages/ClassGrove';
+import StudentHome from './pages/StudentHome';
+import StudentWaitingLobby from './pages/StudentWaitingLobby';
+import StudentLeaderboard from './pages/StudentLeaderboard';
+import StudentStats from './pages/StudentStats';
 import StudentGameQuestion from './pages/StudentGameQuestion';
 import FeedbackStreak from './pages/FeedbackStreak';
+import TeacherCreateQuiz from './pages/TeacherCreateQuiz';
+import TeacherLobby from './pages/TeacherLobby';
 import TeacherGapReport from './pages/TeacherGapReport';
-import ClassGrove from './pages/ClassGrove';
+import TeacherLiveGame from './pages/TeacherLiveGame';
+import StudentRoundWait from './pages/StudentRoundWait';
+import StudentQuizFinish from './pages/StudentQuizFinish';
 import SleepScreen from './pages/SleepScreen';
-import SplashScreen from './components/SplashScreen';
+import { haptics } from './services/haptics';
+import { socketService } from './services/socketService';
 
-// Client-side router screens
-type Screen =
-  | 'teacher_create'
-  | 'teacher_lobby'
-  | 'student_join'
+type TabType = 'home' | 'grove' | 'leaderboard' | 'stats';
+type SubScreenType =
+  | null
+  | 'student_waiting'
   | 'student_game'
+  | 'teacher_game'
   | 'feedback_correct'
   | 'feedback_wrong'
-  | 'teacher_report'
-  | 'class_grove'
+  | 'student_round_wait'
+  | 'student_quiz_finish'
   | 'sleep_screen';
 
 export default function App() {
-  const [showSplash, setShowSplash] = useState(true);
-  const [screen, setScreen] = useState<Screen>('class_grove');
   const [role, setRole] = useState<'teacher' | 'student'>('student');
+  const [tab, setTab] = useState<TabType>('grove');
+  const [subScreen, setSubScreen] = useState<SubScreenType>(null);
+  const [isMobileDevOpen, setIsMobileDevOpen] = useState(false);
+
+  // Live session state
+  const [activePin, setActivePin] = useState<string>('482915');
+  const [teacherToken, setTeacherToken] = useState<string>('');
+  const [studentPlayerId, setStudentPlayerId] = useState<string>('');
+  const [studentName, setStudentName] = useState<string>('Иван К');
+  const [studentAvatar, setStudentAvatar] = useState<string>('fox_smart');
+  const [currentQuestionData, setCurrentQuestionData] = useState<any>(null);
+  const [personalAnswerResult, setPersonalAnswerResult] = useState<any>(null);
+  const [quizFinishData, setQuizFinishData] = useState<any>(null);
+  const [quizSubject, setQuizSubject] = useState<string>('Математика');
+  const [quizGrade, setQuizGrade] = useState<number>(7);
+  const [quizClass, setQuizClass] = useState<string>('7А');
+  const [quizTitle, setQuizTitle] = useState<string>('Викторина по математике');
+  const [leaderboardBoostPoints, setLeaderboardBoostPoints] = useState<number | null>(null);
+  const [leaderboardBoostRank, setLeaderboardBoostRank] = useState<number | null>(null);
+  const studentQuizStatsRef = useRef<{ correct: number; wrong: number; total: number; score: number }>({ correct: 0, wrong: 0, total: 3, score: 0 });
+
+  // Listen to incoming WebSocket events
+  useEffect(() => {
+    const handleQuestionStart = (data: any) => {
+      setCurrentQuestionData(data);
+      setPersonalAnswerResult(null);
+      if (data?.subject) setQuizSubject(data.subject);
+      if (data?.class_name) setQuizClass(data.class_name);
+      if (data?.grade) setQuizGrade(data.grade);
+      if (data?.quiz_title) setQuizTitle(data.quiz_title);
+      if (data?.question_index === 0) {
+        studentQuizStatsRef.current = { correct: 0, wrong: 0, total: data?.total_questions || 3, score: 0 };
+      }
+      if (role === 'teacher') {
+        setSubScreen('teacher_game');
+      } else {
+        setSubScreen('student_game');
+      }
+    };
+
+    const handleAnswerResult = (data: any) => {
+      setPersonalAnswerResult(data);
+      if (data?.is_correct) {
+        studentQuizStatsRef.current.correct += 1;
+      } else {
+        studentQuizStatsRef.current.wrong += 1;
+      }
+      if (data?.total_score != null) {
+        studentQuizStatsRef.current.score = data.total_score;
+      } else if (data?.points_awarded != null) {
+        studentQuizStatsRef.current.score += data.points_awarded;
+      }
+    };
+
+    const handleGameFinished = (data: any) => {
+      haptics.notification('success');
+      if (role === 'teacher') {
+        setSubScreen(null);
+        setTab('stats');
+      } else {
+        const topPlayers = data?.top_players || [];
+        const myPlayer = topPlayers.find((p: any) =>
+          (studentPlayerId && p.id === studentPlayerId) ||
+          (p.name && p.name.trim().toLowerCase() === studentName.trim().toLowerCase())
+        );
+        const myScore = myPlayer?.score ?? (studentQuizStatsRef.current.score > 0 ? studentQuizStatsRef.current.score : (personalAnswerResult?.total_score || 850));
+        const myRank = myPlayer?.rank ?? (
+          topPlayers.length > 0
+            ? topPlayers.filter((p: any) => (p.score ?? 0) > myScore).length + 1
+            : 1
+        );
+        setQuizFinishData({
+          top_players: topPlayers,
+          myScore: myScore,
+          myRank: myRank,
+          correctCount: studentQuizStatsRef.current.correct,
+          wrongCount: studentQuizStatsRef.current.wrong,
+          totalQuestions: currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3,
+        });
+        setSubScreen('student_quiz_finish');
+      }
+    };
+
+    socketService.on('QUESTION_START', handleQuestionStart);
+    socketService.on('PERSONAL_ANSWER_RESULT', handleAnswerResult);
+    socketService.on('GAME_FINISHED', handleGameFinished);
+
+    return () => {
+      socketService.off('QUESTION_START', handleQuestionStart);
+      socketService.off('PERSONAL_ANSWER_RESULT', handleAnswerResult);
+      socketService.off('GAME_FINISHED', handleGameFinished);
+    };
+  }, [role, studentName, studentPlayerId]);
 
   const handleRoleSwitch = (newRole: 'teacher' | 'student') => {
+    haptics.impact('light');
     setRole(newRole);
-    setScreen(newRole === 'teacher' ? 'teacher_create' : 'class_grove');
+    setSubScreen(null);
+    setTab(newRole === 'teacher' ? 'home' : 'grove');
   };
 
-  const renderScreen = () => {
-    switch (screen) {
-      case 'teacher_create':
-        return (
-          <TeacherCreateQuiz
-            onQuizCreated={() => setScreen('teacher_lobby')}
-            onBack={() => setScreen('class_grove')}
-          />
-        );
-      case 'teacher_lobby':
-        return (
-          <TeacherLobby
-            onStartQuiz={() => setScreen('student_game')}
-            onBack={() => setScreen('teacher_create')}
-          />
-        );
-      case 'student_join':
-        return <StudentJoin onJoined={() => setScreen('student_game')} />;
-      case 'student_game':
-        return (
-          <StudentGameQuestion
-            onBack={() => setScreen('class_grove')}
-            onAnswer={(correct) => setScreen(correct ? 'feedback_correct' : 'feedback_wrong')}
-          />
-        );
-      case 'feedback_correct':
-        return (
-          <FeedbackStreak
-            isCorrect={true}
-            points={750}
-            streak={3}
-            onContinue={() => setScreen('class_grove')}
-          />
-        );
-      case 'feedback_wrong':
-        return (
-          <FeedbackStreak
-            isCorrect={false}
-            points={0}
-            streak={0}
-            correctAnswer="5/6"
-            onContinue={() => setScreen('teacher_report')}
-          />
-        );
-      case 'teacher_report':
-        return <TeacherGapReport onBack={() => setScreen('class_grove')} />;
-      case 'class_grove':
-        return (
-          <ClassGrove
-            onBack={() => setScreen('teacher_create')}
-            onStartQuiz={() => setScreen('student_game')}
-            onOpenLeaderboard={() => setScreen('teacher_report')}
-            onOpenStats={() => setScreen('teacher_report')}
-          />
-        );
-      case 'sleep_screen':
-        return (
-          <SleepScreen
-            onWakeUp={() => setScreen('class_grove')}
-            onGoHome={() => setScreen('class_grove')}
-          />
-        );
-      default:
-        return <ClassGrove onBack={() => setScreen('teacher_create')} />;
+  const handleTabChange = (newTab: TabType) => {
+    haptics.selection();
+    setSubScreen(null);
+    setTab(newTab);
+  };
+
+  // Render content according to active Tab & Role
+  const renderTabContent = () => {
+    if (subScreen === 'student_waiting') {
+      return (
+        <StudentWaitingLobby
+          roomCode={activePin}
+          playerName={studentName}
+          playerAvatar={studentAvatar}
+          onGameStart={() => setSubScreen('student_game')}
+          onLeaveRoom={() => {
+            socketService.disconnect();
+            setSubScreen(null);
+          }}
+        />
+      );
     }
+    if (subScreen === 'student_game') {
+      const qIndex = currentQuestionData?.question_index ?? 0;
+      const totalQ = currentQuestionData?.total_questions ?? 3;
+      const qObj = currentQuestionData?.question;
+      const shapeMap: Record<number, 'triangle' | 'diamond' | 'circle' | 'square'> = {
+        0: 'triangle',
+        1: 'diamond',
+        2: 'circle',
+        3: 'square',
+      };
+      const colorMap: Record<number, 'red' | 'blue' | 'yellow' | 'green'> = {
+        0: 'red',
+        1: 'blue',
+        2: 'yellow',
+        3: 'green',
+      };
+      const normalizeColor = (c: any, idx: number): 'red' | 'blue' | 'yellow' | 'green' => {
+        if (c === 'red' || c === 'orange') return 'red';
+        if (c === 'blue') return 'blue';
+        if (c === 'yellow') return 'yellow';
+        if (c === 'green') return 'green';
+        return colorMap[idx % 4] || 'blue';
+      };
+      const normalizeShape = (s: any, idx: number): 'triangle' | 'diamond' | 'circle' | 'square' => {
+        if (s === 'triangle') return 'triangle';
+        if (s === 'diamond') return 'diamond';
+        if (s === 'circle') return 'circle';
+        if (s === 'square') return 'square';
+        return shapeMap[idx % 4] || 'circle';
+      };
+      const options = qObj?.options?.map((opt: any, idx: number) => ({
+        id: `opt_${opt.id}`,
+        text: opt.text,
+        color: normalizeColor(opt.color, idx),
+        shape: normalizeShape(opt.symbol || opt.shape, idx),
+      })) || undefined;
+
+      return (
+        <StudentGameQuestion
+          key={`q_${qIndex}_${qObj?.id || 0}`}
+          questionNumber={qIndex + 1}
+          totalQuestions={totalQ}
+          subjectTitle={currentQuestionData?.subject || quizSubject}
+          classNameTitle={currentQuestionData?.class_name || quizClass}
+          questionText={qObj?.text}
+          latex={qObj?.latex}
+          options={options}
+          tier={currentQuestionData?.tier || 2}
+          is_boss={currentQuestionData?.is_boss || false}
+          timeLimitSec={currentQuestionData?.time_limit_sec || 25}
+          answeredCount={currentQuestionData?.answered_count ?? 0}
+          totalStudents={currentQuestionData?.total_players ?? 0}
+          onBack={() => setSubScreen(null)}
+          onGameFinished={(finishData) => {
+            haptics.notification('success');
+            const topPlayers = finishData?.top_players || [];
+            const myPlayer = topPlayers.find((p: any) =>
+              (studentPlayerId && p.id === studentPlayerId) ||
+              (p.name && p.name.trim().toLowerCase() === studentName.trim().toLowerCase())
+            );
+            const myScore = myPlayer?.score ?? (studentQuizStatsRef.current.score > 0 ? studentQuizStatsRef.current.score : (personalAnswerResult?.total_score || 850));
+            const myRank = myPlayer?.rank ?? (
+              topPlayers.length > 0
+                ? topPlayers.filter((p: any) => (p.score ?? 0) > myScore).length + 1
+                : 1
+            );
+            setQuizFinishData({
+              top_players: topPlayers,
+              myScore: myScore,
+              myRank: myRank,
+              correctCount: studentQuizStatsRef.current.correct,
+              wrongCount: studentQuizStatsRef.current.wrong,
+              totalQuestions: currentQuestionData?.total_questions || studentQuizStatsRef.current.total || totalQ,
+            });
+            setSubScreen('student_quiz_finish');
+          }}
+          onAnswerSubmit={(optionId, _isCorrect, responseTimeMs, tabBlurred) => {
+            const parsed = parseInt(optionId.replace('opt_', ''), 10);
+            const rawId = isNaN(parsed) ? 0 : parsed;
+            if (socketService.isConnected()) {
+              socketService.send('SUBMIT_ANSWER', {
+                question_id: qObj?.id ?? 1,
+                option_id: rawId,
+                time_taken_sec: responseTimeMs / 1000,
+                tab_blurred: tabBlurred,
+              });
+            }
+            // Transition directly to student_round_wait, keeping in sync with teacher
+            setSubScreen('student_round_wait');
+          }}
+        />
+      );
+    }
+    if (subScreen === 'teacher_game') {
+      return (
+        <TeacherLiveGame
+          roomCode={activePin}
+          initialQuestionData={currentQuestionData}
+          subject={quizSubject}
+          classNameTitle={quizClass}
+          onFinishQuiz={() => {
+            setSubScreen(null);
+            setTeacherToken('');
+            setTab('stats');
+          }}
+        />
+      );
+    }
+    if (subScreen === 'feedback_correct' || subScreen === 'feedback_wrong') {
+      return (
+        <FeedbackStreak
+          isCorrect={subScreen === 'feedback_correct'}
+          points={personalAnswerResult?.points_awarded || 750}
+          streak={personalAnswerResult?.streak || 1}
+          correctAnswer={personalAnswerResult?.correct_option_text}
+          onContinue={() => setSubScreen('student_round_wait')}
+        />
+      );
+    }
+    if (subScreen === 'student_round_wait') {
+      return (
+        <StudentRoundWait
+          roomCode={activePin}
+          playerName={studentName}
+          playerAvatar={studentAvatar}
+          personalResult={personalAnswerResult}
+          onNextQuestion={(qData) => {
+            setCurrentQuestionData(qData);
+            setPersonalAnswerResult(null);
+            setSubScreen('student_game');
+          }}
+          onGameFinished={(finishData) => {
+            haptics.notification('success');
+            const topPlayers = finishData?.top_players || [];
+            const myPlayer = topPlayers.find((p: any) =>
+              (studentPlayerId && p.id === studentPlayerId) ||
+              (p.name && p.name.trim().toLowerCase() === studentName.trim().toLowerCase())
+            );
+            const myScore = myPlayer?.score ?? (studentQuizStatsRef.current.score > 0 ? studentQuizStatsRef.current.score : (personalAnswerResult?.total_score || 850));
+            const myRank = myPlayer?.rank ?? (
+              topPlayers.length > 0
+                ? topPlayers.filter((p: any) => (p.score ?? 0) > myScore).length + 1
+                : 1
+            );
+            setQuizFinishData({
+              top_players: topPlayers,
+              myScore: myScore,
+              myRank: myRank,
+              correctCount: studentQuizStatsRef.current.correct,
+              wrongCount: studentQuizStatsRef.current.wrong,
+              totalQuestions: currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3,
+            });
+            setSubScreen('student_quiz_finish');
+          }}
+        />
+      );
+    }
+    if (subScreen === 'student_quiz_finish') {
+      return (
+        <StudentQuizFinish
+          playerId={studentPlayerId}
+          playerName={studentName}
+          playerAvatar={studentAvatar}
+          topPlayers={quizFinishData?.top_players || []}
+          myScore={quizFinishData?.myScore || personalAnswerResult?.total_score || 850}
+          myRank={quizFinishData?.myRank}
+          correctCount={quizFinishData?.correctCount ?? 3}
+          wrongCount={quizFinishData?.wrongCount ?? 0}
+          totalQuestions={quizFinishData?.totalQuestions ?? 3}
+          onGoToLeaderboard={(earnedPoints, rank) => {
+            socketService.disconnect();
+            setLeaderboardBoostPoints(earnedPoints || quizFinishData?.myScore || 150);
+            setLeaderboardBoostRank(rank || quizFinishData?.myRank || null);
+            setSubScreen(null);
+            setTab('leaderboard');
+          }}
+        />
+      );
+    }
+    if (subScreen === 'sleep_screen') {
+      return (
+        <SleepScreen
+          onWakeUp={() => setSubScreen(null)}
+          onGoHome={() => setSubScreen(null)}
+        />
+      );
+    }
+
+    // Role: STUDENT
+    if (role === 'student') {
+      switch (tab) {
+        case 'home':
+          return (
+            <StudentHome
+              onJoinGame={(payload) => {
+                setActivePin(payload.pin);
+                setStudentName(payload.name);
+                setStudentAvatar(payload.avatar);
+                if (payload.joinData?.player_id) {
+                  setStudentPlayerId(payload.joinData.player_id);
+                }
+                socketService.connect(payload.pin, payload.joinData.session_token).catch(() => { });
+                setSubScreen('student_waiting');
+              }}
+              onGoToGrove={() => setTab('grove')}
+            />
+          );
+        case 'grove':
+          return (
+            <ClassGrove
+              onStartQuiz={() => setSubScreen('student_game')}
+              onOpenLeaderboard={() => setTab('leaderboard')}
+              onOpenStats={() => setTab('stats')}
+            />
+          );
+        case 'leaderboard':
+          return (
+            <StudentLeaderboard
+              boostPoints={leaderboardBoostPoints}
+              boostRank={leaderboardBoostRank}
+              onClearBoost={() => {
+                setLeaderboardBoostPoints(null);
+                setLeaderboardBoostRank(null);
+              }}
+            />
+          );
+        case 'stats':
+          return <StudentStats />;
+      }
+    }
+
+    // Role: TEACHER
+    if (role === 'teacher') {
+      switch (tab) {
+        case 'home':
+          return (
+            <TeacherCreateQuiz
+              onQuizCreated={(roomData: any) => {
+                if (roomData) {
+                  setActivePin(roomData.room_code);
+                  setTeacherToken(roomData.teacher_token);
+                  if (roomData.subject) setQuizSubject(roomData.subject);
+                  if (roomData.grade) {
+                    setQuizGrade(roomData.grade);
+                    setQuizClass(`${roomData.grade}А`);
+                  }
+                  if (roomData.quiz_title) setQuizTitle(roomData.quiz_title);
+                }
+                setTab('leaderboard');
+              }}
+            />
+          );
+        case 'grove':
+          return (
+            <ClassGrove
+              onStartQuiz={() => setTab('leaderboard')}
+              onOpenLeaderboard={() => setTab('leaderboard')}
+              onOpenStats={() => setTab('stats')}
+            />
+          );
+        case 'leaderboard':
+          return (
+            <TeacherLobby
+              pin={activePin}
+              teacherToken={teacherToken}
+              quizTitle={quizTitle}
+              subject={quizSubject}
+              grade={quizGrade}
+              onRoomReady={(pin, token) => {
+                setActivePin(pin);
+                setTeacherToken(token);
+              }}
+              onQuizTitleChange={(newTitle) => setQuizTitle(newTitle)}
+              onStartQuiz={() => {
+                if (socketService.isConnected()) {
+                  socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
+                }
+                setSubScreen('teacher_game');
+              }}
+            />
+          );
+        case 'stats':
+          return <TeacherGapReport />;
+      }
+    }
+
+    return null;
   };
 
-  const DEV_SCREENS: { key: Screen | 'splash'; label: string; icon: string }[] = [
-    { key: 'class_grove', label: 'Роща класса (Спринт)', icon: '🌳' },
-    { key: 'student_join', label: 'Домой: Вход по PIN (Ученик)', icon: '🔑' },
-    { key: 'student_game', label: 'Вопрос викторины (2.5D)', icon: '🎮' },
-    { key: 'feedback_correct', label: 'Победа (Конфетти)', icon: '🎉' },
-    { key: 'feedback_wrong', label: 'Ошибка (Фидбек)', icon: '❌' },
-    { key: 'teacher_create', label: 'Создать квиз (Учитель)', icon: '✨' },
-    { key: 'teacher_lobby', label: 'Лобби учителя (PIN)', icon: '👨‍🏫' },
-    { key: 'teacher_report', label: 'Отчёт дефицитов (Gap Report)', icon: '📋' },
-    { key: 'sleep_screen', label: 'Спящая роща (Ночной отдых)', icon: '🌙' },
-    { key: 'splash', label: 'Заставка Спринта (Хвостик)', icon: '🦊' },
-  ];
+  const activeBg = (tab === 'grove' && !subScreen)
+    ? "url('/assets/backgrounds/grove_bg_clean.png')"
+    : "url('/assets/backgrounds/quiz_bg_clean.png')";
 
   return (
-    <div className="app-shell">
-      {/* =========================================================================
-          PHONE VIEWPORT CONTAINER (Sferum MAX 60fps Target)
-          ========================================================================= */}
-      <div className="app-container">
-        {/* Splash screen with waving Sprint tail */}
-        <AnimatePresence>
-          {showSplash && <SplashScreen onLoaded={() => setShowSplash(false)} />}
-        </AnimatePresence>
-
-        {/* Global App Header (Shown only on non-game views to avoid double headers) */}
-        {screen !== 'class_grove' && screen !== 'sleep_screen' && (
-          <header
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '12px 14px 10px',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
-              backgroundColor: 'rgba(13, 20, 36, 0.75)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              zIndex: 10,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <img
-                src="/assets/mascot/app_icon.png"
-                alt="Лисквиз"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 12,
-                  boxShadow: '0 2px 10px rgba(255, 122, 0, 0.35)',
-                }}
-              />
-              <div>
-                <h1
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 900,
-                    color: '#FFFFFF',
-                    lineHeight: 1.2,
-                    letterSpacing: '-0.3px',
-                  }}
-                >
-                  Лисквиз
-                </h1>
-                <p style={{ fontSize: 11, color: '#10B981', fontWeight: 700, margin: 0 }}>
-                  Роща знаний • 5А
-                </p>
-              </div>
+    <div className="desktop-layout">
+      {/* ========================================================
+          MOBILE PHONE FRAME (Authentic Sferum / MAX experience)
+         ======================================================== */}
+      <div
+        className="app-container"
+        style={{
+          backgroundImage: activeBg,
+          backgroundPosition: 'center top',
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+        }}
+      >
+        {/* Mobile Top App Bar: Grove Stats + Role Switch */}
+        <header style={styles.topHeader}>
+          <div style={styles.topStatsGroup}>
+            <div style={styles.topStatPill} title="Стрик 5 дней">
+              <Flame size={15} color="#FF7A00" />
+              <span style={styles.topStatVal}>5</span>
             </div>
+            <div style={styles.topStatPill} title="Здоровье Древа 95%">
+              <Droplets size={14} color="#34D399" />
+              <span style={styles.topStatVal}>95%</span>
+            </div>
+            <div style={styles.topStatPill} title="Стадия Дерева 4">
+              <Sparkles size={13} color="#FBBF24" />
+              <span style={styles.topStatVal}>Ур. 4</span>
+            </div>
+          </div>
 
-            {/* Role switch toggle */}
-            <div
+          {/* Role switcher toggle: Учитель / Ученик */}
+          <div style={styles.roleToggleBox}>
+            <button
+              onClick={() => handleRoleSwitch('teacher')}
               style={{
-                display: 'flex',
-                background: 'rgba(255, 255, 255, 0.06)',
-                borderRadius: 12,
-                padding: 3,
-                gap: 2,
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                ...styles.roleBtn,
+                background: role === 'teacher' ? '#FF7A00' : 'transparent',
+                color: role === 'teacher' ? '#FFFFFF' : '#9CA3AF',
               }}
             >
-              <button
-                onClick={() => handleRoleSwitch('teacher')}
-                style={{
-                  border: 'none',
-                  background: role === 'teacher' ? '#FF7A00' : 'transparent',
-                  color: role === 'teacher' ? '#fff' : '#9CA3AF',
-                  padding: '5px 12px',
-                  borderRadius: 9,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                Учитель
-              </button>
-              <button
-                onClick={() => handleRoleSwitch('student')}
-                style={{
-                  border: 'none',
-                  background: role === 'student' ? '#FF7A00' : 'transparent',
-                  color: role === 'student' ? '#fff' : '#9CA3AF',
-                  padding: '5px 12px',
-                  borderRadius: 9,
-                  cursor: 'pointer',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                Ученик
-              </button>
-            </div>
-          </header>
-        )}
+              Учитель
+            </button>
+            <button
+              onClick={() => handleRoleSwitch('student')}
+              style={{
+                ...styles.roleBtn,
+                background: role === 'student' ? '#FF7A00' : 'transparent',
+                color: role === 'student' ? '#FFFFFF' : '#9CA3AF',
+              }}
+            >
+              Ученик
+            </button>
+          </div>
+        </header>
 
-        {/* Active Screen Transition */}
-        <main
-          style={{
-            flex: 1,
-            height: '100%',
-            minHeight: 0,
-            position: 'relative',
-            display: 'flex',
-            flexDirection: 'column',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-          }}
-        >
+        {/* Scrollable Screen Body */}
+        <main style={styles.mainContent}>
           <AnimatePresence mode="wait">
             <motion.div
-              key={screen}
-              initial={{ opacity: 0, scale: 0.98 }}
+              key={`${role}-${tab}-${subScreen || 'main'}`}
+              initial={{ opacity: 0, scale: 0.985 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-              style={{
-                width: '100%',
-                height: '100%',
-                minHeight: '100%',
-                flex: 1,
-                display: 'flex',
-                flexDirection: 'column',
-              }}
+              exit={{ opacity: 0, scale: 0.985 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+              style={styles.screenWrapper}
             >
-              {renderScreen()}
+              {renderTabContent()}
             </motion.div>
           </AnimatePresence>
         </main>
+
+        {/* ========================================================
+            TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Icon only)
+           ======================================================== */}
+        {!subScreen && (
+          <div style={styles.dockWrapper}>
+            <nav style={styles.bottomNavDock}>
+              {/* Tab 1: Домой */}
+              {(() => {
+                const isActive = tab === 'home' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('home')}
+                    style={styles.navBtn}
+                    title="Домой"
+                  >
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <Home size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
+
+              {/* Tab 2: Роща */}
+              {(() => {
+                const isActive = tab === 'grove' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('grove')}
+                    style={styles.navBtn}
+                    title="Роща"
+                  >
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <Sprout size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
+
+              {/* Tab 3: Рейтинг / Лобби */}
+              {(() => {
+                const isActive = tab === 'leaderboard' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('leaderboard')}
+                    style={styles.navBtn}
+                    title={role === 'teacher' ? 'Лобби' : 'Рейтинг'}
+                  >
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <Crown size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
+
+              {/* Tab 4: Статистика / Отчёт */}
+              {(() => {
+                const isActive = tab === 'stats' && !subScreen;
+                return (
+                  <button
+                    onClick={() => handleTabChange('stats')}
+                    style={styles.navBtn}
+                    title={role === 'teacher' ? 'Отчёт' : 'Статистика'}
+                  >
+                    <div
+                      style={{
+                        ...styles.navIconCircle,
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
+                      }}
+                    >
+                      <BarChart2 size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                    </div>
+                  </button>
+                );
+              })()}
+            </nav>
+          </div>
+        )}
       </div>
 
-      {/* =========================================================================
-          DESKTOP SIDEBAR: DEV CONTROLS & TEST MOUNT (Outside Phone Bezel)
-          ========================================================================= */}
+      {/* ========================================================
+          DESKTOP DEV TOOLS SIDEBAR (Outside mobile screen)
+         ======================================================== */}
       <aside className="dev-sidebar">
-        <div className="dev-sidebar-header">
-          <span style={{ fontSize: 18 }}>🛠️</span>
-          <div>
-            <div className="dev-sidebar-title">Кнопки для разработчиков</div>
-            <div className="dev-sidebar-sub">Быстрый переход к экранам и мокам:</div>
-          </div>
+        <div style={styles.devHeader}>
+          <Wrench size={16} color="#FF7A00" />
+          <span style={styles.devTitle}>Кнопки для разработчиков</span>
         </div>
+        <p style={styles.devSub}>Быстрый переход к экранам и мокам:</p>
 
-        <div className="dev-btn-list">
-          {DEV_SCREENS.map((item) => {
-            const isActive = item.key === 'splash' ? showSplash : screen === item.key;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                className={`dev-screen-btn ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  if (item.key === 'splash') {
-                    setShowSplash(true);
-                  } else {
-                    setScreen(item.key as Screen);
-                  }
-                }}
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+        <div style={styles.devList}>
+          <button
+            onClick={() => {
+              setRole('student');
+              setTab('grove');
+              setSubScreen(null);
+            }}
+            style={styles.devBtn}
+          >
+            🌳 Роща класса (Спринт)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setTab('home');
+              setSubScreen(null);
+            }}
+            style={styles.devBtn}
+          >
+            🔑 Домой: Вход по PIN (Ученик)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setSubScreen('student_game');
+            }}
+            style={styles.devBtn}
+          >
+            🎮 Вопрос викторины (2.5D)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setSubScreen('feedback_correct');
+            }}
+            style={styles.devBtn}
+          >
+            🎉 Победа (Конфетти)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setSubScreen('feedback_wrong');
+            }}
+            style={styles.devBtn}
+          >
+            ❌ Ошибка (Фидбек)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setSubScreen('student_round_wait');
+            }}
+            style={styles.devBtn}
+          >
+            ⏳ Ожидание раунда (Ученик)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setQuizFinishData({
+                top_players: [
+                  { rank: 1, id: 's1', name: 'Иван К', avatar: 'fox_smart', score: 980 },
+                  { rank: 2, id: 's2', name: 'Аня Смирнова', avatar: 'owl', score: 870 },
+                  { rank: 3, id: 's3', name: 'Максим Петров', avatar: 'bear', score: 760 },
+                  { rank: 4, id: 's4', name: 'Лена Морозова', avatar: 'bunny', score: 620 },
+                ],
+                myScore: 980,
+                correctCount: 3,
+                wrongCount: 0,
+                totalQuestions: 3,
+              });
+              setSubScreen('student_quiz_finish');
+            }}
+            style={styles.devBtn}
+          >
+            🥇 Итоги викторины (Пьедестал)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setTab('leaderboard');
+              setSubScreen(null);
+            }}
+            style={styles.devBtn}
+          >
+            🏆 Рейтинг ученика (Топ-3)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setTab('stats');
+              setSubScreen(null);
+            }}
+            style={styles.devBtn}
+          >
+            📊 Статистика ученика (Ачивки)
+          </button>
+
+          <div style={styles.devDivider} />
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setTab('home');
+              setSubScreen(null);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            ✨ Создать квиз (Учитель)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setTab('leaderboard');
+              setSubScreen(null);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            🧑‍🏫 Лобби учителя (PIN)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setSubScreen('teacher_game');
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            🎮 Игра Live (Учитель)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setTab('stats');
+              setSubScreen(null);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            📋 Отчёт дефицитов (Gap Report)
+          </button>
+
+          <button
+            onClick={() => {
+              setSubScreen('sleep_screen');
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(168, 85, 247, 0.4)', color: '#D8B4FE' }}
+          >
+            🌙 Спящая роща (Ночной отдых)
+          </button>
         </div>
       </aside>
+
+      {/* Floating Toggle for Dev tools on small mobile screens */}
+      <button
+        className="mobile-dev-toggle"
+        onClick={() => setIsMobileDevOpen((prev) => !prev)}
+        title="Кнопки для разработчиков"
+      >
+        <Wrench size={18} color="#FFFFFF" />
+      </button>
+
+      {/* Mobile Dev Drawer */}
+      {isMobileDevOpen && (
+        <div className="mobile-dev-drawer">
+          <div style={styles.mobileDevDrawerHeader}>
+            <span style={{ fontWeight: 800, fontSize: 13, color: '#FF7A00' }}>
+              🛠️ Кнопки для разработчиков
+            </span>
+            <button
+              onClick={() => setIsMobileDevOpen(false)}
+              style={styles.drawerCloseBtn}
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <button
+              onClick={() => {
+                setRole('student');
+                setTab('grove');
+                setSubScreen(null);
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              🌳 Роща
+            </button>
+            <button
+              onClick={() => {
+                setRole('student');
+                setTab('home');
+                setSubScreen(null);
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              🔑 Вход по PIN
+            </button>
+            <button
+              onClick={() => {
+                setSubScreen('student_game');
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              🎮 Игра
+            </button>
+            <button
+              onClick={() => {
+                setSubScreen('feedback_correct');
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              🎉 Победа
+            </button>
+            <button
+              onClick={() => {
+                setRole('teacher');
+                setTab('home');
+                setSubScreen(null);
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              ✨ Квиз
+            </button>
+            <button
+              onClick={() => {
+                setRole('teacher');
+                setTab('leaderboard');
+                setSubScreen(null);
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              🧑‍🏫 Лобби
+            </button>
+            <button
+              onClick={() => {
+                setRole('teacher');
+                setTab('stats');
+                setSubScreen(null);
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              📋 Отчёт
+            </button>
+            <button
+              onClick={() => {
+                setSubScreen('sleep_screen');
+                setIsMobileDevOpen(false);
+              }}
+              style={styles.mobileDevBtn}
+            >
+              🌙 Сон
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+const styles: Record<string, React.CSSProperties> = {
+  topHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '10px 14px 8px',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+    backgroundColor: 'rgba(13, 20, 36, 0.85)',
+    backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
+    zIndex: 10,
+    flexShrink: 0,
+  },
+  topStatsGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  topStatPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.14)',
+    borderRadius: 999,
+    padding: '4px 9px',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.25)',
+  },
+  topStatVal: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    letterSpacing: '0.2px',
+  },
+  roleToggleBox: {
+    display: 'flex',
+    background: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 12,
+    padding: 3,
+    gap: 2,
+    border: 'none',
+  },
+  roleBtn: {
+    border: 'none',
+    padding: '5px 12px',
+    borderRadius: 9,
+    cursor: 'pointer',
+    fontSize: 12,
+    fontWeight: 700,
+    transition: 'all 0.15s ease',
+  },
+  mainContent: {
+    flex: 1,
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+  },
+  screenWrapper: {
+    width: '100%',
+    minHeight: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: 'transparent',
+  },
+  dockWrapper: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: '0 12px 14px 12px',
+    backgroundColor: 'transparent',
+    zIndex: 25,
+    pointerEvents: 'none',
+  },
+  bottomNavDock: {
+    display: 'flex',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    height: 58,
+    backgroundColor: 'rgba(12, 20, 37, 0.94)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 29,
+    padding: '0 8px',
+    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)',
+    pointerEvents: 'auto',
+  },
+  navBtn: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 0,
+    transition: 'all 0.18s ease',
+  },
+  navIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.18s ease',
+  },
+  devHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  devTitle: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: '#FF7A00',
+  },
+  devSub: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    margin: '0 0 10px 0',
+    lineHeight: 1.3,
+  },
+  devList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+  },
+  devBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.09)',
+    borderRadius: 10,
+    padding: '8px 10px',
+    color: '#D1D5DB',
+    fontSize: 12,
+    fontWeight: 600,
+    textAlign: 'left',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  devDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    margin: '4px 0',
+  },
+  mobileDevDrawerHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  drawerCloseBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#9CA3AF',
+    cursor: 'pointer',
+  },
+  mobileDevBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: '8px',
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+};

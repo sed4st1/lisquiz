@@ -38,6 +38,7 @@ class TestLisquizClassGrove(unittest.TestCase):
             cursor.execute("DELETE FROM student_contributions WHERE class_id = ?", (self.test_class_id,))
             cursor.execute("DELETE FROM student_gacha_inventory WHERE student_id LIKE 'test_s%' OR student_id LIKE 'api_%'")
             cursor.execute("DELETE FROM student_gacha_state WHERE student_id LIKE 'test_s%' OR student_id LIKE 'api_%'")
+            cursor.execute("DELETE FROM student_contributions WHERE student_id LIKE 'api_%'")
             conn.commit()
 
     # =========================================================================

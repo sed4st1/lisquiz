@@ -1,110 +1,466 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronLeft,
   Copy,
   Check,
-  UserPlus,
   Rocket,
-  Sparkles,
+  Users,
+  Eye,
+  Plus,
+  BookOpen,
+  CheckCircle2,
+  Trash2,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
+import { socketService } from '../services/socketService';
+import { roomApi } from '../services/roomApi';
+import { quizStorage, SavedQuiz } from '../services/quizStorage';
+import QuizQuestionEditorModal from '../components/QuizQuestionEditorModal';
+
+export interface ConnectedStudent {
+  id: string;
+  name: string;
+  avatar: string;
+}
 
 export interface TeacherLobbyProps {
   pin?: string;
+  teacherToken?: string;
   quizTitle?: string;
   subject?: string;
   grade?: number;
   maxStudents?: number;
   onStartQuiz?: () => void;
-  onBack?: () => void;
+  onRoomReady?: (pin: string, token: string) => void;
+  onQuizTitleChange?: (newTitle: string) => void;
 }
 
-const CONNECTED_STUDENTS = [
-  { id: '1', name: 'Маша К.', avatar: '/assets/avatars/students/hedgehog.png' },
-  { id: '2', name: 'Артём В.', avatar: '/assets/avatars/students/raccoon.png' },
-  { id: '3', name: 'София Л.', avatar: '/assets/avatars/students/owl.png' },
-  { id: '4', name: 'Дима С.', avatar: '/assets/avatars/students/bear.png' },
-  { id: '5', name: 'Полина Т.', avatar: '/assets/avatars/students/bunny.png' },
-  { id: '6', name: 'Кирилл М.', avatar: '/assets/avatars/students/squirrel.png' },
-  { id: '7', name: 'Алина Д.', avatar: '/assets/avatars/students/hedgehog.png' },
-  { id: '8', name: 'Никита Б.', avatar: '/assets/avatars/students/raccoon.png' },
-  { id: '9', name: 'Лена О.', avatar: '/assets/avatars/students/owl.png' },
-  { id: '10', name: 'Иван З.', avatar: '/assets/avatars/students/bear.png' },
-  { id: '11', name: 'Оля Р.', avatar: '/assets/avatars/students/bunny.png' },
-  { id: '12', name: 'Егор К.', avatar: '/assets/avatars/students/squirrel.png' },
-  { id: '13', name: 'Таня С.', avatar: '/assets/avatars/students/hedgehog.png' },
-  { id: '14', name: 'Максим Г.', avatar: '/assets/avatars/students/raccoon.png' },
-  { id: '15', name: 'Даша Ф.', avatar: '/assets/avatars/students/owl.png' },
-];
+const AVATAR_MAP: Record<string, string> = {
+  bear: '/assets/avatars/students/bear.png',
+  bunny: '/assets/avatars/students/bunny.png',
+  hedgehog: '/assets/avatars/students/hedgehog.png',
+  owl: '/assets/avatars/students/owl.png',
+  raccoon: '/assets/avatars/students/raccoon.png',
+  squirrel: '/assets/avatars/students/squirrel.png',
+  fox_smart: '/assets/avatars/students/raccoon.png',
+  fox_1: '/assets/avatars/students/raccoon.png',
+  fox_happy: '/assets/avatars/students/raccoon.png',
+  fox_detective: '/assets/avatars/students/raccoon.png',
+};
+
+const getSubjectIcon = (subj?: string) => {
+  const s = (subj || '').toLowerCase();
+  if (s.includes('физик')) return '⚡';
+  if (s.includes('алгебр')) return '🔢';
+  if (s.includes('геометр')) return '📐';
+  if (s.includes('матем')) return '➗';
+  if (s.includes('русск')) return '📝';
+  return '📚';
+};
 
 export default function TeacherLobby({
-  pin = '482915',
+  pin: propPin,
+  teacherToken: propToken,
   quizTitle = 'Викторина по математике',
+  subject,
   grade = 7,
   onStartQuiz,
-  onBack,
+  onRoomReady,
+  onQuizTitleChange,
 }: TeacherLobbyProps) {
+  const [activePin, setActivePin] = useState<string>(propPin || '');
+  const [currentQuizTitle, setCurrentQuizTitle] = useState<string>(quizTitle);
+  const [students, setStudents] = useState<ConnectedStudent[]>([]);
   const [copied, setCopied] = useState<boolean>(false);
-  const [students, setStudents] = useState(CONNECTED_STUDENTS);
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
+  const [quizToDelete, setQuizToDelete] = useState<SavedQuiz | null>(null);
+
+  // Quizzes list with real textbook quizzes from Ivan's bank
+  const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>(() => quizStorage.getSavedQuizzes());
+  const [activeQuizId, setActiveQuizId] = useState<string>(() => {
+    const list = quizStorage.getSavedQuizzes();
+    const act = list.find((q) => q.is_active);
+    return act ? act.id : list[0]?.id || '';
+  });
+  const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 3200);
+  };
+
+  // 1. Fetch real textbook presets from Ivan's backend
+  useEffect(() => {
+    roomApi.getPresetTextbookQuizzes().then((serverPresets) => {
+      if (serverPresets && serverPresets.length > 0) {
+        const merged = quizStorage.mergePresetQuizzes(serverPresets);
+        setSavedQuizzes(merged);
+      }
+    });
+  }, []);
+
+  // 2. Room lifecycle and WebSocket connection
+  useEffect(() => {
+    let isMounted = true;
+    let handleSync: ((data: any) => void) | null = null;
+    let handleJoined: ((data: any) => void) | null = null;
+    let handleLeft: ((data: any) => void) | null = null;
+    let handleCountdown: ((data: any) => void) | null = null;
+
+    const setupRoom = async () => {
+      let code = propPin;
+      let token = propToken;
+
+      if (!code || !token) {
+        try {
+          const res = await roomApi.createRoom();
+          code = res.room_code;
+          token = res.teacher_token;
+          if (isMounted) {
+            setActivePin(code);
+            onRoomReady?.(code, token);
+          }
+        } catch (e) {
+          console.error('Failed to create room:', e);
+          code = '482915';
+          token = 'mock_teacher_token';
+          if (isMounted) {
+            setActivePin(code);
+          }
+        }
+      }
+
+      if (!code || !token) return;
+
+      // Sync active room quiz from backend if available
+      try {
+        const roomQuiz = await roomApi.getRoomQuiz(code);
+        if (isMounted && roomQuiz && roomQuiz.questions && roomQuiz.questions.length > 0) {
+          const existingList = quizStorage.getSavedQuizzes();
+          const existing = existingList.find((q) => q.id === `room_quiz_${code}`);
+          const quizObj: SavedQuiz = {
+            id: `room_quiz_${code}`,
+            title: roomQuiz.title || quizTitle || 'Викторина по теме',
+            subject: roomQuiz.subject || subject || 'Математика',
+            grade: roomQuiz.grade || grade || 7,
+            topic: roomQuiz.topic || 'Школьная программа',
+            group_label: existing?.group_label || 'Текущий',
+            is_active: true,
+            updated_at: new Date().toISOString(),
+            questions: roomQuiz.questions.map((q: any, idx: number) => ({
+              id: q.id ?? (idx + 1),
+              text: q.text || '',
+              explanation: q.explanation || '',
+              time_limit_sec: q.time_limit_sec ?? 20,
+              tier: q.tier ?? 1,
+              is_boss: q.is_boss ?? false,
+              topic: q.topic ?? '',
+              options: (q.options || []).map((opt: any, oIdx: number) => ({
+                id: opt.id ?? oIdx,
+                text: opt.text ?? '',
+                is_correct: !!opt.is_correct,
+                symbol: opt.symbol,
+                color: opt.color,
+              })),
+            })),
+          };
+          quizStorage.upsertQuiz(quizObj);
+          quizStorage.setActiveQuiz(quizObj.id);
+          setSavedQuizzes(quizStorage.getSavedQuizzes());
+          setActiveQuizId(quizObj.id);
+          setCurrentQuizTitle(quizObj.title);
+          onQuizTitleChange?.(quizObj.title);
+        }
+      } catch (e) {
+        console.warn('Could not fetch room quiz from backend:', e);
+      }
+
+      try {
+        await socketService.connect(code, token);
+
+        handleSync = (data: any) => {
+          if (!isMounted) return;
+          if (data && data.players) {
+            const list: ConnectedStudent[] = Object.values(data.players)
+              .filter((p: any) => p.connected !== false)
+              .map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                avatar: p.avatar,
+              }));
+            setStudents(list);
+          }
+        };
+
+        handleJoined = (data: any) => {
+          if (!isMounted) return;
+          haptics.notification('success');
+          setStudents((prev) => {
+            const exists = prev.some((s) => s.id === data.player_id);
+            if (exists) return prev;
+            return [
+              ...prev,
+              {
+                id: data.player_id,
+                name: data.name,
+                avatar: data.avatar || 'fox_smart',
+              },
+            ];
+          });
+        };
+
+        handleLeft = (data: any) => {
+          if (!isMounted) return;
+          setStudents((prev) => prev.filter((s) => s.id !== data.player_id));
+        };
+
+        handleCountdown = (data: any) => {
+          if (!isMounted) return;
+          const sec = data.countdown_sec || 3;
+          setCountdown(sec);
+
+          let current = sec;
+          const interval = setInterval(() => {
+            current -= 1;
+            if (current <= 0) {
+              clearInterval(interval);
+              if (isMounted) {
+                setCountdown(null);
+                onStartQuiz?.();
+              }
+            } else {
+              if (isMounted) setCountdown(current);
+            }
+          }, 1000);
+        };
+
+        socketService.on('SYNC_STATE', handleSync);
+        socketService.on('PLAYER_JOINED', handleJoined);
+        socketService.on('PLAYER_LEFT', handleLeft);
+        socketService.on('COUNTDOWN_START', handleCountdown);
+      } catch (err) {
+        console.error('WebSocket connection error in TeacherLobby:', err);
+      }
+    };
+
+    setupRoom();
+
+    return () => {
+      isMounted = false;
+      if (handleSync) socketService.off('SYNC_STATE', handleSync);
+      if (handleJoined) socketService.off('PLAYER_JOINED', handleJoined);
+      if (handleLeft) socketService.off('PLAYER_LEFT', handleLeft);
+      if (handleCountdown) socketService.off('COUNTDOWN_START', handleCountdown);
+    };
+  }, [propPin, propToken]);
 
   const handleCopyPin = () => {
     haptics.notification('success');
-    navigator.clipboard?.writeText(pin);
+    navigator.clipboard?.writeText(activePin);
     setCopied(true);
     setTimeout(() => setCopied(false), 2200);
   };
 
-  const handleAddStudent = () => {
-    haptics.impact('light');
-    const newStudent = {
-      id: String(Date.now()),
-      name: `Ученик ${students.length + 1}`,
-      avatar: '/assets/avatars/students/bunny.png',
-    };
-    setStudents((prev) => [...prev, newStudent]);
+  const handleStartGame = () => {
+    haptics.notification('success');
+    if (socketService.isConnected()) {
+      socketService.send('TEACHER_ACTION', { action: 'START_GAME' });
+    } else {
+      setCountdown(3);
+      setTimeout(() => {
+        setCountdown(null);
+        onStartQuiz?.();
+      }, 3000);
+    }
   };
 
-  const digits = pin.split('');
+  const handleKickStudent = (studentId: string) => {
+    haptics.impact('medium');
+    if (socketService.isConnected()) {
+      socketService.send('TEACHER_ACTION', {
+        action: 'KICK_PLAYER',
+        player_id: studentId,
+      });
+    }
+    setStudents((prev) => prev.filter((s) => s.id !== studentId));
+    setSelectedStudentToKick(null);
+  };
+
+  const handleSelectQuiz = async (q: SavedQuiz) => {
+    haptics.selection();
+    quizStorage.setActiveQuiz(q.id);
+    setActiveQuizId(q.id);
+    setSavedQuizzes(quizStorage.getSavedQuizzes());
+    setCurrentQuizTitle(q.title);
+    onQuizTitleChange?.(q.title);
+
+    if (activePin) {
+      try {
+        await roomApi.updateRoomQuiz(activePin, {
+          title: q.title,
+          subject: q.subject,
+          grade: q.grade,
+          topic: q.topic,
+          questions: q.questions,
+        });
+        showToast(`Викторина «${q.title}» активирована!`);
+      } catch (err) {
+        console.error('Failed to sync quiz with room:', err);
+        showToast(`Викторина выбрана для запуска!`);
+      }
+    } else {
+      showToast(`Викторина выбрана для запуска!`);
+    }
+  };
+
+  const handleEditQuiz = (q: SavedQuiz) => {
+    haptics.impact('light');
+    setEditingQuiz(q);
+    setIsEditorOpen(true);
+  };
+
+  const handleSaveEditedQuiz = async (updatedQuiz: SavedQuiz) => {
+    haptics.notification('success');
+    const list = quizStorage.upsertQuiz(updatedQuiz);
+    setSavedQuizzes(list);
+    setIsEditorOpen(false);
+    setEditingQuiz(null);
+
+    if (updatedQuiz.id === activeQuizId) {
+      setCurrentQuizTitle(updatedQuiz.title);
+      onQuizTitleChange?.(updatedQuiz.title);
+      if (activePin) {
+        try {
+          await roomApi.updateRoomQuiz(activePin, {
+            title: updatedQuiz.title,
+            subject: updatedQuiz.subject,
+            grade: updatedQuiz.grade,
+            topic: updatedQuiz.topic,
+            questions: updatedQuiz.questions,
+          });
+        } catch (e) {
+          console.error('Failed to sync updated quiz with room:', e);
+        }
+      }
+    }
+    showToast(`Вопросы сохранены!`);
+  };
+
+  const handleCreateNewQuizTemplate = () => {
+    haptics.impact('light');
+    const newQuiz: SavedQuiz = {
+      id: `quiz_custom_${Date.now()}`,
+      title: 'Своя проверочная викторина',
+      subject: subject || 'Математика',
+      grade: grade || 7,
+      topic: 'Тематический опрос',
+      group_label: 'Свой вариант',
+      is_active: false,
+      updated_at: new Date().toISOString(),
+      questions: [
+        {
+          id: 1,
+          text: 'Введите текст первого вопроса...',
+          explanation: '',
+          time_limit_sec: 20,
+          tier: 1,
+          is_boss: false,
+          topic: 'Вопрос 1',
+          options: [
+            { id: 0, text: 'Правильный ответ', is_correct: true, symbol: 'triangle', color: 'red' },
+            { id: 1, text: 'Вариант 2', is_correct: false, symbol: 'diamond', color: 'blue' },
+            { id: 2, text: 'Вариант 3', is_correct: false, symbol: 'circle', color: 'yellow' },
+            { id: 3, text: 'Вариант 4', is_correct: false, symbol: 'square', color: 'green' },
+          ],
+        },
+      ],
+    };
+    const list = quizStorage.upsertQuiz(newQuiz);
+    setSavedQuizzes(list);
+    setEditingQuiz(newQuiz);
+    setIsEditorOpen(true);
+  };
+
+  const handleRequestDelete = (q: SavedQuiz) => {
+    if (savedQuizzes.length <= 1) {
+      showToast('Должна остаться хотя бы одна викторина');
+      return;
+    }
+    haptics.notification('warning');
+    setQuizToDelete(q);
+  };
+
+  const confirmDeleteQuiz = () => {
+    if (!quizToDelete) return;
+    haptics.notification('success');
+    const updated = quizStorage.deleteQuiz(quizToDelete.id);
+    setSavedQuizzes(updated);
+    if (activeQuizId === quizToDelete.id) {
+      const nextActive = updated[0];
+      if (nextActive) {
+        handleSelectQuiz(nextActive);
+      }
+    }
+    setQuizToDelete(null);
+    showToast('Викторина удалена');
+  };
+
+  const getAvatarSrc = (avatar?: string) => {
+    return AVATAR_MAP[avatar || ''] || AVATAR_MAP.raccoon;
+  };
+
+  const digits = activePin.padEnd(6, '·').slice(0, 6).split('');
 
   return (
     <div style={styles.container}>
-      {/* Top Header */}
-      <header style={styles.header}>
-        <button
-          onClick={onBack}
-          style={styles.backBtn}
-          title="Назад"
-        >
-          <ChevronLeft size={20} color="#FFFFFF" />
-        </button>
-        <h1 style={styles.headerTitle}>Комната ожидания</h1>
-        <div style={{ width: 36 }} />
-      </header>
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ y: -16, opacity: 0, scale: 0.95 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: -16, opacity: 0, scale: 0.95 }}
+            style={styles.toastContainer}
+          >
+            <CheckCircle2 size={16} color="#10B981" />
+            <span style={styles.toastText}>{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Quiz Title Pill */}
-      <div style={styles.topicBadgeWrapper}>
-        <div style={styles.topicBadge}>
-          <img
-            src="/assets/icons/icon_sprout.svg"
-            alt="Росток"
-            style={{ width: 16, height: 16 }}
-          />
-          <span>{quizTitle} • {grade} класс</span>
+      {/* Top Bar: Active Quiz Badge */}
+      <div style={styles.topInfoBar}>
+        <div style={styles.activeQuizPill}>
+          <span style={styles.sproutDot}>🌱</span>
+          <span style={styles.activeQuizTitle} title={currentQuizTitle}>
+            {currentQuizTitle || 'Викторина урока'}
+          </span>
+          <span style={styles.activeQuizGrade}>{grade}А класс</span>
         </div>
       </div>
 
       {/* PIN Code Panel */}
       <motion.div
-        initial={{ y: 15, opacity: 0 }}
+        initial={{ y: 12, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 28 }}
         style={styles.pinCard}
       >
-        <span style={styles.pinCardTitle}>PIN-код для учеников</span>
+        <div style={styles.pinHeader}>
+          <span style={styles.pinCardTitle}>PIN КОД ДЛЯ ПОДКЛЮЧЕНИЯ</span>
+          <div style={styles.onlineBadge}>
+            <span style={styles.onlineDot} />
+            <span>В сети: <strong>{students.length}</strong></span>
+          </div>
+        </div>
 
-        <div style={styles.pinRow} onClick={handleCopyPin} title="Нажмите, чтобы скопировать">
+        <div style={styles.pinRow} onClick={handleCopyPin} title="Нажмите для копирования">
           <div style={styles.digitBoxesRow}>
             {digits.map((digit, i) => (
               <div key={i} style={styles.digitBox}>
@@ -114,89 +470,277 @@ export default function TeacherLobby({
           </div>
 
           <button style={styles.copyBtn} aria-label="Скопировать PIN">
-            {copied ? <Check size={18} color="#10B981" /> : <Copy size={18} color="#9CA3AF" />}
+            {copied ? <Check size={18} color="#10B981" /> : <Copy size={18} color="#94A3B8" />}
           </button>
-        </div>
-
-        {/* Connected Count Indicator */}
-        <div style={styles.statusRow}>
-          <span style={styles.statusDot} />
-          <span style={styles.statusText}>
-            Подключились: <strong style={{ color: '#FFFFFF' }}>{students.length} из 30</strong>
-          </span>
         </div>
       </motion.div>
 
-      {/* Students Avatar Grid */}
-      <div style={styles.avatarsCard}>
-        <div style={styles.avatarGrid}>
-          {students.map((student, i) => (
-            <motion.div
-              key={student.id}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: i * 0.03, type: 'spring', stiffness: 500, damping: 22 }}
-              style={styles.avatarItem}
-              title={student.name}
-            >
-              <div style={styles.avatarCircle}>
-                <img
-                  src={student.avatar}
-                  alt={student.name}
-                  style={styles.avatarImg}
-                />
-                <span style={styles.avatarOnlineDot} />
-              </div>
-              <span style={styles.avatarName}>{student.name}</span>
-            </motion.div>
-          ))}
+      {/* Students Avatar Strip */}
+      <div style={styles.studentsCard}>
+        {students.length === 0 ? (
+          <div style={styles.emptyStudents}>
+            <Users size={18} color="#60A5FA" />
+            <span>Ждём подключения учеников (ввод PIN с экрана)</span>
+          </div>
+        ) : (
+          <div style={styles.studentsGrid}>
+            {students.map((student, i) => (
+              <motion.div
+                key={student.id}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: i * 0.02, type: 'spring', stiffness: 500, damping: 22 }}
+                onClick={() => {
+                  haptics.selection();
+                  setSelectedStudentToKick(student);
+                }}
+                style={styles.studentItem}
+                title="Нажмите чтобы исключить"
+              >
+                <div style={styles.studentAvatarCircle}>
+                  <img
+                    src={getAvatarSrc(student.avatar)}
+                    alt={student.name}
+                    style={styles.studentAvatarImg}
+                  />
+                  <span style={styles.studentOnlineDot} />
+                </div>
+                <span style={styles.studentName}>{student.name}</span>
+              </motion.div>
+            ))}
+          </div>
+        )}
+      </div>
 
-          {/* Add Student Button */}
-          <motion.div
-            whileTap={{ scale: 0.9 }}
-            onClick={handleAddStudent}
-            style={styles.addAvatarBtn}
-            title="Пригласить ученика"
+      {/* Quizzes Templates (2-Column Mobile Square Tiles) */}
+      <div style={styles.templatesSectionCard}>
+        <div style={styles.templatesHeader}>
+          <div style={styles.templatesTitleRow}>
+            <BookOpen size={17} color="#60A5FA" />
+            <h2 style={styles.templatesTitle}>Шаблоны викторин</h2>
+          </div>
+
+          {/* Pleasant Tactile Button for "Свой тест" matching project design */}
+          <TactileButton
+            theme="blue"
+            size="sm"
+            onClick={handleCreateNewQuizTemplate}
+            iconBefore={<Plus size={15} />}
           >
-            <div style={styles.addCircle}>
-              <UserPlus size={20} color="#9CA3AF" />
-            </div>
-            <span style={styles.avatarName}>Ещё</span>
+            Свой тест
+          </TactileButton>
+        </div>
+
+        {/* 2-Column Square Tiles Grid (Optimized for Mobile Phones) */}
+        <div style={styles.mobileSquareGrid}>
+          {savedQuizzes.map((q) => {
+            const isActive = q.id === activeQuizId;
+            const qCount = q.questions.length;
+            const icon = getSubjectIcon(q.subject);
+
+            return (
+              <motion.div
+                key={q.id}
+                layout
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => handleSelectQuiz(q)}
+                style={{
+                  ...styles.mobileSquareTile,
+                  ...(isActive ? styles.mobileSquareTileActive : {}),
+                }}
+              >
+                {/* Top: Subject Badge & Status / Delete */}
+                <div style={styles.tileTop}>
+                  <span style={styles.subjectPill}>
+                    {icon} {q.subject || 'Тест'}
+                  </span>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {isActive ? (
+                      <div style={styles.activeCheckBadge} title="Активна для запуска">
+                        <CheckCircle2 size={14} color="#10B981" />
+                      </div>
+                    ) : null}
+
+                    {savedQuizzes.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRequestDelete(q);
+                        }}
+                        style={styles.deleteMiniBtn}
+                        title="Удалить викторину"
+                      >
+                        <Trash2 size={13} color="#94A3B8" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Center: Title & Subtitle */}
+                <div style={styles.tileCenter}>
+                  <div style={styles.tileTitleText} title={q.title}>
+                    {q.title}
+                  </div>
+                  <div style={styles.tileSubtitle}>
+                    {q.group_label || `${q.grade} класс`}
+                  </div>
+                </div>
+
+                {/* Bottom: Large, Thumb-Friendly View & Edit Button (No Copy button) */}
+                <div style={styles.tileBottom}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEditQuiz(q);
+                    }}
+                    style={styles.bigTouchViewBtn}
+                    title="Открыть редактор вопросов"
+                  >
+                    <Eye size={15} color="#60A5FA" />
+                    <span>Вопросы ({qCount})</span>
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Static Sticky Bottom Action Bar (Transparent background, floating button) */}
+      <div style={styles.stickyBottomBar}>
+        <div style={{ width: '100%', pointerEvents: 'auto' }}>
+          <TactileButton
+            theme="green"
+            size="lg"
+            fullWidth
+            onClick={handleStartGame}
+            iconBefore={<Rocket size={20} />}
+          >
+            {countdown !== null ? `Старт через ${countdown}...` : 'Начать викторину'}
+          </TactileButton>
+        </div>
+      </div>
+
+      {/* Delete Quiz Confirmation Modal */}
+      <AnimatePresence>
+        {quizToDelete && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={styles.modalBackdrop}
+            onClick={() => setQuizToDelete(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9 }}
+              style={styles.confirmModalCard}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={styles.deleteWarningIconCircle}>
+                <Trash2 size={24} color="#EF4444" />
+              </div>
+
+              <h3 style={styles.confirmTitle}>Удалить викторину?</h3>
+              <p style={styles.confirmDesc}>
+                Викторина «{quizToDelete.title}» будет удалена без возможности восстановления.
+              </p>
+
+              <div style={styles.confirmBtnRow}>
+                <button
+                  onClick={() => setQuizToDelete(null)}
+                  style={styles.cancelBtn}
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={confirmDeleteQuiz}
+                  style={styles.dangerConfirmBtn}
+                >
+                  Удалить
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
-      </div>
+        )}
+      </AnimatePresence>
 
-      {/* Launch Quiz Button */}
-      <div style={styles.actionSection}>
-        <TactileButton
-          theme="green"
-          size="lg"
-          fullWidth
-          onClick={() => {
-            haptics.notification('success');
-            onStartQuiz?.();
+      {/* Kick Student Modal */}
+      <AnimatePresence>
+        {selectedStudentToKick && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={styles.modalBackdrop}
+            onClick={() => setSelectedStudentToKick(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 10 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9 }}
+              style={styles.confirmModalCard}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={styles.confirmTitle}>Исключить ученика?</h3>
+              <p style={styles.confirmDesc}>
+                {selectedStudentToKick.name} будет удален из текущей комнаты
+              </p>
+
+              <div style={styles.confirmBtnRow}>
+                <button
+                  onClick={() => setSelectedStudentToKick(null)}
+                  style={styles.cancelBtn}
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={() => handleKickStudent(selectedStudentToKick.id)}
+                  style={styles.dangerConfirmBtn}
+                >
+                  Исключить
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Quiz Question Inspector & Editor Modal */}
+      {editingQuiz && (
+        <QuizQuestionEditorModal
+          quiz={editingQuiz}
+          isOpen={isEditorOpen}
+          onClose={() => {
+            setIsEditorOpen(false);
+            setEditingQuiz(null);
           }}
-          iconBefore={<Rocket size={20} />}
-        >
-          Начать викторину
-        </TactileButton>
-      </div>
+          onSave={handleSaveEditedQuiz}
+        />
+      )}
 
-      {/* Bottom Glade with Mascot */}
-      <div style={styles.bottomGladeSection}>
-        <div style={styles.mascotSpeechBubble}>
-          <Sparkles size={14} color="#F59E0B" style={{ flexShrink: 0 }} />
-          <span>Все готовы? Тогда поехали!</span>
+      {/* Fullscreen Countdown Overlay */}
+      {countdown !== null && (
+        <div style={styles.countdownOverlay}>
+          <motion.div
+            key={countdown}
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 1.4, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+            style={styles.countdownNumber}
+          >
+            {countdown}
+          </motion.div>
+          <span style={styles.countdownLabel}>Приготовьтесь!</span>
         </div>
-
-        <div style={styles.mascotWrapper}>
-          <img
-            src="/assets/mascot/sprint_idle.png"
-            alt="Спринт в лесу"
-            style={styles.mascotImg}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -208,258 +752,448 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
-    backgroundPosition: 'center top',
-    backgroundSize: 'cover',
-    backgroundRepeat: 'no-repeat',
-    padding: '12px 14px 16px',
+    padding: '12px 14px 170px', // Extra bottom space for static sticky button!
     boxSizing: 'border-box',
     overflowY: 'auto',
     overflowX: 'hidden',
   },
-  header: {
+  toastContainer: {
+    position: 'fixed',
+    top: 14,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    backgroundColor: '#0F172A',
+    border: '1.5px solid #10B981',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
+    borderRadius: 12,
+    padding: '8px 16px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginBottom: 6,
-    zIndex: 4,
+    gap: 8,
+    zIndex: 9999,
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: '50%',
-    backgroundColor: 'rgba(17, 24, 39, 0.65)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
-    backdropFilter: 'blur(10px)',
-    WebkitBackdropFilter: 'blur(10px)',
+  toastText: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: '#F8FAFC',
+  },
+  topInfoBar: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'pointer',
-    touchAction: 'manipulation',
+    marginBottom: 8,
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: 800,
-    color: '#FFFFFF',
-    margin: 0,
-    letterSpacing: '-0.3px',
-  },
-  topicBadgeWrapper: {
-    display: 'flex',
-    justifyContent: 'center',
-    marginBottom: 10,
-    zIndex: 3,
-  },
-  topicBadge: {
+  activeQuizPill: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(14, 25, 45, 0.85)',
-    border: '1px solid rgba(16, 185, 129, 0.4)',
+    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+    border: '1px solid #334155',
     borderRadius: 999,
-    padding: '5px 14px',
-    fontSize: 12,
+    padding: '4px 12px',
+  },
+  sproutDot: {
+    fontSize: 13,
+  },
+  activeQuizTitle: {
+    fontSize: 12.5,
+    fontWeight: 800,
+    color: '#F8FAFC',
+    maxWidth: 220,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  activeQuizGrade: {
+    fontSize: 11,
     fontWeight: 700,
-    color: '#34D399',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
+    color: '#FBBF24',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    padding: '1px 6px',
+    borderRadius: 6,
   },
   pinCard: {
-    position: 'relative',
-    backgroundColor: 'rgba(14, 30, 58, 0.92)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
-    backdropFilter: 'blur(18px)',
-    WebkitBackdropFilter: 'blur(18px)',
-    borderRadius: 24,
-    padding: '16px 18px',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.45)',
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    padding: '12px 14px',
+    border: '1.5px solid #1E293B',
+    marginBottom: 10,
+    boxShadow: '0 8px 20px rgba(0, 0, 0, 0.3)',
+  },
+  pinHeader: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    marginBottom: 12,
-    zIndex: 3,
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   pinCardTitle: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-    marginBottom: 10,
+    fontSize: 11,
+    fontWeight: 800,
+    color: '#94A3B8',
+    letterSpacing: '0.06em',
+  },
+  onlineBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    fontSize: 11.5,
+    color: '#94A3B8',
+  },
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 999,
+    backgroundColor: '#10B981',
+    boxShadow: '0 0 6px #10B981',
   },
   pinRow: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
     cursor: 'pointer',
-    marginBottom: 12,
   },
   digitBoxesRow: {
     display: 'flex',
-    gap: 8,
+    gap: 6,
+    flex: 1,
   },
   digitBox: {
-    width: 44,
-    height: 54,
-    backgroundColor: 'rgba(11, 20, 38, 0.9)',
-    border: '1.5px solid rgba(255, 255, 255, 0.22)',
-    borderRadius: 14,
+    flex: 1,
+    height: 48,
+    backgroundColor: '#1E293B',
+    borderRadius: 10,
+    border: '1.5px solid #334155',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
   },
   digitChar: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 900,
     color: '#FFFFFF',
-    fontFamily: "'SF Mono', 'Fira Code', monospace",
+    fontFamily: 'monospace',
   },
   copyBtn: {
-    width: 44,
-    height: 54,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    border: '1px solid rgba(255, 255, 255, 0.15)',
+    width: 46,
+    height: 48,
+    backgroundColor: '#1E293B',
+    border: '1.5px solid #334155',
+    borderRadius: 10,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
+    flexShrink: 0,
   },
-  statusRow: {
+  studentsCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    padding: '10px 12px',
+    border: '1px solid #1E293B',
+    marginBottom: 12,
+  },
+  emptyStudents: {
     display: 'flex',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: 600,
+    padding: '6px 0',
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: '50%',
-    backgroundColor: '#10B981',
-    boxShadow: '0 0 10px #10B981',
-  },
-  statusText: {
-    fontSize: 13,
-    color: '#D1D5DB',
-  },
-  avatarsCard: {
-    backgroundColor: 'rgba(14, 25, 45, 0.85)',
-    border: '1px solid rgba(255, 255, 255, 0.14)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
-    borderRadius: 22,
-    padding: '14px 12px',
-    marginBottom: 14,
-    zIndex: 3,
-  },
-  avatarGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(5, 1fr)',
-    gap: 10,
+  studentsGrid: {
+    display: 'flex',
     alignItems: 'center',
+    gap: 10,
+    overflowX: 'auto',
+    paddingBottom: 2,
   },
-  avatarItem: {
+  studentItem: {
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
+    cursor: 'pointer',
+    flexShrink: 0,
   },
-  avatarCircle: {
+  studentAvatarCircle: {
     position: 'relative',
-    width: 46,
-    height: 46,
-    borderRadius: '50%',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    border: '1.5px solid rgba(255, 255, 255, 0.18)',
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: '#1E293B',
+    border: '1.5px solid #10B981',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarImg: {
-    width: '85%',
-    height: '85%',
-    objectFit: 'contain',
+  studentAvatarImg: {
+    width: 32,
+    height: 32,
+    objectFit: 'cover',
   },
-  avatarOnlineDot: {
+  studentOnlineDot: {
     position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 9,
-    height: 9,
-    borderRadius: '50%',
+    bottom: 1,
+    right: 1,
+    width: 6,
+    height: 6,
+    borderRadius: 999,
     backgroundColor: '#10B981',
-    border: '1.5px solid #0D1322',
   },
-  avatarName: {
-    fontSize: 10,
-    color: '#9CA3AF',
-    fontWeight: 600,
-    textAlign: 'center',
-    maxWidth: 54,
+  studentName: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: '#E2E8F0',
+    maxWidth: 50,
+    whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
   },
-  addAvatarBtn: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-    cursor: 'pointer',
-  },
-  addCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: '50%',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    border: '1.5px dashed rgba(255, 255, 255, 0.25)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionSection: {
+  templatesSectionCard: {
+    backgroundColor: '#0B132B',
+    borderRadius: 18,
+    padding: '14px',
+    border: '1px solid #1E293B',
     marginBottom: 12,
-    zIndex: 3,
   },
-  bottomGladeSection: {
-    position: 'relative',
+  templatesHeader: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
-  mascotSpeechBubble: {
-    backgroundColor: 'rgba(15, 23, 42, 0.94)',
-    border: '1.5px solid rgba(255, 255, 255, 0.2)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
-    borderRadius: 16,
-    padding: '6px 14px',
-    color: '#F9FAFB',
-    fontSize: 12,
-    fontWeight: 800,
+  templatesTitleRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 6,
-    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
   },
-  mascotWrapper: {
-    width: 95,
-    height: 95,
+  templatesTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+  },
+  mobileSquareGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(2, 1fr)', // Strict 2-column mobile layout!
+    gap: 10,
+  },
+  mobileSquareTile: {
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    padding: '12px 10px',
+    border: '1.5px solid #1E293B',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    minHeight: 148,
+    cursor: 'pointer',
+    position: 'relative',
+    transition: 'all 0.18s ease',
+    boxSizing: 'border-box',
+  },
+  mobileSquareTileActive: {
+    borderColor: '#10B981',
+    backgroundColor: '#09211A',
+    boxShadow: '0 0 0 1.5px #10B981, 0 6px 20px rgba(16, 185, 129, 0.22)',
+  },
+  tileTop: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  subjectPill: {
+    fontSize: 10,
+    fontWeight: 800,
+    color: '#CBD5E1',
+    backgroundColor: '#1E293B',
+    padding: '2px 6px',
+    borderRadius: 6,
+    maxWidth: 90,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  activeCheckBadge: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    width: 20,
+    height: 20,
+    borderRadius: 999,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
   },
-  mascotImg: {
-    maxHeight: '100%',
-    width: 'auto',
-    objectFit: 'contain',
-    filter: 'drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6))',
+  deleteMiniBtn: {
+    background: 'transparent',
+    border: 'none',
+    padding: 3,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+  },
+  tileCenter: {
+    margin: '8px 0',
+  },
+  tileTitleText: {
+    fontSize: 12.5,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    lineHeight: 1.3,
+    display: '-webkit-box',
+    WebkitLineClamp: 2,
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+  },
+  tileSubtitle: {
+    fontSize: 10.5,
+    color: '#94A3B8',
+    fontWeight: 600,
+    marginTop: 4,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  tileBottom: {
+    width: '100%',
+    marginTop: 4,
+  },
+  bigTouchViewBtn: {
+    width: '100%',
+    height: 36, // Finger-friendly touch height >= 36px
+    backgroundColor: '#1E293B',
+    border: '1px solid #334155',
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    color: '#E2E8F0',
+    fontSize: 11.5,
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  // Fixed / Static Bottom Button (Transparent container, floating above bottom dock)
+  stickyBottomBar: {
+    position: 'fixed',
+    bottom: 74,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    width: '100%',
+    maxWidth: 420,
+    padding: '0 16px',
+    boxSizing: 'border-box',
+    backgroundColor: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
+    pointerEvents: 'none',
+    zIndex: 22,
+  },
+  modalBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backdropFilter: 'blur(6px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 99999,
+    padding: 16,
+  },
+  confirmModalCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 18,
+    padding: 22,
+    border: '1.5px solid #334155',
+    maxWidth: 320,
+    width: '100%',
+    textAlign: 'center',
+    boxShadow: '0 20px 50px rgba(0, 0, 0, 0.6)',
+  },
+  deleteWarningIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '0 auto 12px',
+  },
+  confirmTitle: {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: '0 0 8px',
+  },
+  confirmDesc: {
+    fontSize: 13,
+    color: '#94A3B8',
+    lineHeight: 1.4,
+    margin: '0 0 18px',
+  },
+  confirmBtnRow: {
+    display: 'flex',
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    padding: '10px',
+    borderRadius: 10,
+    border: '1px solid #334155',
+    background: '#1E293B',
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  dangerConfirmBtn: {
+    flex: 1,
+    padding: '10px',
+    borderRadius: 10,
+    border: 'none',
+    background: '#EF4444',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(239, 68, 68, 0.4)',
+  },
+  countdownOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(5, 10, 20, 0.9)',
+    backdropFilter: 'blur(8px)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999999,
+  },
+  countdownNumber: {
+    fontSize: 90,
+    fontWeight: 900,
+    color: '#10B981',
+    lineHeight: 1,
+  },
+  countdownLabel: {
+    fontSize: 20,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    marginTop: 12,
   },
 };

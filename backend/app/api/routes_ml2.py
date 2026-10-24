@@ -216,6 +216,12 @@ async def list_textbooks(
     return {"textbooks": textbook_service.list_textbooks(subject=subject, grade=grade)}
 
 
+@router.get("/textbooks/preset-quizzes")
+async def get_preset_textbook_quizzes():
+    """Готовые проверенные викторины по 6 ключевым учебникам РФ из базы Ивана."""
+    return {"quizzes": textbook_service.get_preset_textbook_quizzes()}
+
+
 @router.get("/textbooks/{textbook_id}")
 async def get_textbook(textbook_id: str):
     """Оглавление учебника со всеми главами и параграфами."""

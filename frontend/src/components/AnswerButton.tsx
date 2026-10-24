@@ -5,7 +5,7 @@ import katex from 'katex';
 import { haptics } from '../services/haptics';
 
 export interface AnswerButtonProps {
-  color: 'red' | 'blue' | 'yellow' | 'green';
+  color: 'red' | 'blue' | 'yellow' | 'green' | 'orange';
   shape: 'triangle' | 'diamond' | 'circle' | 'square';
   text: string;
   latex?: string;
@@ -16,10 +16,15 @@ export interface AnswerButtonProps {
 }
 
 const BUTTON_THEMES: Record<
-  'red' | 'blue' | 'yellow' | 'green',
+  'red' | 'blue' | 'yellow' | 'green' | 'orange',
   { bg: string; shadow: string; glow: string }
 > = {
   red: {
+    bg: '#EF4444',
+    shadow: '#B91C1C',
+    glow: 'rgba(239, 68, 68, 0.8)',
+  },
+  orange: {
     bg: '#EF4444',
     shadow: '#B91C1C',
     glow: 'rgba(239, 68, 68, 0.8)',
@@ -41,7 +46,7 @@ const BUTTON_THEMES: Record<
   },
 };
 
-const SHAPE_SYMBOLS: Record<'triangle' | 'diamond' | 'circle' | 'square', string> = {
+const SHAPE_SYMBOLS: Record<string, string> = {
   triangle: '▲',
   diamond: '◆',
   circle: '●',
@@ -85,7 +90,7 @@ export default function AnswerButton({
 
   const isWrong = isCorrect === false && isSelected;
   const isWinner = isCorrect === true;
-  const theme = BUTTON_THEMES[color];
+  const theme = BUTTON_THEMES[color] || BUTTON_THEMES.red;
 
   return (
     <motion.div

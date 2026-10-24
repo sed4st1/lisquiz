@@ -76,7 +76,7 @@ body {
   height: 92vh;
   max-height: 880px;
   margin: 0 auto !important;
-  background: #0B132B;
+  background: #0B132B url('/assets/backgrounds/quiz_bg_clean.png') center top / cover no-repeat;
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 40px;
   box-shadow: 0 30px 90px -10px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08);
@@ -97,7 +97,7 @@ body {
     border-radius: 0;
     border: none;
     box-shadow: none;
-    background: var(--bg-primary);
+    background: #0B132B url('/assets/backgrounds/quiz_bg_clean.png') center top / cover no-repeat;
   }
 }
 
@@ -365,3 +365,74 @@ button, input, select, a, [role="button"] {
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
 }
 
+/* ===== Desktop Layout with Outside Dev Sidebar ===== */
+.desktop-layout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.dev-sidebar {
+  width: 250px;
+  background: rgba(14, 25, 45, 0.9);
+  border: 1px solid rgba(255, 122, 0, 0.35);
+  border-radius: 24px;
+  padding: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mobile-dev-toggle {
+  display: none;
+  position: fixed;
+  bottom: 74px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  background: #FF7A00;
+  border: 2px solid #FFFFFF;
+  box-shadow: 0 4px 18px rgba(255, 122, 0, 0.6);
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  cursor: pointer;
+}
+
+.mobile-dev-drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(11, 19, 43, 0.98);
+  border-top: 2px solid #FF7A00;
+  border-radius: 20px 20px 0 0;
+  padding: 16px;
+  z-index: 200;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.7);
+}
+
+@media (max-width: 820px) {
+  .desktop-layout {
+    gap: 0;
+    max-width: 100%;
+  }
+
+  .dev-sidebar {
+    display: none;
+  }
+
+  .mobile-dev-toggle {
+    display: flex;
+  }
+}

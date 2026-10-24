@@ -10,7 +10,11 @@ import {
   ChevronUp,
   CheckCircle2,
   BookOpen,
-  ArrowLeft,
+  ShieldAlert,
+  EyeOff,
+  Zap,
+  Lightbulb,
+  Download,
 } from 'lucide-react';
 import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
 
@@ -26,15 +30,88 @@ export interface QuestionAnalyticsItem {
   commonMistake?: string;
 }
 
+export interface MisconceptionItem {
+  misc_id: string;
+  title: string;
+  occurrences: number;
+  pct_of_class: number;
+  correction_hint?: string;
+}
+
+export interface CheatingAuditItem {
+  student_id: string;
+  student_name: string;
+  blur_count: number;
+  rapid_guess_count: number;
+  total_answers: number;
+  risk_level: 'CLEAN' | 'MEDIUM' | 'HIGH' | string;
+  flags: string[];
+}
+
 export interface TeacherGapReportProps {
   quizTitle?: string;
   topic?: string;
   grade?: number;
   totalStudents?: number;
   questions?: QuestionAnalyticsItem[];
+  topMisconceptions?: MisconceptionItem[];
+  cheatingAuditLog?: CheatingAuditItem[];
   onSendReviewTasks?: (topics: string[]) => void;
-  onBack?: () => void;
 }
+
+const DEFAULT_MISCONCEPTIONS: MisconceptionItem[] = [
+  {
+    misc_id: 'MC.EQ.DIV',
+    title: 'Выражение делителя из равенства (деление вместо умножения)',
+    occurrences: 11,
+    pct_of_class: 42.3,
+    correction_hint: 'Напомнить треугольник формул и правило: делитель = делимое разделить на частное.',
+  },
+  {
+    misc_id: 'MC.DENS.UNIT',
+    title: 'Перевод единиц плотности: путаница множителя 1000',
+    occurrences: 8,
+    pct_of_class: 30.8,
+    correction_hint: 'Напомнить правило: 1 г/см³ = 1000 кг/м³, кубический метр тяжелее в 1000 раз.',
+  },
+  {
+    misc_id: 'MC.ARCH.BODYDENS',
+    title: 'Подстановка плотности тела вместо жидкости в силу Архимеда',
+    occurrences: 5,
+    pct_of_class: 19.2,
+    correction_hint: 'Показать демонстрацию: сила Архимеда зависит только от вытесненной жидкости.',
+  },
+];
+
+const DEFAULT_CHEATING_LOG: CheatingAuditItem[] = [
+  {
+    student_id: 'p_104',
+    student_name: 'Максим Г.',
+    blur_count: 3,
+    rapid_guess_count: 2,
+    total_answers: 10,
+    risk_level: 'HIGH',
+    flags: ['Сворачивание вкладки во время вопроса (3 раза)', 'Клики быстрее порога чтения (2 раза)'],
+  },
+  {
+    student_id: 'p_112',
+    student_name: 'Егор В.',
+    blur_count: 2,
+    rapid_guess_count: 0,
+    total_answers: 10,
+    risk_level: 'MEDIUM',
+    flags: ['Сворачивание приложения во время теста (2 раза)'],
+  },
+  {
+    student_id: 'p_107',
+    student_name: 'Артём К.',
+    blur_count: 0,
+    rapid_guess_count: 1,
+    total_answers: 10,
+    risk_level: 'MEDIUM',
+    flags: ['Один ответ быстрее 0.8 сек (возможно угадывание)'],
+  },
+];
 
 const DEFAULT_QUESTIONS: QuestionAnalyticsItem[] = [
   {
@@ -149,8 +226,9 @@ export default function TeacherGapReport({
   grade = 5,
   totalStudents = 26,
   questions = DEFAULT_QUESTIONS,
+  topMisconceptions = DEFAULT_MISCONCEPTIONS,
+  cheatingAuditLog = DEFAULT_CHEATING_LOG,
   onSendReviewTasks,
-  onBack,
 }: TeacherGapReportProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [isSent, setIsSent] = useState(false);
@@ -172,6 +250,51 @@ export default function TeacherGapReport({
   const displayedQuestions =
     filterMode === 'weak' ? weakQuestions : questions;
 
+  const handleExportCSV = () => {
+    const rows = [
+      ['№', 'Тема вопроса', 'Текст вопроса', 'Верных ответов (%)', 'Всего ответов', 'Верно ответили', 'Частая ошибка'],
+      ...questions.map((q) => [
+        q.questionNumber,
+        q.topic,
+        `"${q.text.replace(/"/g, '""')}"`,
+        `${q.correctPercentage}%`,
+        q.totalAnswers,
+        q.correctAnswers,
+        `"${(q.commonMistake || '').replace(/"/g, '""')}"`,
+      ]),
+      [],
+      ['Частые когнитивные ошибки класса (Misconceptions)'],
+      ['Код', 'Формулировка ошибки', 'Учеников', 'Доля класса (%)', 'Педагогический совет'],
+      ...topMisconceptions.map((m) => [
+        m.misc_id,
+        `"${m.title.replace(/"/g, '""')}"`,
+        m.occurrences,
+        `${m.pct_of_class}%`,
+        `"${(m.correction_hint || '').replace(/"/g, '""')}"`,
+      ]),
+      [],
+      ['Аудит честности (Cheating Telemetry)'],
+      ['Ученик', 'Сворачиваний окна (Blur)', 'Быстрых кликов (Guess)', 'Всего ответов', 'Уровень риска'],
+      ...cheatingAuditLog.map((c) => [
+        c.student_name,
+        c.blur_count,
+        c.rapid_guess_count,
+        c.total_answers,
+        c.risk_level,
+      ]),
+    ];
+
+    const csvContent = '\uFEFF' + rows.map((e) => e.join(';')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `lisquiz_gap_report_${grade}кл.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSendTasks = () => {
     setIsSent(true);
     const weakTopicsList = weakQuestions.map((q) => q.topic);
@@ -188,25 +311,33 @@ export default function TeacherGapReport({
       <div style={styles.innerWrapper}>
         {/* Navigation & Header */}
         <header style={styles.header}>
-          <div style={styles.topActions}>
-            {onBack && (
-              <button onClick={onBack} style={styles.backButton}>
-                <ArrowLeft size={18} />
-                <span>Назад</span>
-              </button>
-            )}
-            <div style={styles.liveTag}>
-              <span style={styles.liveDot} />
-              <span>Синхронизировано со Сферум</span>
-            </div>
-          </div>
-
-          <div style={styles.titleSection}>
-            <h1 style={styles.title}>Отчёт по викторине</h1>
+          <div>
+            <h1 style={styles.headerTitle}>Отчёт по викторине</h1>
             <p style={styles.subtitle}>
-              {quizTitle} • {topic} ({grade} класс)
+              {quizTitle}, {topic} ({grade} класс)
             </p>
           </div>
+
+          <button
+            onClick={handleExportCSV}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: '#1E293B',
+              color: '#34D399',
+              border: 'none',
+              borderRadius: 12,
+              padding: '8px 12px',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: 'pointer',
+            }}
+            title="Экспорт в Excel / CSV для электронного журнала"
+          >
+            <Download size={15} color="#34D399" />
+            <span>Экспорт CSV</span>
+          </button>
         </header>
 
         {/* Mascot Insight Banner */}
@@ -404,7 +535,7 @@ export default function TeacherGapReport({
                 <div style={styles.weakTopicInfo}>
                   <div style={styles.weakTopicTitle}>{item.topic}</div>
                   <div style={styles.weakTopicSub}>
-                    Код ФРП: <strong>{item.kesCode}</strong> • Результат класса:{' '}
+                    Код ФРП: <strong>{item.kesCode}</strong>, результат класса:{' '}
                     <span style={{ color: colors.answerRed, fontWeight: 700 }}>
                       {item.correctPercentage}%
                     </span>
@@ -413,6 +544,168 @@ export default function TeacherGapReport({
                 <div style={styles.gapTag}>Пробел в знаниях</div>
               </div>
             ))}
+          </div>
+
+          {/* Частые ошибки класса (ML 2.0 Root-Cause DAG) */}
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Lightbulb size={18} color="#F59E0B" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                  Частые ошибки класса
+                </h3>
+                <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                  Дистракторы и когнитивные заблуждения по результатам теста
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+              {topMisconceptions.map((m, idx) => (
+                <div
+                  key={m.misc_id || idx}
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: 18,
+                    backgroundColor: '#151F36',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6,
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: '#FCD34D', flex: 1 }}>
+                      {m.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        padding: '4px 10px',
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(245, 158, 11, 0.18)',
+                        color: '#FBBF24',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {m.occurrences} чел ({m.pct_of_class}%)
+                    </span>
+                  </div>
+                  {m.correction_hint && (
+                    <div style={{ marginTop: 4 }}>
+                      <span style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.45 }}>
+                        💡 <strong style={{ color: '#D1D5DB' }}>Педагогический совет:</strong> {m.correction_hint}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Тихий античит: Аудит честности викторины */}
+          <div style={{ marginTop: 22 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShieldAlert size={18} color="#EF4444" />
+              </div>
+              <div>
+                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
+                  Аудит честности викторины
+                </h3>
+                <span style={{ fontSize: 12, color: '#9CA3AF' }}>
+                  Тихая телеметрия переключения окон и скорости ответов
+                </span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
+              {cheatingAuditLog.map((student) => {
+                const isHigh = student.risk_level === 'HIGH';
+                const isMedium = student.risk_level === 'MEDIUM';
+                const badgeBg = isHigh
+                  ? 'rgba(239, 68, 68, 0.22)'
+                  : isMedium
+                  ? 'rgba(245, 158, 11, 0.22)'
+                  : 'rgba(16, 185, 129, 0.22)';
+                const badgeColor = isHigh ? '#F87171' : isMedium ? '#FBBF24' : '#34D399';
+                const badgeText = isHigh ? 'Высокий риск' : isMedium ? 'Внимание' : 'Чисто';
+
+                return (
+                  <div
+                    key={student.student_id}
+                    style={{
+                      padding: '14px 16px',
+                      borderRadius: 18,
+                      backgroundColor: '#151F36',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12,
+                            fontWeight: 800,
+                            color: '#FFFFFF',
+                          }}
+                        >
+                          {student.student_name[0]}
+                        </div>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: '#FFFFFF' }}>
+                          {student.student_name}
+                        </span>
+                      </div>
+
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          padding: '3px 9px',
+                          borderRadius: 12,
+                          backgroundColor: badgeBg,
+                          color: badgeColor,
+                        }}
+                      >
+                        {badgeText}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: student.blur_count > 0 ? '#F87171' : '#9CA3AF' }}>
+                        <EyeOff size={13} />
+                        <span>Сворачиваний: <strong>{student.blur_count}</strong></span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: student.rapid_guess_count > 0 ? '#FBBF24' : '#9CA3AF' }}>
+                        <Zap size={13} />
+                        <span>Быстрых кликов: <strong>{student.rapid_guess_count}</strong></span>
+                      </div>
+                    </div>
+
+                    {student.flags && student.flags.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
+                        {student.flags.map((flag, fIdx) => (
+                          <span key={fIdx} style={{ fontSize: 11.5, color: '#9CA3AF' }}>
+                            • {flag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           {/* Action Button */}
@@ -455,11 +748,8 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     justifyContent: 'center',
-    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
-    backgroundPosition: 'center top',
-    backgroundSize: 'cover',
-    backgroundRepeat: 'no-repeat',
-    padding: `${spacing.md}px ${spacing.md}px ${spacing.xxxl}px`,
+    backgroundColor: 'transparent',
+    padding: `${spacing.md}px ${spacing.md}px 92px`,
     boxSizing: 'border-box',
     color: colors.textPrimary,
     overflowY: 'auto',
@@ -475,53 +765,19 @@ const styles: Record<string, React.CSSProperties> = {
   header: {
     display: 'flex',
     flexDirection: 'column',
-    gap: spacing.sm,
+    width: '100%',
+    marginBottom: 4,
+    zIndex: 4,
   },
-  topActions: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backButton: {
-    background: 'none',
-    border: 'none',
-    color: colors.textSecondary,
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
-    cursor: 'pointer',
-    fontSize: 14,
-    padding: 0,
-  },
-  liveTag: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    fontSize: 12,
-    color: colors.emeraldGreen,
-    backgroundColor: colors.emeraldGreenLight,
-    padding: '4px 10px',
-    borderRadius: borderRadius.pill,
-    fontWeight: 500,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: '50%',
-    backgroundColor: colors.emeraldGreen,
-  },
-  titleSection: {
-    marginTop: spacing.xs,
-  },
-  title: {
-    fontSize: 24,
+  headerTitle: {
+    fontSize: 17,
     fontWeight: 800,
-    letterSpacing: '-0.02em',
+    color: '#FFFFFF',
     margin: 0,
-    color: colors.textPrimary,
+    letterSpacing: '-0.3px',
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textSecondary,
     marginTop: 4,
   },

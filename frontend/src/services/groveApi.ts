@@ -446,3 +446,22 @@ export async function fetchStudentInventory(
     };
   }
 }
+
+
+// Aliases for compatibility with other frontend screens
+export type TreeStageInfo = StageInfo;
+export type LiebigBalance = LiebigResourceData;
+export type GroveState = GroveStateResponse;
+export type StudentContribution = StudentLeaderboardEntry;
+export type LeaderboardData = GroveLeaderboardResponse;
+export type CardPullResult = CardPullResponse;
+export type StudentInventory = StudentInventoryResponse;
+export type RevivalResult = RevivalResponse;
+
+export const groveApi = {
+  getGroveState: (classId: string = 'class_7a') => fetchGroveState(classId),
+  getWeeklyLeaderboard: (classId: string = 'class_7a') => fetchGroveLeaderboard(classId),
+  getStudentInventory: (studentId: string = 'current_student') => fetchStudentInventory(studentId),
+  pullCard: (studentId: string = 'current_student', cost: number = 50) => pullKnowledgeCard(studentId, cost),
+  completeRevival: (classId: string = 'class_7a') => reviveGrove(classId),
+};
