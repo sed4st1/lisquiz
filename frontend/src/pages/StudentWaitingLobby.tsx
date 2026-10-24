@@ -106,20 +106,14 @@ export default function StudentWaitingLobby({
       }
     };
 
-    // Auto-detect if room ceases to exist on the server
-    const roomPollInterval = setInterval(async () => {
-      if (!isMounted) return;
-      try {
-        const res = await fetch(`/api/rooms/${roomCode}`);
-        if (!res.ok) {
-          clearInterval(roomPollInterval);
-          socketService.disconnect();
-          onLeaveRoom();
-        }
-      } catch {
-        // network exception, keep retry
-      }
-    }, 2500);
+    socketService.on('SYNC_STATE', handleSync);
+    socketService.on('PLAYER_JOINED', handlePlayerJoined);
+    socketService.on('PLAYER_LEFT', handlePlayerLeft);
+    socketService.on('COUNTDOWN_START', handleCountdownStart);
+    socketService.on('DISCONNECT', handleDisconnect);
+    socketService.on('KICKED', handleKickOrExit);
+    socketService.on('ROOM_CLOSED', handleKickOrExit);
+    socketService.on('TEACHER_LEFT', handleKickOrExit);
 
     // Initial sync
     const cached = socketService.getLastSyncState();
@@ -130,14 +124,22 @@ export default function StudentWaitingLobby({
       socketService.send('GET_SYNC');
     }
 
-    socketService.on('SYNC_STATE', handleSync);
-    socketService.on('PLAYER_JOINED', handlePlayerJoined);
-    socketService.on('PLAYER_LEFT', handlePlayerLeft);
-    socketService.on('COUNTDOWN_START', handleCountdownStart);
-    socketService.on('DISCONNECT', handleDisconnect);
-    socketService.on('KICKED', handleKickOrExit);
-    socketService.on('ROOM_CLOSED', handleKickOrExit);
-    socketService.on('TEACHER_LEFT', handleKickOrExit);
+    // Auto-detect if room ceases to exist on the server + periodic sync
+    const roomPollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}`);
+        if (!res.ok) {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onLeaveRoom();
+        } else if (socketService.isConnected()) {
+          socketService.send('GET_SYNC');
+        }
+      } catch {
+        // network exception, keep retry
+      }
+    }, 2500);
 
     return () => {
       isMounted = false;

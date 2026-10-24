@@ -275,16 +275,6 @@ async def join_room(room_code: str, req: JoinRoomRequest):
             detail=f"Комната {room_code} не найдена или уже завершена",
         )
 
-    # Проверяем, что в комнате присутствует учитель (хост)
-    has_teacher = any(
-        s.role == UserRole.TEACHER
-        for s in ws_manager.rooms.get(room_code, {}).values()
-    )
-    if not has_teacher:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Комната {room_code} не найдена: учитель закрыл лобби или не в сети",
-        )
 
     try:
         player, token = await room_state_engine.join_room(

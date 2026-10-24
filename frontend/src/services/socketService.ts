@@ -84,6 +84,7 @@ class SocketService {
 
   public disconnect(): void {
     this.isExplicitDisconnect = true;
+    this.lastSyncState = null;
     this.stopHeartbeat();
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);

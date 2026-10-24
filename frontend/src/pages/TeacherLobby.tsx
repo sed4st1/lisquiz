@@ -133,6 +133,7 @@ export default function TeacherLobby({
     let handleJoined: ((data: any) => void) | null = null;
     let handleLeft: ((data: any) => void) | null = null;
     let handleCountdown: ((data: any) => void) | null = null;
+    let syncInterval: any = null;
 
     const setupRoom = async () => {
       let code = propPin && propPin !== '482915' ? propPin : '';
@@ -204,7 +205,6 @@ export default function TeacherLobby({
 
       try {
         await socketService.connect(code, token);
-        socketService.send('GET_SYNC');
 
         handleSync = (data: any) => {
           if (!isMounted) return;
@@ -266,6 +266,15 @@ export default function TeacherLobby({
         socketService.on('PLAYER_JOINED', handleJoined);
         socketService.on('PLAYER_LEFT', handleLeft);
         socketService.on('COUNTDOWN_START', handleCountdown);
+
+        socketService.send('GET_SYNC');
+
+        syncInterval = setInterval(() => {
+          if (!isMounted) return;
+          if (socketService.isConnected()) {
+            socketService.send('GET_SYNC');
+          }
+        }, 2000);
       } catch (err) {
         console.error('WebSocket connection error in TeacherLobby:', err);
       }
@@ -275,6 +284,7 @@ export default function TeacherLobby({
 
     return () => {
       isMounted = false;
+      if (syncInterval) clearInterval(syncInterval);
       if (handleSync) socketService.off('SYNC_STATE', handleSync);
       if (handleJoined) socketService.off('PLAYER_JOINED', handleJoined);
       if (handleLeft) socketService.off('PLAYER_LEFT', handleLeft);

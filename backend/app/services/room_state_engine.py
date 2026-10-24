@@ -330,7 +330,7 @@ class RoomStateEngine:
             # Очистка предыдущих неактивных/дублирующихся сессий с тем же именем в лобби
             ghost_ids = [
                 pid for pid, p in room.players.items()
-                if p.name.strip().lower() == name.strip().lower() and not p.connected
+                if p.name.strip().lower() == name.strip().lower()
             ]
             for gid in ghost_ids:
                 room.players.pop(gid, None)
