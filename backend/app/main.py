@@ -71,6 +71,7 @@ app.include_router(rooms_router)
 app.include_router(ws_router)
 app.include_router(max_router)
 app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
+app.include_router(routes_quiz.router, prefix="/api/quizzes", tags=["Quizzes"])
 app.include_router(routes_ml2.router, prefix="/api/ml2", tags=["ML 2.0"])
 app.include_router(routes_grove.router, prefix="/api/grove", tags=["Class Grove"])
 

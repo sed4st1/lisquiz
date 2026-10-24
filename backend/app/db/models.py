@@ -28,6 +28,8 @@ class QuizModel(Base):
     subject: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     grade: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     topic: Mapped[str] = mapped_column(String(255), nullable=False)
+    group_label: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    teacher_pseudonym_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     source_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -57,6 +59,8 @@ class QuestionModel(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     time_limit_sec: Mapped[int] = mapped_column(Integer, default=20, nullable=False)
+    tier: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    is_boss: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     topic: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     kes_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 

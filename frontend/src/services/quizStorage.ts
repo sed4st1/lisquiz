@@ -1,4 +1,5 @@
 import textbookPresets from './textbook_presets.json';
+import { quizApi } from './quizApi';
 
 export interface QuizOption {
   id: number;
@@ -78,6 +79,8 @@ export const quizStorage = {
       updated = [{ ...quiz, updated_at: new Date().toISOString() }, ...list];
     }
     this.saveQuizzes(updated);
+    // Asynchronously sync directly to DB
+    quizApi.saveQuiz(quiz).catch((err) => console.warn('Failed to sync quiz to DB:', err));
     return updated;
   },
 
@@ -105,6 +108,7 @@ export const quizStorage = {
 
     const updated = [duplicated, ...list];
     this.saveQuizzes(updated);
+    quizApi.saveQuiz(duplicated).catch((err) => console.warn('Failed to sync duplicated quiz to DB:', err));
     return duplicated;
   },
 
@@ -122,7 +126,22 @@ export const quizStorage = {
     const list = this.getSavedQuizzes();
     const updated = list.filter((q) => q.id !== quizId);
     this.saveQuizzes(updated.length > 0 ? updated : DEFAULT_PRESET_QUIZZES);
+    // Asynchronously delete from DB
+    quizApi.deleteQuiz(quizId).catch((err) => console.warn('Failed to delete quiz from DB:', err));
     return updated;
+  },
+
+  async syncFromDb(): Promise<SavedQuiz[]> {
+    try {
+      const dbQuizzes = await quizApi.listQuizzes();
+      if (dbQuizzes && dbQuizzes.length > 0) {
+        this.saveQuizzes(dbQuizzes);
+        return dbQuizzes;
+      }
+    } catch (e) {
+      console.warn('Failed to sync quizzes from DB:', e);
+    }
+    return this.getSavedQuizzes();
   },
 
   mergePresetQuizzes(serverPresets: SavedQuiz[]): SavedQuiz[] {

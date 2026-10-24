@@ -57,6 +57,8 @@ class Quiz(BaseModel):
     subject: str = "Математика"
     grade: int = 7
     topic: str = "Школьная программа"
+    group_label: Optional[str] = None
+    teacher_pseudonym_id: Optional[str] = None
     questions: List[Question]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source: Optional[str] = "bank"  # "bank", "gigachat", "ocr"

@@ -10,9 +10,7 @@ import {
   BookOpen,
   CheckCircle2,
   Trash2,
-  Bot,
 } from 'lucide-react';
-import { testHarness } from '../services/testHarness';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
 import { socketService } from '../services/socketService';
@@ -89,21 +87,6 @@ export default function TeacherLobby({
   const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isAddingBots, setIsAddingBots] = useState(false);
-
-  const handleAddMockBots = async (count: number) => {
-    if (!activePin) return;
-    setIsAddingBots(true);
-    haptics.impact('light');
-    try {
-      const added = await testHarness.addMockStudents(activePin, count);
-      showToast(`🤖 Добавлено ${added} тестовых учеников!`);
-    } catch {
-      showToast('Ошибка подключения ботов');
-    } finally {
-      setIsAddingBots(false);
-    }
-  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -112,12 +95,14 @@ export default function TeacherLobby({
     }, 3200);
   };
 
-  // 1. Fetch real textbook presets from Ivan's backend
+  // 1. Fetch real quizzes from backend DB
   useEffect(() => {
-    roomApi.getPresetTextbookQuizzes().then((serverPresets) => {
-      if (serverPresets && serverPresets.length > 0) {
-        const merged = quizStorage.mergePresetQuizzes(serverPresets);
-        setSavedQuizzes(merged);
+    quizStorage.syncFromDb().then((dbQuizzes) => {
+      if (dbQuizzes && dbQuizzes.length > 0) {
+        setSavedQuizzes(dbQuizzes);
+        if (!activeQuizId) {
+          setActiveQuizId(dbQuizzes[0].id);
+        }
       }
     });
   }, []);
@@ -492,46 +477,12 @@ export default function TeacherLobby({
         </div>
       </motion.div>
 
-      {/* QA & Testing Quick Bots Bar */}
-      <div style={styles.testBotsBar}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <Bot size={14} color="#60A5FA" />
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#93C5FD' }}>Тест:</span>
-        </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <button
-            type="button"
-            onClick={() => handleAddMockBots(3)}
-            disabled={isAddingBots}
-            style={styles.testBotBtn}
-          >
-            +3 бота
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAddMockBots(5)}
-            disabled={isAddingBots}
-            style={styles.testBotBtn}
-          >
-            +5 ботов
-          </button>
-          <button
-            type="button"
-            onClick={() => handleAddMockBots(8)}
-            disabled={isAddingBots}
-            style={{ ...styles.testBotBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
-          >
-            Класс (8)
-          </button>
-        </div>
-      </div>
-
       {/* Students Avatar Strip */}
       <div style={styles.studentsCard}>
         {students.length === 0 ? (
           <div style={styles.emptyStudents}>
             <Users size={18} color="#60A5FA" />
-            <span>Ждём подключения учеников (ввод PIN с экрана)</span>
+            <span>Ученики подключаются...</span>
           </div>
         ) : (
           <div style={styles.studentsGrid}>
@@ -563,100 +514,89 @@ export default function TeacherLobby({
         )}
       </div>
 
-      {/* Quizzes Templates (2-Column Mobile Square Tiles) */}
+      {/* Quizzes Templates (Simplified Mobile View) */}
       <div style={styles.templatesSectionCard}>
         <div style={styles.templatesHeader}>
           <div style={styles.templatesTitleRow}>
-            <BookOpen size={17} color="#60A5FA" />
-            <h2 style={styles.templatesTitle}>Шаблоны викторин</h2>
+            <BookOpen size={16} color="#60A5FA" />
+            <h2 style={styles.templatesTitle}>Викторина для игры</h2>
           </div>
 
-          {/* Pleasant Tactile Button for "Свой тест" matching project design */}
           <TactileButton
             theme="blue"
             size="sm"
             onClick={handleCreateNewQuizTemplate}
-            iconBefore={<Plus size={15} />}
+            iconBefore={<Plus size={14} />}
           >
             Свой тест
           </TactileButton>
         </div>
 
-        {/* 2-Column Square Tiles Grid (Optimized for Mobile Phones) */}
-        <div style={styles.mobileSquareGrid}>
-          {savedQuizzes.map((q) => {
-            const isActive = q.id === activeQuizId;
-            const qCount = q.questions.length;
-            const icon = getSubjectIcon(q.subject);
-
-            return (
-              <motion.div
-                key={q.id}
-                layout
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleSelectQuiz(q)}
-                style={{
-                  ...styles.mobileSquareTile,
-                  ...(isActive ? styles.mobileSquareTileActive : {}),
-                }}
-              >
-                {/* Top: Subject Badge & Status / Delete */}
-                <div style={styles.tileTop}>
-                  <span style={styles.subjectPill}>
-                    {icon} {q.subject || 'Тест'}
-                  </span>
-
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {isActive ? (
-                      <div style={styles.activeCheckBadge} title="Активна для запуска">
-                        <CheckCircle2 size={14} color="#10B981" />
-                      </div>
-                    ) : null}
-
-                    {savedQuizzes.length > 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRequestDelete(q);
-                        }}
-                        style={styles.deleteMiniBtn}
-                        title="Удалить викторину"
-                      >
-                        <Trash2 size={13} color="#94A3B8" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Center: Title & Subtitle */}
-                <div style={styles.tileCenter}>
-                  <div style={styles.tileTitleText} title={q.title}>
-                    {q.title}
-                  </div>
-                  <div style={styles.tileSubtitle}>
-                    {q.group_label || `${q.grade} класс`}
-                  </div>
-                </div>
-
-                {/* Bottom: Large, Thumb-Friendly View & Edit Button (No Copy button) */}
-                <div style={styles.tileBottom}>
+        {/* Active Quiz Card */}
+        {(() => {
+          const activeQuiz = savedQuizzes.find((q) => q.id === activeQuizId) || savedQuizzes[0];
+          if (!activeQuiz) return null;
+          const qCount = activeQuiz.questions?.length || 0;
+          return (
+            <div style={styles.activeQuizCard}>
+              <div style={styles.activeQuizTopRow}>
+                <span style={styles.activeQuizBadge}>
+                  {getSubjectIcon(activeQuiz.subject)} {activeQuiz.subject} • {activeQuiz.grade} кл
+                </span>
+                <span style={styles.activeQuizQuestionsCount}>
+                  {qCount} вопр.
+                </span>
+              </div>
+              <h3 style={styles.activeQuizTitleText}>{activeQuiz.title}</h3>
+              <div style={styles.activeQuizFooter}>
+                <button
+                  type="button"
+                  onClick={() => handleEditQuiz(activeQuiz)}
+                  style={styles.editQuizActionBtn}
+                >
+                  <Eye size={14} color="#60A5FA" />
+                  <span>Редактировать вопросы</span>
+                </button>
+                {savedQuizzes.length > 1 && (
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditQuiz(q);
-                    }}
-                    style={styles.bigTouchViewBtn}
-                    title="Открыть редактор вопросов"
+                    onClick={() => handleRequestDelete(activeQuiz)}
+                    style={styles.deleteActiveQuizBtn}
+                    title="Удалить викторину"
                   >
-                    <Eye size={15} color="#60A5FA" />
-                    <span>Вопросы ({qCount})</span>
+                    <Trash2 size={14} color="#EF4444" />
                   </button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Compact Horizontal Scroll / Chips for Selecting Other Quizzes */}
+        <div style={styles.quizChipsScroll}>
+          {savedQuizzes.map((q) => {
+            const isSel = q.id === activeQuizId;
+            return (
+              <button
+                key={q.id}
+                type="button"
+                onClick={() => handleSelectQuiz(q)}
+                style={{
+                  ...styles.quizChipItem,
+                  borderColor: isSel ? '#FF7A00' : 'rgba(255, 255, 255, 0.1)',
+                  backgroundColor: isSel ? 'rgba(255, 122, 0, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {isSel && <CheckCircle2 size={13} color="#FF7A00" />}
+                  <span style={{ color: isSel ? '#FF7A00' : '#FFFFFF', fontWeight: 700, fontSize: 12.5 }}>
+                    {q.title}
+                  </span>
                 </div>
-              </motion.div>
+                <span style={{ fontSize: 10.5, color: '#9CA3AF' }}>
+                  {q.subject} • {q.questions?.length || 0} в.
+                </span>
+              </button>
             );
           })}
         </div>
@@ -1050,10 +990,91 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#FFFFFF',
     margin: 0,
   },
-  mobileSquareGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)', // Strict 2-column mobile layout!
-    gap: 10,
+  activeQuizCard: {
+    backgroundColor: '#0F172A',
+    borderRadius: 16,
+    padding: '12px 14px',
+    border: '1.5px solid rgba(59, 130, 246, 0.35)',
+    marginBottom: 10,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  activeQuizTopRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  activeQuizBadge: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#93C5FD',
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+    padding: '2px 8px',
+    borderRadius: 6,
+  },
+  activeQuizQuestionsCount: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: 600,
+  },
+  activeQuizTitleText: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: 0,
+    lineHeight: 1.35,
+  },
+  activeQuizFooter: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  editQuizActionBtn: {
+    flex: 1,
+    height: 34,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+  },
+  deleteActiveQuizBtn: {
+    width: 34,
+    height: 34,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  quizChipsScroll: {
+    display: 'flex',
+    gap: 8,
+    overflowX: 'auto',
+    paddingBottom: 4,
+  },
+  quizChipItem: {
+    flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 3,
+    padding: '8px 12px',
+    borderRadius: 12,
+    border: '1px solid',
+    cursor: 'pointer',
+    textAlign: 'left',
+    maxWidth: 200,
   },
   mobileSquareTile: {
     backgroundColor: '#0F172A',

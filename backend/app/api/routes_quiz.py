@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
-from typing import List, Optional, Dict
+from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends, Header
+from typing import List, Optional, Dict, Any
+from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.schemas import Quiz, QuizCreateRequest, Question
 from ..services.ai_service import ai_service
 from ..services.bank_service import bank_service
+from ..services.auth_service import auth_service
+from ..services import quiz_service
+from ..db.session import get_db
 
 router = APIRouter()
 
@@ -107,9 +111,6 @@ async def generate_quiz_from_image(
         raise HTTPException(status_code=500, detail=f"Ошибка генерации: {str(e)}")
 
 
-# Локальное хранилище для сохраненных/отредактированных викторин
-SAVED_QUIZZES: Dict[str, Quiz] = {}
-
 
 @router.get("/catalog/topics")
 async def get_catalog_topics(subject: Optional[str] = None, grade: Optional[int] = None):
@@ -137,35 +138,86 @@ async def get_catalog_topics(subject: Optional[str] = None, grade: Optional[int]
     return {"catalog": catalog}
 
 
-@router.post("", response_model=Quiz)
-async def save_quiz(quiz: Quiz):
-    """
-    Сохранение отредактированной викторины.
-    """
-    import uuid
-    if not quiz.id:
-        quiz.id = f"quiz_{uuid.uuid4().hex[:8]}"
-    SAVED_QUIZZES[quiz.id] = quiz
-    return quiz
+def _extract_teacher_id(authorization: Optional[str] = None) -> str:
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ")[1]
+        payload = auth_service.decode_access_token(token)
+        if payload and payload.get("pseudonym_id"):
+            return payload["pseudonym_id"]
+    return "teacher_host"
 
 
-@router.get("/{quiz_id}", response_model=Quiz)
-async def get_quiz(quiz_id: str):
+@router.get("", response_model=List[Dict[str, Any]])
+async def get_all_quizzes(
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Получение структуры сохраненной викторины по ID.
+    Получение всех доступных викторин из базы данных:
+    проверенные шаблоны РФ + викторины, созданные текущим учителем.
     """
-    if quiz_id in SAVED_QUIZZES:
-        return SAVED_QUIZZES[quiz_id]
-    raise HTTPException(status_code=404, detail=f"Викторина с ID '{quiz_id}' не найдена")
+    teacher_id = _extract_teacher_id(authorization)
+    return await quiz_service.list_quizzes(db, teacher_id)
+
+
+@router.post("", response_model=Dict[str, Any])
+async def save_quiz_to_db(
+    quiz: Quiz,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Создание или обновление викторины прямо в базе данных с привязкой к учителю.
+    """
+    teacher_id = _extract_teacher_id(authorization)
+    quiz_dict = quiz.model_dump()
+    saved = await quiz_service.save_or_update_quiz(db, quiz_dict, teacher_id)
+    return saved
+
+
+@router.get("/{quiz_id}", response_model=Dict[str, Any])
+async def get_quiz_from_db(
+    quiz_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Получение структуры сохраненной викторины из БД по ID.
+    """
+    quiz_data = await quiz_service.get_quiz_by_id(db, quiz_id)
+    if not quiz_data:
+        raise HTTPException(status_code=404, detail=f"Викторина '{quiz_id}' не найдена в базе данных")
+    return quiz_data
+
+
+@router.put("/{quiz_id}", response_model=Dict[str, Any])
+async def update_quiz_in_db(
+    quiz_id: str,
+    quiz: Quiz,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Редактирование викторины в базе данных.
+    """
+    teacher_id = _extract_teacher_id(authorization)
+    quiz_dict = quiz.model_dump()
+    quiz_dict["id"] = quiz_id
+    saved = await quiz_service.save_or_update_quiz(db, quiz_dict, teacher_id)
+    return saved
 
 
 @router.delete("/{quiz_id}")
-async def delete_quiz(quiz_id: str):
+async def delete_quiz_from_db(
+    quiz_id: str,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
     """
-    Удаление викторины.
+    Удаление викторины из базы данных.
     """
-    if quiz_id in SAVED_QUIZZES:
-        del SAVED_QUIZZES[quiz_id]
-        return {"status": "deleted", "quiz_id": quiz_id}
-    raise HTTPException(status_code=404, detail=f"Викторина с ID '{quiz_id}' не найдена")
+    teacher_id = _extract_teacher_id(authorization)
+    deleted = await quiz_service.delete_quiz(db, quiz_id, teacher_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Викторина '{quiz_id}' не найдена")
+    return {"status": "deleted", "quiz_id": quiz_id}
 
