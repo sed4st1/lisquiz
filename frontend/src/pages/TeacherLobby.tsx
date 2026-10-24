@@ -536,40 +536,27 @@ export default function TeacherLobby({
         )}
       </div>
 
-      {/* Шаблоны викторин (Компактные квадратики без воды) */}
+      {/* Шаблоны викторин (Список прямоугольников #151f36 без обводки) */}
       <div style={styles.templatesSection}>
         <div style={styles.templatesHeader}>
           <div style={styles.templatesHeaderLeft}>
             <span style={styles.templatesSectionTitle}>Шаблоны викторин</span>
-            <span style={styles.templatesSubBadge}>{allQuizzes.length} тем</span>
+            <span style={styles.templatesSubBadge}>{allQuizzes.length}</span>
           </div>
           <button
             type="button"
-            onClick={() => onNavigateToCreateQuiz?.()}
-            style={styles.manageQuizzesLink}
-          >
-            Конструктор →
-          </button>
-        </div>
-
-        <div style={styles.squaresGrid}>
-          {/* Квадратик 0: Создать свой тест */}
-          <motion.div
-            whileTap={{ scale: 0.95 }}
             onClick={() => {
               haptics.impact('light');
               onNavigateToCreateQuiz ? onNavigateToCreateQuiz() : handleCreateNewQuizTemplate();
             }}
-            style={styles.createSquareTile}
-            title="Создать свой тест"
+            style={styles.createTestBtn}
           >
-            <div style={styles.createIconCircle}>
-              <Plus size={20} color="#60A5FA" />
-            </div>
-            <span style={styles.createSquareText}>Свой тест</span>
-          </motion.div>
+            <Plus size={14} color="#60A5FA" />
+            <span>Создать тест</span>
+          </button>
+        </div>
 
-          {/* Квадратики 1..N: Шаблоны и квизы */}
+        <div style={styles.templatesList}>
           {allQuizzes.map((q) => {
             const isSel = q.id === activeQuizId;
             const isCustom = !PRESET_CLEAN_MAP[q.id];
@@ -579,34 +566,53 @@ export default function TeacherLobby({
             return (
               <motion.div
                 key={q.id}
-                whileTap={{ scale: 0.95 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => handleSelectQuiz(q)}
                 style={{
-                  ...styles.squareTile,
-                  borderColor: isSel ? '#FF7A00' : '#233354',
-                  backgroundColor: isSel ? 'rgba(255, 122, 0, 0.16)' : '#111C35',
-                  boxShadow: isSel ? '0 0 14px rgba(255, 122, 0, 0.35)' : 'none',
+                  ...styles.templateRect,
+                  backgroundColor: isSel ? '#1d2a4a' : '#151f36',
                 }}
               >
-                {/* Верхняя строка: Иконка + Чекмарк или Редактировать */}
-                <div style={styles.tileTopRow}>
-                  <span style={styles.tileEmoji}>{icon}</span>
-                  {isSel ? (
-                    <div style={styles.activeCheckBadge}>
-                      <Check size={11} color="#FFFFFF" strokeWidth={3} />
+                {/* Левая часть: Иконка + Название без воды + Мета */}
+                <div style={styles.rectLeft}>
+                  <div
+                    style={{
+                      ...styles.rectIconBox,
+                      backgroundColor: isSel ? 'rgba(255, 122, 0, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                    }}
+                  >
+                    <span style={styles.rectEmoji}>{icon}</span>
+                  </div>
+
+                  <div style={styles.rectTexts}>
+                    <div
+                      style={{
+                        ...styles.rectTitle,
+                        color: isSel ? '#FFFFFF' : '#E2E8F0',
+                      }}
+                    >
+                      {q.title}
                     </div>
-                  ) : isCustom ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <div style={styles.rectMeta}>
+                      {q.subject} • {q.grade} класс • {q.questions?.length || 0} вопр.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Правая часть: Управление для своих тестов + Радио-круг выбора */}
+                <div style={styles.rectRight}>
+                  {isCustom && !isSel && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 6 }}>
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleEditQuiz(q);
                         }}
-                        style={styles.tileEditBtn}
+                        style={styles.rectActionBtn}
                         title="Редактировать"
                       >
-                        <Edit3 size={11} color="#94A3B8" />
+                        <Edit3 size={14} color="#94A3B8" />
                       </button>
                       <button
                         type="button"
@@ -614,30 +620,22 @@ export default function TeacherLobby({
                           e.stopPropagation();
                           handleRequestDelete(q);
                         }}
-                        style={styles.tileEditBtn}
+                        style={styles.rectActionBtn}
                         title="Удалить"
                       >
-                        <Trash2 size={11} color="#EF4444" />
+                        <Trash2 size={14} color="#EF4444" />
                       </button>
                     </div>
-                  ) : (
-                    <div style={{ width: 14 }} />
                   )}
-                </div>
 
-                {/* Центр: Короткое понятное название без воды */}
-                <div
-                  style={{
-                    ...styles.tileTitle,
-                    color: isSel ? '#FFFFFF' : '#E2E8F0',
-                  }}
-                >
-                  {q.title}
-                </div>
-
-                {/* Низ: Класс и число вопросов */}
-                <div style={styles.tileMeta}>
-                  {q.grade} кл • {q.questions?.length || 0} в.
+                  <div
+                    style={{
+                      ...styles.rectRadioCircle,
+                      backgroundColor: isSel ? '#FF7A00' : 'rgba(255, 255, 255, 0.08)',
+                    }}
+                  >
+                    {isSel && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                  </div>
                 </div>
               </motion.div>
             );
@@ -1010,11 +1008,10 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
   },
   templatesSection: {
-    backgroundColor: '#0B132B',
-    borderRadius: 18,
-    padding: '12px',
-    border: '1.5px solid #1E293B',
-    marginBottom: 12,
+    backgroundColor: 'transparent',
+    border: 'none',
+    padding: 0,
+    marginBottom: 16,
   },
   templatesHeader: {
     display: 'flex',
@@ -1026,7 +1023,7 @@ const styles: Record<string, React.CSSProperties> = {
   templatesHeaderLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   templatesSectionTitle: {
     fontSize: 12,
@@ -1036,111 +1033,111 @@ const styles: Record<string, React.CSSProperties> = {
     letterSpacing: '0.04em',
   },
   templatesSubBadge: {
-    fontSize: 10.5,
+    fontSize: 11,
     fontWeight: 700,
     color: '#60A5FA',
     backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    padding: '1px 6px',
+    padding: '1px 7px',
     borderRadius: 6,
   },
-  manageQuizzesLink: {
-    background: 'none',
+  createTestBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
     border: 'none',
+    borderRadius: 8,
     color: '#60A5FA',
     fontSize: 12,
     fontWeight: 700,
     cursor: 'pointer',
-    padding: '2px 4px',
+    padding: '5px 10px',
   },
-  squaresGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 8,
-  },
-  createSquareTile: {
-    minHeight: 100,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    border: '1.5px dashed rgba(255, 255, 255, 0.22)',
+  templatesList: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
-    cursor: 'pointer',
-    padding: '8px 4px',
-    boxSizing: 'border-box',
   },
-  createIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 999,
-    backgroundColor: 'rgba(96, 165, 250, 0.15)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  createSquareText: {
-    fontSize: 11.5,
-    fontWeight: 700,
-    color: '#93C5FD',
-    textAlign: 'center',
-  },
-  squareTile: {
-    minHeight: 100,
+  templateRect: {
+    backgroundColor: '#151f36',
+    border: 'none',
     borderRadius: 14,
-    border: '1.5px solid',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '8px 6px',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
-    boxSizing: 'border-box',
-  },
-  tileTopRow: {
+    padding: '12px 14px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: '100%',
-    padding: '0 2px',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s ease',
   },
-  tileEmoji: {
+  rectLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    minWidth: 0,
+  },
+  rectIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    border: 'none',
+  },
+  rectEmoji: {
     fontSize: 18,
     lineHeight: 1,
   },
-  activeCheckBadge: {
-    width: 17,
-    height: 17,
-    borderRadius: 999,
-    backgroundColor: '#FF7A00',
+  rectTexts: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+    minWidth: 0,
+    flex: 1,
+  },
+  rectTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    lineHeight: 1.25,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rectMeta: {
+    fontSize: 11.5,
+    fontWeight: 600,
+    color: '#94A3B8',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rectRight: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 4,
+    flexShrink: 0,
   },
-  tileEditBtn: {
+  rectActionBtn: {
     background: 'none',
     border: 'none',
-    padding: 2,
+    padding: 4,
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tileTitle: {
-    fontSize: 12.5,
-    fontWeight: 800,
-    textAlign: 'center',
-    lineHeight: 1.25,
-    margin: '4px 0',
-    wordBreak: 'break-word',
-  },
-  tileMeta: {
-    fontSize: 10,
-    fontWeight: 600,
-    color: '#94A3B8',
-    textAlign: 'center',
+  rectRadioCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    border: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    transition: 'all 0.15s ease',
   },
   // Fixed / Static Bottom Button (Transparent container, floating above bottom dock)
   stickyBottomBar: {
