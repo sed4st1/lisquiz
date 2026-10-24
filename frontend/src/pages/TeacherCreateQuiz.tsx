@@ -16,6 +16,7 @@ import {
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
 import { roomApi } from '../services/roomApi';
+import { classApi, ClassItem } from '../services/classApi';
 
 export interface TextbookItem {
   id: string;
@@ -47,6 +48,9 @@ const FALLBACK_TEXTBOOKS: TextbookItem[] = [
 export interface TeacherCreateQuizProps {
   onQuizCreated?: (roomData?: any) => void;
   onNavigateToLobby?: () => void;
+  onOpenClassManagement?: (initialCreate?: boolean) => void;
+  initialClassId?: string;
+  initialClassName?: string;
 }
 
 const SUBJECTS = [
@@ -76,7 +80,14 @@ const TOPIC_PRESETS: Record<string, string[]> = {
 export default function TeacherCreateQuiz({
   onQuizCreated,
   onNavigateToLobby,
+  onOpenClassManagement,
+  initialClassId,
+  initialClassName,
 }: TeacherCreateQuizProps) {
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
+  const quizBuilderRef = useRef<HTMLDivElement | null>(null);
+
   const [subject, setSubject] = useState<string>('Математика');
   const [grade, setGrade] = useState<number>(7);
   const [topic, setTopic] = useState<string>('Дроби');
@@ -88,8 +99,8 @@ export default function TeacherCreateQuiz({
   const [selectedParagraph, setSelectedParagraph] = useState<ParagraphItem | null>(null);
   const [inspectingTextbook, setInspectingTextbook] = useState<any | null>(null);
   const [textbookModalStep, setTextbookModalStep] = useState<'books' | 'paragraphs'>('books');
-  const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | 'textbook' | null>(null);
-  const [speechText, setSpeechText] = useState<string>('Привет! Я Спринт. Помогу создать отличную викторину по школьной программе!');
+  const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | 'textbook' | 'class' | null>(null);
+  const [speechText, setSpeechText] = useState<string>('Привет! Я Спринт. Создайте класс для постоянного рейтинга или выберите учебник для викторины!');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -102,7 +113,26 @@ export default function TeacherCreateQuiz({
         }
       })
       .catch(() => {});
-  }, []);
+
+    classApi.listClasses()
+      .then((list) => {
+        if (list && list.length > 0) {
+          setClasses(list);
+          if (initialClassId) {
+            const found = list.find((c) => c.id === initialClassId);
+            if (found) setSelectedClass(found);
+            else setSelectedClass(list[0]);
+          } else if (initialClassName) {
+            const found = list.find((c) => c.name === initialClassName);
+            if (found) setSelectedClass(found);
+            else setSelectedClass(list[0]);
+          } else if (!selectedClass) {
+            setSelectedClass(list[0]);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [initialClassId, initialClassName]);
 
   const handleSelectTextbookForInspection = async (tb: TextbookItem) => {
     haptics.selection();
@@ -140,6 +170,7 @@ export default function TeacherCreateQuiz({
         question_count: questionCount,
         textbook_id: selectedTextbook?.id,
         paragraph_num: selectedParagraph?.num,
+        class_id: selectedClass?.id,
       });
 
       setTimeout(() => {
@@ -170,8 +201,96 @@ export default function TeacherCreateQuiz({
     <div style={styles.container}>
       {/* Top Header */}
       <header style={styles.header}>
-        <h1 style={styles.headerTitle}>Создание викторины</h1>
+        <div>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#FF7A00', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
+            ЛисийКвиз • Меню учителя
+          </span>
+          <h1 style={styles.headerTitle}>Главная панель</h1>
+        </div>
+        <button
+          onClick={() => {
+            haptics.impact('light');
+            onOpenClassManagement?.(false);
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 12px',
+            borderRadius: 14,
+            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+            border: '1px solid rgba(59, 130, 246, 0.35)',
+            color: '#93C5FD',
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: 'pointer',
+          }}
+          title="Открыть реестр классов и аналитику"
+        >
+          <Users size={15} />
+          <span>Классы {classes.length > 0 ? `(${classes.length})` : ''}</span>
+        </button>
       </header>
+
+      {/* ========================================================
+          TWO PROMINENT ENTRY BUTTONS: СОЗДАТЬ КЛАСС / СОЗДАТЬ ВИКТОРИНУ
+         ======================================================== */}
+      <div style={styles.heroDualActionsContainer}>
+        {/* Button 1: Создать класс */}
+        <motion.button
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => {
+            haptics.impact('medium');
+            onOpenClassManagement?.(true);
+          }}
+          style={styles.heroActionCardClass}
+        >
+          <div style={styles.actionIconCircleBlue}>
+            <GraduationCap size={22} color="#60A5FA" />
+          </div>
+          <div style={styles.actionCardContent}>
+            <div style={styles.actionHeaderRow}>
+              <span style={styles.actionCardTitle}>Создать класс</span>
+              <span style={styles.badge152}>152-ФЗ Zero-PII</span>
+            </div>
+            <p style={styles.actionCardSub}>
+              Постоянная группа, инвайт в Сферум, рейтинг четверти и матрица пробелов
+            </p>
+          </div>
+          <div style={styles.actionArrowCircleBlue}>
+            <ChevronRight size={18} color="#60A5FA" />
+          </div>
+        </motion.button>
+
+        {/* Button 2: Создать викторину */}
+        <motion.button
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.96 }}
+          onClick={() => {
+            haptics.impact('medium');
+            quizBuilderRef.current?.scrollIntoView({ behavior: 'smooth' });
+            setSpeechText('Отлично! Выберите класс, учебник ФГОС и тему для викторины ниже!');
+          }}
+          style={styles.heroActionCardQuiz}
+        >
+          <div style={styles.actionIconCircleOrange}>
+            <Sparkles size={22} color="#FBBF24" />
+          </div>
+          <div style={styles.actionCardContent}>
+            <div style={styles.actionHeaderRow}>
+              <span style={styles.actionCardTitle}>Создать викторину</span>
+              <span style={styles.badgeFgos}>ФГОС / ИИ</span>
+            </div>
+            <p style={styles.actionCardSub}>
+              По каталогу учебников РФ, параграфам, темам ФРП или фото страницы
+            </p>
+          </div>
+          <div style={styles.actionArrowCircleOrange}>
+            <ChevronRight size={18} color="#FBBF24" />
+          </div>
+        </motion.button>
+      </div>
 
       {/* Mascot Hero Card */}
       <motion.div
@@ -195,8 +314,51 @@ export default function TeacherCreateQuiz({
         </div>
       </motion.div>
 
+      {/* Section Header: Настройка викторины */}
+      <div ref={quizBuilderRef} style={styles.quizSectionHeader}>
+        <span style={styles.quizSectionTitle}>Параметры викторины</span>
+        {selectedClass ? (
+          <span style={styles.activeClassPill}>
+            Привязано к {selectedClass.name}
+          </span>
+        ) : (
+          <span style={{ ...styles.activeClassPill, color: '#9CA3AF', borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.06)' }}>
+            Быстрая игра
+          </span>
+        )}
+      </div>
+
       {/* Interactive Selection Tiles */}
       <div style={styles.tilesContainer}>
+        {/* Tile 0: Class Association (152-ФЗ) */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            haptics.impact('light');
+            setActiveModal('class');
+          }}
+          style={{
+            ...styles.tileCard,
+            borderColor: selectedClass ? '#3B82F6' : '#283756',
+            backgroundColor: selectedClass ? 'rgba(59, 130, 246, 0.08)' : '#151F36',
+          }}
+        >
+          <div style={styles.tileLeft}>
+            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(59, 130, 246, 0.22)', color: '#60A5FA' }}>
+              <Users size={20} />
+            </div>
+            <div style={styles.tileTexts}>
+              <span style={styles.tileLabel}>Привязка к классу (152-ФЗ)</span>
+              <span style={{ ...styles.tileValue, color: selectedClass ? '#60A5FA' : '#9CA3AF' }}>
+                {selectedClass
+                  ? `${selectedClass.name} • ${selectedClass.subject} (${selectedClass.grade} кл.)`
+                  : 'Без привязки (разовая игра)'}
+              </span>
+            </div>
+          </div>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </motion.div>
+
         {/* Tile: Russian Textbooks & Paragraphs */}
         <motion.div
           whileTap={{ scale: 0.98 }}
@@ -436,6 +598,7 @@ export default function TeacherCreateQuiz({
             >
               <div style={styles.modalHeader}>
                 <span style={styles.modalTitle}>
+                  {activeModal === 'class' && 'Привязка к классу (152-ФЗ)'}
                   {activeModal === 'subject' && 'Выберите предмет'}
                   {activeModal === 'grade' && 'Выберите класс'}
                   {activeModal === 'topic' && 'Выберите тему ФРП'}
@@ -449,6 +612,89 @@ export default function TeacherCreateQuiz({
 
               {/* Modal Body Items */}
               <div style={styles.modalList}>
+                {activeModal === 'class' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      onClick={() => {
+                        haptics.selection();
+                        setSelectedClass(null);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: !selectedClass ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: !selectedClass ? '#3B82F6' : 'rgba(255, 255, 255, 0.1)',
+                        textAlign: 'left',
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                        <span style={{ color: '#FFFFFF', fontWeight: 800, fontSize: 13.5 }}>
+                          Без привязки к классу
+                        </span>
+                        <span style={{ color: '#9CA3AF', fontSize: 11.5 }}>
+                          Быстрая игра по PIN-коду (без долгосрочной статистики)
+                        </span>
+                      </div>
+                      {!selectedClass && <Check size={18} color="#3B82F6" />}
+                    </button>
+
+                    {classes.map((cls) => {
+                      const isSel = selectedClass?.id === cls.id;
+                      return (
+                        <button
+                          key={cls.id}
+                          onClick={() => {
+                            haptics.selection();
+                            setSelectedClass(cls);
+                            setSubject(cls.subject);
+                            setGrade(cls.grade);
+                            setSpeechText(`Выбран класс ${cls.name}. Результаты викторины сохранятся в долгосрочный рейтинг класса!`);
+                            setActiveModal(null);
+                          }}
+                          style={{
+                            ...styles.modalOptionBtn,
+                            backgroundColor: isSel ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                            borderColor: isSel ? '#3B82F6' : 'rgba(255, 255, 255, 0.1)',
+                            textAlign: 'left',
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ color: isSel ? '#60A5FA' : '#FFFFFF', fontWeight: 800, fontSize: 14 }}>
+                                {cls.name}
+                              </span>
+                              <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 6px', borderRadius: 6, backgroundColor: 'rgba(59, 130, 246, 0.25)', color: '#93C5FD' }}>
+                                {cls.subject} • {cls.grade} кл
+                              </span>
+                            </div>
+                            <span style={{ color: '#9CA3AF', fontSize: 11.5 }}>
+                              Инвайт-код: {cls.invite_code} • Учеников: {cls.students_count || 0}
+                            </span>
+                          </div>
+                          {isSel && <Check size={18} color="#3B82F6" />}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      onClick={() => {
+                        setActiveModal(null);
+                        onOpenClassManagement?.(true);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                        borderColor: 'rgba(16, 185, 129, 0.4)',
+                        justifyContent: 'center',
+                        marginTop: 4,
+                      }}
+                    >
+                      <span style={{ color: '#34D399', fontWeight: 800, fontSize: 13.5 }}>
+                        + Создать новый класс
+                      </span>
+                    </button>
+                  </div>
+                )}
                 {activeModal === 'textbook' && (
                   <div>
                     {textbookModalStep === 'paragraphs' && inspectingTextbook ? (
@@ -704,6 +950,149 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#FFFFFF',
     margin: 0,
     letterSpacing: '-0.3px',
+  },
+  heroDualActionsContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+    marginBottom: 14,
+    zIndex: 4,
+  },
+  heroActionCardClass: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 14px',
+    borderRadius: 20,
+    backgroundColor: '#131F38',
+    border: '2px solid rgba(59, 130, 246, 0.4)',
+    borderBottom: '4px solid #1D4ED8',
+    cursor: 'pointer',
+    textAlign: 'left',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+    transition: 'all 0.15s ease',
+  },
+  heroActionCardQuiz: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 14px',
+    borderRadius: 20,
+    backgroundColor: '#261B12',
+    border: '2px solid rgba(245, 158, 11, 0.45)',
+    borderBottom: '4px solid #D97706',
+    cursor: 'pointer',
+    textAlign: 'left',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
+    transition: 'all 0.15s ease',
+  },
+  actionIconCircleBlue: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(59, 130, 246, 0.22)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    border: '1px solid rgba(96, 165, 250, 0.3)',
+  },
+  actionIconCircleOrange: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(245, 158, 11, 0.22)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    border: '1px solid rgba(251, 191, 36, 0.3)',
+  },
+  actionCardContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  actionHeaderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 4,
+  },
+  actionCardTitle: {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    letterSpacing: '-0.2px',
+  },
+  badge152: {
+    fontSize: 10,
+    fontWeight: 800,
+    color: '#93C5FD',
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    padding: '2px 7px',
+    borderRadius: 6,
+    border: '1px solid rgba(96, 165, 250, 0.3)',
+    whiteSpace: 'nowrap',
+  },
+  badgeFgos: {
+    fontSize: 10,
+    fontWeight: 800,
+    color: '#FCD34D',
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    padding: '2px 7px',
+    borderRadius: 6,
+    border: '1px solid rgba(251, 191, 36, 0.3)',
+    whiteSpace: 'nowrap',
+  },
+  actionCardSub: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    margin: 0,
+    lineHeight: 1.35,
+  },
+  actionArrowCircleBlue: {
+    width: 30,
+    height: 30,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  actionArrowCircleOrange: {
+    width: 30,
+    height: 30,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  quizSectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    marginTop: 4,
+  },
+  quizSectionTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#E5E7EB',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  activeClassPill: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#60A5FA',
+    backgroundColor: 'rgba(59, 130, 246, 0.18)',
+    padding: '2px 8px',
+    borderRadius: 8,
+    border: '1px solid rgba(59, 130, 246, 0.3)',
   },
   heroCard: {
     position: 'relative',

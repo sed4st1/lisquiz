@@ -19,17 +19,25 @@ import { haptics } from '../services/haptics';
 interface TeacherClassManagementProps {
   onBack: () => void;
   onSelectClassForQuiz?: (cls: ClassItem) => void;
+  initialCreateOpen?: boolean;
 }
 
 export default function TeacherClassManagement({
   onBack,
   onSelectClassForQuiz,
+  initialCreateOpen = false,
 }: TeacherClassManagementProps) {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
   const [activeSubTab, setActiveSubTab] = useState<'roster' | 'leaderboard' | 'gaps'>('roster');
   const [isLoading, setIsLoading] = useState(true);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(initialCreateOpen);
+
+  useEffect(() => {
+    if (initialCreateOpen) {
+      setIsCreateModalOpen(true);
+    }
+  }, [initialCreateOpen]);
 
   // Form state
   const [newClassName, setNewClassName] = useState('7А');

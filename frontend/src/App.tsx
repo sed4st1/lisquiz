@@ -75,6 +75,8 @@ export default function App() {
   const [quizSubject, setQuizSubject] = useState<string>('Математика');
   const [quizGrade, setQuizGrade] = useState<number>(7);
   const [quizClass, setQuizClass] = useState<string>('7А');
+  const [quizClassId, setQuizClassId] = useState<string | undefined>(undefined);
+  const [classModalInitialOpen, setClassModalInitialOpen] = useState<boolean>(false);
   const [quizTitle, setQuizTitle] = useState<string>('Викторина по математике');
   const [leaderboardBoostPoints, setLeaderboardBoostPoints] = useState<number | null>(null);
   const [leaderboardBoostRank, setLeaderboardBoostRank] = useState<number | null>(null);
@@ -311,11 +313,16 @@ export default function App() {
     if (subScreen === 'teacher_classes') {
       return (
         <TeacherClassManagement
-          onBack={() => setSubScreen(null)}
+          initialCreateOpen={classModalInitialOpen}
+          onBack={() => {
+            setSubScreen(null);
+            setClassModalInitialOpen(false);
+          }}
           onSelectClassForQuiz={(cls) => {
             setQuizSubject(cls.subject);
             setQuizGrade(cls.grade);
             setQuizClass(cls.name);
+            setQuizClassId(cls.id);
             setSubScreen(null);
             setTab('home');
           }}
@@ -574,10 +581,17 @@ export default function App() {
         case 'home':
           return (
             <TeacherCreateQuiz
+              initialClassId={quizClassId}
+              initialClassName={quizClass}
+              onOpenClassManagement={(openCreate?: boolean) => {
+                setClassModalInitialOpen(!!openCreate);
+                setSubScreen('teacher_classes');
+              }}
               onQuizCreated={(roomData: any) => {
                 if (roomData) {
                   setActivePin(roomData.room_code);
                   setTeacherToken(roomData.teacher_token);
+                  if (roomData.class_id) setQuizClassId(roomData.class_id);
                   if (roomData.subject) setQuizSubject(roomData.subject);
                   if (roomData.grade) {
                     setQuizGrade(roomData.grade);
