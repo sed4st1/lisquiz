@@ -56,7 +56,8 @@ export const quizStorage = {
               !q.id.startsWith('merzlyak_') &&
               !q.id.startsWith('makarychev_') &&
               !q.id.startsWith('atanasyan_') &&
-              !q.id.startsWith('ladyzhenskaya_')
+              !q.id.startsWith('ladyzhenskaya_') &&
+              !q.id.startsWith('room_quiz_')
           );
           if (cleaned.length !== parsed.length) {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
@@ -156,7 +157,8 @@ export const quizStorage = {
             !q.id.startsWith('merzlyak_') &&
             !q.id.startsWith('makarychev_') &&
             !q.id.startsWith('atanasyan_') &&
-            !q.id.startsWith('ladyzhenskaya_')
+            !q.id.startsWith('ladyzhenskaya_') &&
+              !q.id.startsWith('room_quiz_')
         );
         this.saveQuizzes(cleaned);
         return cleaned;

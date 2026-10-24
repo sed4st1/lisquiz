@@ -124,7 +124,14 @@ async def list_quizzes(
         .options(selectinload(QuizModel.questions).selectinload(QuestionModel.options))
         .order_by(QuizModel.created_at.desc())
     )
-    if teacher_pseudonym_id:
+    if teacher_pseudonym_id and teacher_pseudonym_id != "teacher_host":
+        stmt = stmt.where(
+            or_(
+                QuizModel.teacher_pseudonym_id == teacher_pseudonym_id,
+                QuizModel.teacher_pseudonym_id == "teacher_host"
+            )
+        )
+    elif teacher_pseudonym_id:
         stmt = stmt.where(QuizModel.teacher_pseudonym_id == teacher_pseudonym_id)
     else:
         stmt = stmt.where(QuizModel.teacher_pseudonym_id.isnot(None))

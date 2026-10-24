@@ -1,5 +1,6 @@
 import io
 import csv
+import re
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Response
 from pydantic import BaseModel, Field
@@ -87,48 +88,54 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
     teacher_name = req.teacher_name if req else "Учитель"
     teacher_p_id = req.teacher_pseudonym_id if req else "teacher_host"
 
+    target_quiz = None
     if req and req.quiz:
         target_quiz = req.quiz
     elif req and req.textbook_id and req.paragraph_num:
-        # Прямая выборка заданий из БД учебников РФ
+        # Прямая выборка заданий из БД учебников РФ с проверкой соответствия предмету
         from ..services.textbook_service import textbook_service
-        cnt = max(1, min(20, int(req.question_count or 5)))
-        tb_res = textbook_service.get_questions_by_paragraph(
-            textbook_id=req.textbook_id,
-            paragraph_num=req.paragraph_num,
-            limit=cnt
-        )
-        tb_questions = []
-        for qd in tb_res.get("questions", []):
-            opts = [
-                AnswerOption(id=o["id"], text=o["text"], is_correct=o.get("is_correct", False))
-                for o in qd.get("options", [])
-            ]
-            tb_questions.append(Question(
-                id=qd["id"],
-                text=qd["text"],
-                options=opts,
-                explanation=qd.get("explanation", ""),
-                tier=qd.get("tier", 1),
-                is_boss=qd.get("is_boss", False),
-                time_limit_sec=qd.get("time_limit_sec", 20),
-                topic=tb_res.get("topic", req.topic or "Параграф учебника"),
-            ))
-        if cnt >= 3 and len(tb_questions) >= cnt:
-            tb_questions[-1].tier = 3
-            tb_questions[-1].is_boss = True
+        tb_meta = textbook_service.get_textbook(req.textbook_id)
+        if tb_meta and (not req.subject or tb_meta.get("subject", "").strip().lower() == req.subject.strip().lower()):
+            cnt = max(1, min(20, int(req.question_count or 5)))
+            tb_res = textbook_service.get_questions_by_paragraph(
+                textbook_id=req.textbook_id,
+                paragraph_num=req.paragraph_num,
+                limit=cnt
+            )
+            tb_questions = []
+            for qd in tb_res.get("questions", []):
+                opts = [
+                    AnswerOption(id=o["id"], text=o["text"], is_correct=o.get("is_correct", False))
+                    for o in qd.get("options", [])
+                ]
+                tb_questions.append(Question(
+                    id=qd["id"],
+                    text=qd["text"],
+                    options=opts,
+                    explanation=qd.get("explanation", ""),
+                    tier=qd.get("tier", 1),
+                    is_boss=qd.get("is_boss", False),
+                    time_limit_sec=qd.get("time_limit_sec", 20),
+                    topic=tb_res.get("topic", req.topic or "Параграф учебника"),
+                ))
+            if cnt >= 3 and len(tb_questions) >= cnt:
+                tb_questions[-1].tier = 3
+                tb_questions[-1].is_boss = True
 
-        book_title = tb_res.get("textbook_title") or req.subject or "Учебник"
-        para_title = tb_res.get("paragraph_title") or f"§ {req.paragraph_num}"
-        target_quiz = Quiz(
-            id=f"quiz_tb_{req.textbook_id}_{req.paragraph_num}",
-            title=f"{book_title} — § {req.paragraph_num}. {para_title}".strip(" — § ."),
-            subject=req.subject or "Школьный предмет",
-            grade=int(req.grade or 7),
-            topic=para_title,
-            questions=tb_questions,
-        )
-    elif req and (req.subject or req.grade or req.question_count or req.topic):
+            raw_book_title = tb_res.get("textbook_title") or req.subject or "Учебник"
+            clean_book_title = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', raw_book_title).strip()
+            raw_para_title = tb_res.get("paragraph_title") or f"§ {req.paragraph_num}"
+            clean_para_title = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', raw_para_title).strip()
+            target_quiz = Quiz(
+                id=f"quiz_tb_{req.textbook_id}_{req.paragraph_num}",
+                title=f"{clean_book_title} — § {req.paragraph_num}. {clean_para_title}".strip(" — § ."),
+                subject=tb_meta.get("subject") or req.subject or "Школьный предмет",
+                grade=int(tb_meta.get("grade") or req.grade or 7),
+                topic=clean_para_title,
+                questions=tb_questions,
+            )
+
+    if target_quiz is None and req and (req.subject or req.grade or req.question_count or req.topic):
         subj = req.subject or "Математика"
         grd = int(req.grade or 7)
         top = req.topic or "Тематический тест"
@@ -179,8 +186,11 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
                 topic=top,
                 questions=bank_q[:cnt],
             )
-    else:
+    if target_quiz is None:
         target_quiz = DEMO_DEFAULT_QUIZ
+
+    if target_quiz and target_quiz.title:
+        target_quiz.title = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', target_quiz.title).strip()
 
     room, teacher_token = await room_state_engine.create_room(
         quiz=target_quiz,
@@ -199,6 +209,7 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
         "total_questions": len(room.quiz.questions),
         "teacher_token": teacher_token,
         "ws_url": f"/ws/rooms/{room.room_code}?token={teacher_token}",
+        "quiz": room.quiz.model_dump(),
     }
 
 

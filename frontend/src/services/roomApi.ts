@@ -22,6 +22,7 @@ export interface CreateRoomResponse {
   total_questions?: number;
   teacher_token: string;
   ws_url: string;
+  quiz?: any;
 }
 
 export interface RoomInfoResponse {
@@ -41,6 +42,7 @@ export interface JoinRoomResponse {
   avatar: string;
   session_token: string;
   ws_url: string;
+  quiz?: any;
 }
 
 export const roomApi = {

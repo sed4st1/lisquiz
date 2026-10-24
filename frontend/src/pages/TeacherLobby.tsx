@@ -145,47 +145,42 @@ export default function TeacherLobby({
 
       if (!code || !token) return;
 
-      // Sync active room quiz from backend if available
+      // Sync real quizzes from DB and assign active room quiz
       try {
-        const roomQuiz = await roomApi.getRoomQuiz(code);
-        if (isMounted && roomQuiz && roomQuiz.questions && roomQuiz.questions.length > 0) {
-          const existingList = quizStorage.getSavedQuizzes();
-          const existing = existingList.find((q) => q.id === `room_quiz_${code}`);
-          const quizObj: SavedQuiz = {
-            id: `room_quiz_${code}`,
-            title: roomQuiz.title || quizTitle || 'Викторина по теме',
-            subject: roomQuiz.subject || subject || 'Математика',
-            grade: roomQuiz.grade || grade || 7,
-            topic: roomQuiz.topic || 'Школьная программа',
-            group_label: existing?.group_label || 'Текущий',
-            is_active: true,
-            updated_at: new Date().toISOString(),
-            questions: roomQuiz.questions.map((q: any, idx: number) => ({
-              id: q.id ?? (idx + 1),
-              text: q.text || '',
-              explanation: q.explanation || '',
-              time_limit_sec: q.time_limit_sec ?? 20,
-              tier: q.tier ?? 1,
-              is_boss: q.is_boss ?? false,
-              topic: q.topic ?? '',
-              options: (q.options || []).map((opt: any, oIdx: number) => ({
-                id: opt.id ?? oIdx,
-                text: opt.text ?? '',
-                is_correct: !!opt.is_correct,
-                symbol: opt.symbol,
-                color: opt.color,
-              })),
-            })),
-          };
-          quizStorage.upsertQuiz(quizObj);
-          quizStorage.setActiveQuiz(quizObj.id);
-          setSavedQuizzes(quizStorage.getSavedQuizzes());
-          setActiveQuizId(quizObj.id);
-          setCurrentQuizTitle(quizObj.title);
-          onQuizTitleChange?.(quizObj.title);
+        const dbQuizzes = await quizStorage.syncFromDb();
+        if (isMounted) {
+          setSavedQuizzes(dbQuizzes);
+          const currentActive = dbQuizzes.find((q) => q.is_active);
+          if (currentActive) {
+            setActiveQuizId(currentActive.id);
+            setCurrentQuizTitle(currentActive.title);
+            onQuizTitleChange?.(currentActive.title);
+            await roomApi.updateRoomQuiz(code, {
+              title: currentActive.title,
+              subject: currentActive.subject,
+              grade: currentActive.grade,
+              topic: currentActive.topic,
+              questions: currentActive.questions,
+            }).catch(() => {});
+          } else if (dbQuizzes.length > 0) {
+            setActiveQuizId(dbQuizzes[0].id);
+            setCurrentQuizTitle(dbQuizzes[0].title);
+            onQuizTitleChange?.(dbQuizzes[0].title);
+            quizStorage.setActiveQuiz(dbQuizzes[0].id);
+            await roomApi.updateRoomQuiz(code, {
+              title: dbQuizzes[0].title,
+              subject: dbQuizzes[0].subject,
+              grade: dbQuizzes[0].grade,
+              topic: dbQuizzes[0].topic,
+              questions: dbQuizzes[0].questions,
+            }).catch(() => {});
+          } else {
+            setActiveQuizId('');
+            setCurrentQuizTitle('');
+          }
         }
       } catch (e) {
-        console.warn('Could not fetch room quiz from backend:', e);
+        console.warn('Could not sync quizzes from db:', e);
       }
 
       try {

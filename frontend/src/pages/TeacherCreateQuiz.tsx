@@ -118,6 +118,10 @@ export default function TeacherCreateQuiz({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
+    quizStorage.syncFromDb().then((list) => {
+      if (list && list.length > 0) setSavedQuizzes(list);
+    });
+
     fetch('/api/ml2/textbooks')
       .then((r) => r.json())
       .then((d) => {
@@ -173,15 +177,39 @@ export default function TeacherCreateQuiz({
     setIsGenerating(true);
 
     try {
+      const isTbValid =
+        selectedTextbook &&
+        selectedParagraph &&
+        selectedTextbook.subject?.toLowerCase() === subject.toLowerCase();
+
       const roomData = await roomApi.createRoom({
         subject,
         grade,
         topic,
         question_count: questionCount,
-        textbook_id: selectedTextbook?.id,
-        paragraph_num: selectedParagraph?.num,
+        textbook_id: isTbValid ? selectedTextbook.id : undefined,
+        paragraph_num: isTbValid ? selectedParagraph.num : undefined,
         class_id: selectedClass?.id,
       });
+
+      if (roomData && roomData.quiz) {
+        const rawTitle = roomData.quiz_title || roomData.quiz.title || `${subject}: ${topic}`;
+        const cleanTitle = rawTitle.replace(/\s*\((?:ФГОС(?:\/ФРП)?|ФРП)\)/g, '').trim();
+        const newQuiz: SavedQuiz = {
+          id: `quiz_${Date.now()}`,
+          title: cleanTitle,
+          subject: roomData.subject || roomData.quiz.subject || subject,
+          grade: roomData.grade || roomData.quiz.grade || grade,
+          topic: roomData.quiz.topic || topic,
+          group_label: selectedClass ? selectedClass.name : `${grade} класс`,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+          questions: roomData.quiz.questions || [],
+        };
+        const updatedList = quizStorage.upsertQuiz(newQuiz);
+        setSavedQuizzes(updatedList);
+        quizStorage.setActiveQuiz(newQuiz.id);
+      }
 
       setTimeout(() => {
         setIsGenerating(false);
@@ -190,13 +218,13 @@ export default function TeacherCreateQuiz({
         } else if (onNavigateToLobby) {
           onNavigateToLobby();
         }
-      }, 1000);
+      }, 400);
     } catch (err) {
       console.error('Failed to create room:', err);
       setTimeout(() => {
         setIsGenerating(false);
         onQuizCreated?.();
-      }, 1000);
+      }, 400);
     }
   };
 
@@ -268,6 +296,7 @@ export default function TeacherCreateQuiz({
 
   const handleSaveEditedQuiz = (updated: SavedQuiz) => {
     const list = quizStorage.upsertQuiz(updated);
+    quizStorage.setActiveQuiz(updated.id);
     setSavedQuizzes(list);
     setIsEditorOpen(false);
     setEditingQuiz(null);
@@ -389,7 +418,32 @@ export default function TeacherCreateQuiz({
                   </span>
                 </div>
               </div>
-              <ChevronRight size={20} color="#9CA3AF" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {selectedParagraph && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTextbook(null);
+                      setSelectedParagraph(null);
+                    }}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: 4,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    title="Сбросить учебник"
+                  >
+                    <X size={16} color="#EF4444" />
+                  </button>
+                )}
+                <ChevronRight size={20} color="#9CA3AF" />
+              </div>
             </motion.div>
 
             {/* Tile: Предмет */}
@@ -751,23 +805,31 @@ export default function TeacherCreateQuiz({
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
-                        {textbooks.map((tb) => (
-                          <button
-                            key={tb.id}
-                            onClick={() => handleSelectTextbookForInspection(tb)}
-                            style={styles.modalOptionBtn}
-                          >
-                            <div>
-                              <span style={{ color: '#FFFFFF', fontWeight: 700, display: 'block' }}>
-                                {tb.title}
-                              </span>
-                              <span style={{ color: '#9CA3AF', fontSize: 11 }}>
-                                {tb.author}
-                              </span>
-                            </div>
-                            <ChevronRight size={18} color="#9CA3AF" />
-                          </button>
-                        ))}
+                        {textbooks.filter((tb) => !subject || tb.subject.toLowerCase() === subject.toLowerCase()).length === 0 ? (
+                          <div style={{ textAlign: 'center', padding: '24px 12px', color: '#9CA3AF', fontSize: 13 }}>
+                            В каталоге пока нет учебников по предмету «{subject}». Нажмите «Создать с ИИ» для автоматической генерации викторины по вашей теме.
+                          </div>
+                        ) : (
+                          textbooks
+                            .filter((tb) => !subject || tb.subject.toLowerCase() === subject.toLowerCase())
+                            .map((tb) => (
+                              <button
+                                key={tb.id}
+                                onClick={() => handleSelectTextbookForInspection(tb)}
+                                style={styles.modalOptionBtn}
+                              >
+                                <div>
+                                  <span style={{ color: '#FFFFFF', fontWeight: 700, display: 'block' }}>
+                                    {tb.title}
+                                  </span>
+                                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                    {tb.author}
+                                  </span>
+                                </div>
+                                <ChevronRight size={18} color="#9CA3AF" />
+                              </button>
+                            ))
+                        )}
                       </div>
                     )}
                   </div>
@@ -781,6 +843,8 @@ export default function TeacherCreateQuiz({
                       onClick={() => {
                         haptics.selection();
                         setSubject(item);
+                        setSelectedTextbook(null);
+                        setSelectedParagraph(null);
                         const presets = TOPIC_PRESETS[item];
                         if (presets && presets[0]) setTopic(presets[0]);
                         setActiveModal(null);
@@ -806,6 +870,10 @@ export default function TeacherCreateQuiz({
                       onClick={() => {
                         haptics.selection();
                         setGrade(item);
+                        if (selectedTextbook && selectedTextbook.grade !== item) {
+                          setSelectedTextbook(null);
+                          setSelectedParagraph(null);
+                        }
                         setActiveModal(null);
                       }}
                       style={{
