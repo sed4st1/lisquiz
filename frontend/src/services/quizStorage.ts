@@ -1,4 +1,3 @@
-import textbookPresets from './textbook_presets.json';
 import { quizApi } from './quizApi';
 
 export interface QuizOption {
@@ -36,7 +35,7 @@ export interface SavedQuiz {
 
 const STORAGE_KEY = 'lisquiz_saved_quizzes';
 
-export const DEFAULT_PRESET_QUIZZES: SavedQuiz[] = textbookPresets as SavedQuiz[];
+export const DEFAULT_PRESET_QUIZZES: SavedQuiz[] = [];
 
 export const quizStorage = {
   getSavedQuizzes(): SavedQuiz[] {
@@ -44,20 +43,31 @@ export const quizStorage = {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Filter out legacy mock tests
+        if (Array.isArray(parsed)) {
+          // Strictly exclude any unowned presets or mock templates
           const cleaned = parsed.filter(
-            (q) => !['quiz_preset_group_a', 'quiz_preset_group_b', 'quiz_preset_group_v'].includes(q.id)
+            (q) =>
+              q &&
+              q.id &&
+              !q.id.startsWith('quiz_tb_') &&
+              !q.id.startsWith('quiz_preset_') &&
+              !q.id.startsWith('peryshkin_') &&
+              !q.id.startsWith('vilenkin_') &&
+              !q.id.startsWith('merzlyak_') &&
+              !q.id.startsWith('makarychev_') &&
+              !q.id.startsWith('atanasyan_') &&
+              !q.id.startsWith('ladyzhenskaya_')
           );
-          if (cleaned.length > 0) {
-            return cleaned;
+          if (cleaned.length !== parsed.length) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
           }
+          return cleaned;
         }
       }
     } catch {
       // fallback
     }
-    return DEFAULT_PRESET_QUIZZES;
+    return [];
   },
 
   saveQuizzes(quizzes: SavedQuiz[]): void {
@@ -125,7 +135,7 @@ export const quizStorage = {
   deleteQuiz(quizId: string): SavedQuiz[] {
     const list = this.getSavedQuizzes();
     const updated = list.filter((q) => q.id !== quizId);
-    this.saveQuizzes(updated.length > 0 ? updated : DEFAULT_PRESET_QUIZZES);
+    this.saveQuizzes(updated);
     // Asynchronously delete from DB
     quizApi.deleteQuiz(quizId).catch((err) => console.warn('Failed to delete quiz from DB:', err));
     return updated;
@@ -134,9 +144,22 @@ export const quizStorage = {
   async syncFromDb(): Promise<SavedQuiz[]> {
     try {
       const dbQuizzes = await quizApi.listQuizzes();
-      if (dbQuizzes && dbQuizzes.length > 0) {
-        this.saveQuizzes(dbQuizzes);
-        return dbQuizzes;
+      if (Array.isArray(dbQuizzes)) {
+        const cleaned = dbQuizzes.filter(
+          (q) =>
+            q &&
+            q.id &&
+            !q.id.startsWith('quiz_tb_') &&
+            !q.id.startsWith('quiz_preset_') &&
+            !q.id.startsWith('peryshkin_') &&
+            !q.id.startsWith('vilenkin_') &&
+            !q.id.startsWith('merzlyak_') &&
+            !q.id.startsWith('makarychev_') &&
+            !q.id.startsWith('atanasyan_') &&
+            !q.id.startsWith('ladyzhenskaya_')
+        );
+        this.saveQuizzes(cleaned);
+        return cleaned;
       }
     } catch (e) {
       console.warn('Failed to sync quizzes from DB:', e);
@@ -144,16 +167,7 @@ export const quizStorage = {
     return this.getSavedQuizzes();
   },
 
-  mergePresetQuizzes(serverPresets: SavedQuiz[]): SavedQuiz[] {
-    if (!serverPresets || serverPresets.length === 0) return this.getSavedQuizzes();
-    const existing = this.getSavedQuizzes();
-    const existingIds = new Set(existing.map((q) => q.id));
-    const toAdd = serverPresets.filter((p) => !existingIds.has(p.id));
-    if (toAdd.length > 0) {
-      const merged = [...existing, ...toAdd];
-      this.saveQuizzes(merged);
-      return merged;
-    }
-    return existing;
+  mergePresetQuizzes(_serverPresets: SavedQuiz[]): SavedQuiz[] {
+    return this.getSavedQuizzes();
   },
 };

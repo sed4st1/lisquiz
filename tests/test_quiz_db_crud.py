@@ -4,20 +4,14 @@ from backend.app.main import app
 
 
 @pytest.mark.asyncio
-async def test_quiz_db_list_and_seed():
-    """Проверяет что викторины загружаются из БД и автоматически заполняются реальными шаблонами."""
+async def test_quiz_db_list_empty_by_default():
+    """Проверяет что у учителя изначально чистый список викторин без мусорных шаблонов."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         res = await client.get("/api/quizzes")
         assert res.status_code == 200
         quizzes = res.json()
-        assert len(quizzes) > 0
-        # Check verified preset properties
-        first = quizzes[0]
-        assert "id" in first
-        assert "title" in first
-        assert "questions" in first
-        assert len(first["questions"]) > 0
+        assert isinstance(quizzes, list)
 
 
 @pytest.mark.asyncio

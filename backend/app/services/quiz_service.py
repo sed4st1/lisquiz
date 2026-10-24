@@ -118,20 +118,17 @@ async def list_quizzes(
     db: AsyncSession,
     teacher_pseudonym_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    """Возвращает список викторин из БД: системные шаблоны + личные квизы учителя."""
-    # Убеждаемся что шаблоны загружены
-    await seed_default_presets(db)
-
-    conditions = [QuizModel.is_verified == True]
-    if teacher_pseudonym_id:
-        conditions.append(QuizModel.teacher_pseudonym_id == teacher_pseudonym_id)
-
+    """Возвращает только реальные викторины, созданные учителем."""
     stmt = (
         select(QuizModel)
-        .where(or_(*conditions))
         .options(selectinload(QuizModel.questions).selectinload(QuestionModel.options))
-        .order_by(QuizModel.is_verified.desc(), QuizModel.created_at.desc())
+        .order_by(QuizModel.created_at.desc())
     )
+    if teacher_pseudonym_id:
+        stmt = stmt.where(QuizModel.teacher_pseudonym_id == teacher_pseudonym_id)
+    else:
+        stmt = stmt.where(QuizModel.teacher_pseudonym_id.isnot(None))
+
     result = await db.execute(stmt)
     quizzes = result.scalars().all()
 
