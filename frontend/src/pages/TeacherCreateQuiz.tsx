@@ -173,6 +173,44 @@ export default function TeacherCreateQuiz({
     setActiveModal(null);
   };
 
+  const handleGenerateQuizWithAI = async () => {
+    haptics.notification('success');
+    setIsGenerating(true);
+
+    try {
+      const isTbValid =
+        selectedTextbook &&
+        selectedParagraph;
+
+      const generated = await quizApi.generateQuiz({
+        subject: selectedTextbook?.subject || subject,
+        grade: selectedTextbook?.grade || grade,
+        topic: selectedParagraph ? `§ ${selectedParagraph.num}. ${selectedParagraph.title}` : topic,
+        question_count: questionCount,
+        textbook_id: isTbValid ? selectedTextbook.id : undefined,
+        paragraph_num: isTbValid ? selectedParagraph.num : undefined,
+      });
+
+      if (generated && generated.questions && generated.questions.length > 0) {
+        try {
+          await quizApi.saveQuiz(generated);
+        } catch (e) {
+          console.warn('Auto-save generated quiz notice:', e);
+        }
+        const updatedList = quizStorage.upsertQuiz(generated);
+        quizStorage.setActiveQuiz(generated.id);
+        setSavedQuizzes(updatedList);
+        setEditingQuiz(generated);
+        setIsEditorOpen(true);
+      }
+    } catch (err: any) {
+      console.error('Failed to generate quiz with AI:', err);
+      alert('Ошибка при генерации теста: ' + (err?.message || 'попробуйте ещё раз'));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleStartGeneration = async () => {
     haptics.notification('success');
     setIsGenerating(true);
@@ -576,7 +614,7 @@ export default function TeacherCreateQuiz({
             </motion.div>
           </div>
 
-          {/* Dual Action Buttons */}
+          {/* Action Buttons */}
           <div style={styles.submitSection}>
             <div style={styles.dualSubmitRow}>
               <TactileButton
@@ -584,21 +622,35 @@ export default function TeacherCreateQuiz({
                 size="lg"
                 fullWidth
                 disabled={isGenerating}
-                onClick={handleStartGeneration}
+                onClick={handleGenerateQuizWithAI}
                 iconBefore={<Sparkles size={18} />}
               >
-                {isGenerating ? 'Создание...' : 'Создать с ИИ'}
+                {isGenerating ? 'ИИ создаёт вопросы...' : '✨ Сгенерировать викторину с ИИ'}
               </TactileButton>
-              <TactileButton
-                theme="blue"
-                size="lg"
-                fullWidth
-                disabled={isGenerating}
-                onClick={handleCreateManualQuiz}
-                iconBefore={<Edit3 size={18} />}
-              >
-                Создать самим
-              </TactileButton>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%' }}>
+                <TactileButton
+                  theme="green"
+                  size="md"
+                  fullWidth
+                  disabled={isGenerating}
+                  onClick={handleStartGeneration}
+                  iconBefore={<Play size={16} />}
+                >
+                  🚀 Запуск в игру
+                </TactileButton>
+
+                <TactileButton
+                  theme="blue"
+                  size="md"
+                  fullWidth
+                  disabled={isGenerating}
+                  onClick={handleCreateManualQuiz}
+                  iconBefore={<Edit3 size={16} />}
+                >
+                  Собрать вручную
+                </TactileButton>
+              </div>
             </div>
           </div>
         </div>
@@ -814,31 +866,38 @@ export default function TeacherCreateQuiz({
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
-                        {textbooks.filter((tb) => !subject || tb.subject.toLowerCase() === subject.toLowerCase()).length === 0 ? (
-                          <div style={{ textAlign: 'center', padding: '24px 12px', color: '#9CA3AF', fontSize: 13 }}>
-                            В каталоге пока нет учебников по предмету «{subject}». Нажмите «Создать с ИИ» для автоматической генерации викторины по вашей теме.
-                          </div>
-                        ) : (
-                          textbooks
-                            .filter((tb) => !subject || tb.subject.toLowerCase() === subject.toLowerCase())
-                            .map((tb) => (
-                              <button
-                                key={tb.id}
-                                onClick={() => handleSelectTextbookForInspection(tb)}
-                                style={styles.modalOptionBtn}
-                              >
-                                <div>
-                                  <span style={{ color: '#FFFFFF', fontWeight: 700, display: 'block' }}>
+                        {textbooks.map((tb) => {
+                          const isSubjectMatch = !subject || tb.subject.toLowerCase() === subject.toLowerCase() ||
+                            (subject === 'Математика' && (tb.subject === 'Алгебра' || tb.subject === 'Геометрия')) ||
+                            (subject === 'Алгебра' && tb.subject === 'Математика') ||
+                            (subject === 'Геометрия' && tb.subject === 'Математика');
+                          return (
+                            <button
+                              key={tb.id}
+                              onClick={() => handleSelectTextbookForInspection(tb)}
+                              style={{
+                                ...styles.modalOptionBtn,
+                                borderColor: isSubjectMatch ? 'rgba(59, 130, 246, 0.45)' : 'rgba(255, 255, 255, 0.1)',
+                                backgroundColor: isSubjectMatch ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                              }}
+                            >
+                              <div style={{ textAlign: 'left' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                  <span style={{ color: '#FFFFFF', fontWeight: 700 }}>
                                     {tb.title}
                                   </span>
-                                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>
-                                    {tb.author}
+                                  <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 6, backgroundColor: '#1E293B', color: '#60A5FA', fontWeight: 800 }}>
+                                    {tb.subject}
                                   </span>
                                 </div>
-                                <ChevronRight size={18} color="#9CA3AF" />
-                              </button>
-                            ))
-                        )}
+                                <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                  {tb.author} • {tb.grade} класс
+                                </span>
+                              </div>
+                              <ChevronRight size={18} color="#9CA3AF" />
+                            </button>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

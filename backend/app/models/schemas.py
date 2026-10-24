@@ -72,6 +72,8 @@ class QuizCreateRequest(BaseModel):
     question_count: int = Field(5, ge=1, le=20, examples=[5])
     source_notes: Optional[str] = None
     num_variants: int = Field(4, ge=1, le=4, examples=[4])
+    textbook_id: Optional[str] = None
+    paragraph_num: Optional[int] = None
 
 
 class Player(BaseModel):

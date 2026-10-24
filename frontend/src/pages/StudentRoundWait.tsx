@@ -126,6 +126,7 @@ export default function StudentRoundWait({
         });
       } catch {}
       setMode('finished');
+      onGameFinished?.(data);
     };
 
     socketService.on('QUESTION_RESULTS', handleQuestionResults);

@@ -48,6 +48,15 @@ export default function StudentWaitingLobby({
     // Listen for room updates
     const handleSync = (data: any) => {
       if (!isMounted) return;
+      if (data?.status === 'finished') {
+        socketService.disconnect();
+        onLeaveRoom();
+        return;
+      }
+      if (data?.status === 'question' || data?.status === 'countdown') {
+        onGameStart();
+        return;
+      }
       if (data && data.players) {
         const list = Object.values(data.players).map((p: any) => ({
           id: p.id,
@@ -110,6 +119,8 @@ export default function StudentWaitingLobby({
     socketService.on('PLAYER_JOINED', handlePlayerJoined);
     socketService.on('PLAYER_LEFT', handlePlayerLeft);
     socketService.on('COUNTDOWN_START', handleCountdownStart);
+    socketService.on('QUESTION_START', onGameStart);
+    socketService.on('GAME_FINISHED', handleKickOrExit);
     socketService.on('DISCONNECT', handleDisconnect);
     socketService.on('KICKED', handleKickOrExit);
     socketService.on('ROOM_CLOSED', handleKickOrExit);
@@ -124,7 +135,7 @@ export default function StudentWaitingLobby({
       socketService.send('GET_SYNC');
     }
 
-    // Auto-detect if room ceases to exist on the server + periodic sync
+    // Auto-detect if room ceases to exist or finished + periodic sync
     const roomPollInterval = setInterval(async () => {
       if (!isMounted) return;
       try {
@@ -133,7 +144,20 @@ export default function StudentWaitingLobby({
           clearInterval(roomPollInterval);
           socketService.disconnect();
           onLeaveRoom();
-        } else if (socketService.isConnected()) {
+          return;
+        }
+        const info = await res.json();
+        if (info && info.status === 'finished') {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onLeaveRoom();
+          return;
+        }
+        if (info && (info.status === 'question' || info.status === 'countdown')) {
+          onGameStart();
+          return;
+        }
+        if (socketService.isConnected()) {
           socketService.send('GET_SYNC');
         }
       } catch {
@@ -148,6 +172,8 @@ export default function StudentWaitingLobby({
       socketService.off('PLAYER_JOINED', handlePlayerJoined);
       socketService.off('PLAYER_LEFT', handlePlayerLeft);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
+      socketService.off('QUESTION_START', onGameStart);
+      socketService.off('GAME_FINISHED', handleKickOrExit);
       socketService.off('DISCONNECT', handleDisconnect);
       socketService.off('KICKED', handleKickOrExit);
       socketService.off('ROOM_CLOSED', handleKickOrExit);

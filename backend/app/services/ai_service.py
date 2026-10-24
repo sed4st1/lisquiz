@@ -71,8 +71,43 @@ class AIService:
         questions: List[Question] = []
         source = "bank"
 
-        # 1. Cache-First: если нет пользовательских заметок, проверяем банк вопросов
-        if not req.source_notes:
+        # 0. Интеграция с каталогом школьных учебников и параграфов Ивана
+        if getattr(req, "textbook_id", None) and getattr(req, "paragraph_num", None):
+            try:
+                import re
+                from .textbook_service import textbook_service
+                tb_meta = textbook_service.get_textbook(req.textbook_id)
+                if tb_meta:
+                    tb_res = textbook_service.get_questions_by_paragraph(
+                        textbook_id=req.textbook_id,
+                        paragraph_num=req.paragraph_num,
+                        limit=req.question_count
+                    )
+                    for qd in tb_res.get("questions", []):
+                        opts = [
+                            AnswerOption(id=o["id"], text=o["text"], is_correct=o.get("is_correct", False))
+                            for o in qd.get("options", [])
+                        ]
+                        questions.append(Question(
+                            id=qd["id"],
+                            text=qd["text"],
+                            options=opts,
+                            explanation=qd.get("explanation", ""),
+                            tier=qd.get("tier", 1),
+                            is_boss=qd.get("is_boss", False),
+                            time_limit_sec=qd.get("time_limit_sec", 20),
+                            topic=tb_res.get("topic", req.topic),
+                        ))
+                    if questions:
+                        clean_book = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', tb_meta.get("title", req.subject)).strip()
+                        clean_para = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', tb_res.get("paragraph_title", f"§ {req.paragraph_num}")).strip()
+                        title = f"{clean_book} — § {req.paragraph_num}. {clean_para}".strip(" — § .")
+                        source = "textbook_bank"
+            except Exception as te:
+                logger.warning("Textbook questions lookup failed: %s", te)
+
+        # 1. Cache-First: если нет пользовательских заметок и учебника, проверяем банк вопросов
+        if not questions and not req.source_notes:
             try:
                 bank_qs = bank_service.get_questions_by_topic(
                     subject=req.subject,
@@ -120,6 +155,11 @@ class AIService:
                 if not questions:
                     questions = self._generate_mock_questions(req)
                 source = "bank"
+
+        if len(questions) >= 3:
+            questions[-1].tier = 3
+            questions[-1].is_boss = True
+            questions[-1].time_limit_sec = max(35, questions[-1].time_limit_sec)
 
         # 3. Генерация 4 античит-вариантов (перемешивание порядка вопросов + случайные кнопки/фигуры)
         num_variants = getattr(req, "num_variants", 4) or 4

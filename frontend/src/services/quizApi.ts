@@ -2,6 +2,40 @@ import { authService } from './authService';
 import { SavedQuiz } from './quizStorage';
 
 export const quizApi = {
+  async generateQuiz(payload: {
+    subject: string;
+    grade: number;
+    topic: string;
+    question_count: number;
+    textbook_id?: string;
+    paragraph_num?: number;
+    source_notes?: string;
+  }): Promise<SavedQuiz> {
+    const res = await fetch('/api/quiz/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authService.getAuthHeaders(),
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Ошибка генерации викторины');
+    }
+    const data = await res.json();
+    return {
+      id: data.id || `quiz_${Date.now()}`,
+      title: data.title || `${payload.subject}: ${payload.topic}`,
+      subject: data.subject || payload.subject,
+      grade: data.grade || payload.grade,
+      topic: data.topic || payload.topic,
+      group_label: `${payload.grade} класс`,
+      is_active: true,
+      updated_at: new Date().toISOString(),
+      questions: data.questions || [],
+    };
+  },
   async listQuizzes(): Promise<SavedQuiz[]> {
     try {
       const res = await fetch('/api/quizzes', {

@@ -128,7 +128,7 @@ export default function App() {
         const topPlayers = data?.top_players || [];
         const myPlayer = topPlayers.find((p: any) =>
           (studentPlayerId && p.id === studentPlayerId) ||
-          (p.name && p.name.trim().toLowerCase() === studentName.trim().toLowerCase())
+          (p.name && studentName && String(p.name).trim().toLowerCase() === String(studentName).trim().toLowerCase())
         );
         const myScore = myPlayer?.score ?? (studentQuizStatsRef.current.score > 0 ? studentQuizStatsRef.current.score : (personalAnswerResult?.total_score || 850));
         const myRank = myPlayer?.rank ?? (
