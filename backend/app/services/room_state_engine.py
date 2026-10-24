@@ -748,6 +748,10 @@ class RoomStateEngine:
         total_correct_all = 0
         total_answers_all = max(1, len(room_subs))
 
+        total_players_cnt = len(room.players)
+        total_questions_cnt = len(room.quiz.questions)
+        total_expected_answers = max(len(room_subs), total_players_cnt * total_questions_cnt)
+
         for q in room.quiz.questions:
             q_subs = [s for s in room_subs if s.question_id == q.id]
             correct_opt = next((o for o in q.options if o.is_correct), None)
@@ -760,9 +764,9 @@ class RoomStateEngine:
                     correct_count += 1
                     total_correct_all += 1
 
-            total_q_ans = len(q_subs)
-            pct = int((correct_count / total_q_ans * 100)) if total_q_ans > 0 else 100
-            mistakes = total_q_ans - correct_count
+            total_participants = max(total_players_cnt, len(q_subs))
+            pct = int((correct_count / total_participants * 100)) if total_participants > 0 else 0
+            mistakes = max(0, total_participants - correct_count)
 
             # Определение преобладающего дистрактора
             dominant_distractor = None
@@ -790,7 +794,7 @@ class RoomStateEngine:
                 )
             )
 
-        class_acc = int((total_correct_all / total_answers_all) * 100) if len(room_subs) > 0 else 100
+        class_acc = int((total_correct_all / total_expected_answers) * 100) if total_expected_answers > 0 else 100
         flagged = [p.name for p in room.players.values() if p.blurred_count > 1]
 
         # Формирование телеметрии ответов для ML 2.0 движка ремедиации и античита

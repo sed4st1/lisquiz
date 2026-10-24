@@ -73,7 +73,19 @@ export default function TeacherLobby({
 }: TeacherLobbyProps) {
   const [activePin, setActivePin] = useState<string>(propPin && propPin !== '482915' ? propPin : '');
   const [currentQuizTitle, setCurrentQuizTitle] = useState<string>(quizTitle);
-  const [students, setStudents] = useState<ConnectedStudent[]>([]);
+  const [students, setStudents] = useState<ConnectedStudent[]>(() => {
+    const cached = socketService.getLastSyncState();
+    if (cached && cached.players) {
+      return Object.values(cached.players)
+        .filter((p: any) => p.connected !== false)
+        .map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar,
+        }));
+    }
+    return [];
+  });
   const [copied, setCopied] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
@@ -192,6 +204,7 @@ export default function TeacherLobby({
 
       try {
         await socketService.connect(code, token);
+        socketService.send('GET_SYNC');
 
         handleSync = (data: any) => {
           if (!isMounted) return;

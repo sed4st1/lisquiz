@@ -136,13 +136,16 @@ export default function App() {
             ? topPlayers.filter((p: any) => (p.score ?? 0) > myScore).length + 1
             : 1
         );
+        const totalQ = currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3;
+        const correctQ = studentQuizStatsRef.current.correct;
+        const wrongQ = Math.max(studentQuizStatsRef.current.wrong, totalQ - correctQ);
         setQuizFinishData({
           top_players: topPlayers,
           myScore: myScore,
           myRank: myRank,
-          correctCount: studentQuizStatsRef.current.correct,
-          wrongCount: studentQuizStatsRef.current.wrong,
-          totalQuestions: currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3,
+          correctCount: correctQ,
+          wrongCount: wrongQ,
+          totalQuestions: totalQ,
         });
         setSubScreen('student_quiz_finish');
       }
@@ -600,8 +603,15 @@ export default function App() {
                 if (payload.joinData?.player_id) {
                   setStudentPlayerId(payload.joinData.player_id);
                 }
-                socketService.connect(payload.pin, payload.joinData.session_token).catch(() => { });
-                setSubScreen('student_waiting');
+                socketService.connect(payload.pin, payload.joinData.session_token)
+                  .then(() => {
+                    setSubScreen('student_waiting');
+                  })
+                  .catch((err) => {
+                    socketService.disconnect();
+                    setSubScreen(null);
+                    setAuthFeedback(err?.message || 'Комната не найдена или не отвечает');
+                  });
               }}
               onGoToGrove={() => setTab('grove')}
             />

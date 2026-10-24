@@ -29,7 +29,17 @@ export default function StudentWaitingLobby({
   onGameStart,
   onLeaveRoom,
 }: StudentWaitingLobbyProps) {
-  const [players, setPlayers] = useState<Array<{ id: string; name: string; avatar: string }>>([]);
+  const [players, setPlayers] = useState<Array<{ id: string; name: string; avatar: string }>>(() => {
+    const cached = socketService.getLastSyncState();
+    if (cached && cached.players) {
+      return Object.values(cached.players).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+      }));
+    }
+    return [{ id: 'me', name: playerName, avatar: playerAvatar }];
+  });
   const [countdown, setCountdown] = useState<number | null>(null);
 
   useEffect(() => {
@@ -90,37 +100,35 @@ export default function StudentWaitingLobby({
 
     const handleDisconnect = (data: any) => {
       if (!isMounted) return;
-      // Only kick student if room was explicitly deleted/finished on backend (code 4004)
-      if (data?.code === 4004) {
+      if (data?.code === 4004 || data?.code === 4001 || data?.code === 1006) {
         socketService.disconnect();
         onLeaveRoom();
       }
     };
 
-    // Auto-detect if room ceases to exist on the server (only if WS is disconnected)
-    let consecutive404Count = 0;
+    // Auto-detect if room ceases to exist on the server
     const roomPollInterval = setInterval(async () => {
       if (!isMounted) return;
-      if (socketService.isConnected()) {
-        consecutive404Count = 0;
-        return;
-      }
       try {
         const res = await fetch(`/api/rooms/${roomCode}`);
-        if (res.status === 404) {
-          consecutive404Count += 1;
-          if (consecutive404Count >= 2) {
-            clearInterval(roomPollInterval);
-            socketService.disconnect();
-            onLeaveRoom();
-          }
-        } else if (res.ok) {
-          consecutive404Count = 0;
+        if (!res.ok) {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onLeaveRoom();
         }
       } catch {
-        // Do not kick on temporary network/fetch hiccups
+        // network exception, keep retry
       }
-    }, 3000);
+    }, 2500);
+
+    // Initial sync
+    const cached = socketService.getLastSyncState();
+    if (cached && cached.players) {
+      handleSync(cached);
+    }
+    if (socketService.isConnected()) {
+      socketService.send('GET_SYNC');
+    }
 
     socketService.on('SYNC_STATE', handleSync);
     socketService.on('PLAYER_JOINED', handlePlayerJoined);

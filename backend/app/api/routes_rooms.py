@@ -269,10 +269,21 @@ async def update_room_quiz(room_code: str, quiz: Quiz):
 async def join_room(room_code: str, req: JoinRoomRequest):
     """Подключение ученика к комнате в лобби."""
     room = await room_state_engine.get_room(room_code)
-    if not room:
+    if not room or room.status != RoomStatus.LOBBY:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Комната {room_code} не найдена",
+            detail=f"Комната {room_code} не найдена или уже завершена",
+        )
+
+    # Проверяем, что в комнате присутствует учитель (хост)
+    has_teacher = any(
+        s.role == UserRole.TEACHER
+        for s in ws_manager.rooms.get(room_code, {}).values()
+    )
+    if not has_teacher:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Комната {room_code} не найдена: учитель закрыл лобби или не в сети",
         )
 
     try:

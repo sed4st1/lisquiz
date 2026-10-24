@@ -174,11 +174,11 @@ export default function StudentRoundWait({
             <div
               style={{
                 ...styles.statusIconCircle,
-                backgroundColor: !hasAnswered ? '#1E293B' : isCorrect ? '#065F46' : '#7F1D1D',
+                backgroundColor: !hasAnswered ? '#7F1D1D' : isCorrect ? '#065F46' : '#7F1D1D',
               }}
             >
               {!hasAnswered ? (
-                <Clock size={30} color="#94A3B8" />
+                <Clock size={30} color="#F87171" />
               ) : isCorrect ? (
                 <CheckCircle2 size={32} color="#34D399" />
               ) : (
@@ -187,11 +187,11 @@ export default function StudentRoundWait({
             </div>
 
             <h2 style={styles.statusTitle}>
-              {!hasAnswered ? 'Ответ не выбран' : isCorrect ? 'Ответ зафиксирован!' : 'Ответ принят!'}
+              {!hasAnswered ? 'Время вышло' : isCorrect ? 'Ответ зафиксирован!' : 'Ответ принят!'}
             </h2>
             <p style={styles.statusSubtitle}>
               {!hasAnswered
-                ? 'Ничего страшного, это не считается ошибкой!'
+                ? 'Ответ не выбран в срок — засчитано как ошибка.'
                 : isCorrect
                 ? `Отличная работа! +${points} очков в копилку`
                 : 'Не расстраивайся, сейчас разберём правильный ответ!'}

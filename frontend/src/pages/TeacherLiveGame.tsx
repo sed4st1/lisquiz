@@ -493,27 +493,34 @@ export default function TeacherLiveGame({
             </div>
 
             {/* Teacher Control Actions Immediately Below 2x2 Grid */}
-            <div style={styles.actionRowColumn}>
-              <TactileButton
-                theme="green"
-                size="lg"
-                fullWidth
-                onClick={handleShowResults}
-                iconBefore={<BarChart2 size={18} />}
-              >
-                Показать результаты раунда
-              </TactileButton>
+            {(() => {
+              const canProceed = (totalStudents > 0 && answeredCount >= totalStudents) || timeLeft <= 0;
+              return (
+                <div style={styles.actionRowColumn}>
+                  <TactileButton
+                    theme="green"
+                    size="lg"
+                    fullWidth
+                    disabled={!canProceed}
+                    onClick={handleShowResults}
+                    iconBefore={<BarChart2 size={18} />}
+                  >
+                    Показать результаты раунда
+                  </TactileButton>
 
-              <TactileButton
-                theme="orange"
-                size="lg"
-                fullWidth
-                onClick={handleNextQuestionOrFinish}
-                iconAfter={<ArrowRight size={18} />}
-              >
-                {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
-              </TactileButton>
-            </div>
+                  <TactileButton
+                    theme="orange"
+                    size="lg"
+                    fullWidth
+                    disabled={!canProceed}
+                    onClick={handleNextQuestionOrFinish}
+                    iconAfter={<ArrowRight size={18} />}
+                  >
+                    {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
+                  </TactileButton>
+                </div>
+              );
+            })()}
           </motion.div>
         )}
 

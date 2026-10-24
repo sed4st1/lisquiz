@@ -8,6 +8,11 @@ class SocketService {
   private currentRoomCode: string | null = null;
   private currentToken: string | null = null;
   private isExplicitDisconnect: boolean = false;
+  private lastSyncState: any = null;
+
+  public getLastSyncState(): any {
+    return this.lastSyncState;
+  }
 
   public connect(roomCode: string, token: string): Promise<void> {
     if (
@@ -42,6 +47,9 @@ class SocketService {
           try {
             const parsed = JSON.parse(event.data);
             const { event: eventName, data } = parsed;
+            if (eventName === 'SYNC_STATE') {
+              this.lastSyncState = data;
+            }
             if (eventName) {
               this.dispatch(eventName, data);
             }

@@ -120,8 +120,8 @@ export default function StudentQuizFinish({
     return higherScoreCount + 1;
   })();
 
-  const answeredCount = (correctCount || 0) + (wrongCount || 0);
-  const accuracy = answeredCount > 0 ? Math.round(((correctCount || 0) / answeredCount) * 100) : 100;
+  const wrongCountResolved = Math.max(wrongCount || 0, totalQuestions - correctCount);
+  const accuracy = totalQuestions > 0 ? Math.round(((correctCount || 0) / totalQuestions) * 100) : 0;
 
   return (
     <div style={styles.container}>
@@ -264,11 +264,11 @@ export default function StudentQuizFinish({
 
           <div style={styles.statBox}>
             <div style={styles.statIconRow}>
-              <XCircle size={15} color={wrongCount > 0 ? '#EF4444' : '#94A3B8'} />
+              <XCircle size={15} color={wrongCountResolved > 0 ? '#EF4444' : '#94A3B8'} />
               <span style={styles.statLabel}>Ошибок</span>
             </div>
-            <span style={{ ...styles.statVal, color: wrongCount > 0 ? '#EF4444' : '#E2E8F0' }}>
-              {wrongCount}
+            <span style={{ ...styles.statVal, color: wrongCountResolved > 0 ? '#EF4444' : '#E2E8F0' }}>
+              {wrongCountResolved}
             </span>
           </div>
 
