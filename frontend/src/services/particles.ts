@@ -52,7 +52,7 @@ export class CanvasParticleEngine {
       p.vx = Math.cos(angle) * velocity;
       p.vy = Math.sin(angle) * velocity - 3.2;
       p.scale = 6 + Math.random() * 6;
-      p.color = palette[Math.floor(Math.random() * palette.length)];
+      p.color = palette[Math.floor(Math.random() * palette.length)] ?? '#FF7A00';
       p.opacity = 1;
       p.rotation = Math.random() * 360;
       p.rotSpeed = (Math.random() - 0.5) * 14;
@@ -102,6 +102,7 @@ export class CanvasParticleEngine {
 
     for (let i = this.activeParticles.length - 1; i >= 0; i--) {
       const p = this.activeParticles[i];
+      if (!p) continue;
       p.x += p.vx;
       p.y += p.vy;
 

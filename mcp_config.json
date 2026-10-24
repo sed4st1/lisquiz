@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "shadcn": {
+      "command": "shadcn",
+      "args": ["mcp"]
+    },
+    "shadcn-ui-mcp": {
+      "command": "shadcn-ui-mcp-server",
+      "args": []
+    },
+    "origin-ui": {
+      "command": "npx",
+      "args": ["--yes", "github:kelvinchng/origin-ui-mcp"]
+    },
+    "21st": {
+      "serverUrl": "https://21st.dev/api/mcp"
+    }
+  }
+}

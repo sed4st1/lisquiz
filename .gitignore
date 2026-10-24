@@ -43,3 +43,8 @@ docs/guide/
 # Local design references
 образцы дизайна/
 
+# Databases
+*.db
+*.sqlite3
+backend/data/
+
