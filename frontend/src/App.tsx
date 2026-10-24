@@ -637,6 +637,9 @@ export default function App() {
                 setTeacherToken(token);
               }}
               onQuizTitleChange={(newTitle) => setQuizTitle(newTitle)}
+              onNavigateToCreateQuiz={() => {
+                setSubScreen('teacher_quizzes');
+              }}
               onStartQuiz={() => {
                 if (socketService.isConnected()) {
                   socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });

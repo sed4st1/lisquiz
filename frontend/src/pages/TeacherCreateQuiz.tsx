@@ -14,6 +14,7 @@ import {
   Edit3,
   Play,
   Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
@@ -199,6 +200,41 @@ export default function TeacherCreateQuiz({
     }
   };
 
+  const handleCreateManualQuiz = () => {
+    haptics.impact('medium');
+    const newQuiz: SavedQuiz = {
+      id: `quiz_custom_${Date.now()}`,
+      title: topic ? `${subject}: ${topic}` : `Викторина по ${subject}`,
+      subject: subject,
+      grade: grade,
+      topic: topic || 'Новая тема',
+      group_label: selectedClass ? selectedClass.name : `${grade} класс`,
+      is_active: false,
+      updated_at: new Date().toISOString(),
+      questions: [
+        {
+          id: 1,
+          text: 'Текст первого вопроса',
+          explanation: '',
+          time_limit_sec: 20,
+          tier: 1,
+          is_boss: false,
+          topic: topic || 'Тема',
+          options: [
+            { id: 1, text: 'Правильный ответ', is_correct: true },
+            { id: 2, text: 'Вариант 2', is_correct: false },
+            { id: 3, text: 'Вариант 3', is_correct: false },
+            { id: 4, text: 'Вариант 4', is_correct: false },
+          ],
+        },
+      ],
+    };
+    const list = quizStorage.upsertQuiz(newQuiz);
+    setSavedQuizzes(list);
+    setEditingQuiz(newQuiz);
+    setIsEditorOpen(true);
+  };
+
   const handleLaunchSavedQuiz = async (quiz: SavedQuiz) => {
     haptics.notification('success');
     setIsGenerating(true);
@@ -235,6 +271,7 @@ export default function TeacherCreateQuiz({
     setSavedQuizzes(list);
     setIsEditorOpen(false);
     setEditingQuiz(null);
+    setActiveTab('saved');
     haptics.notification('success');
   };
 
@@ -476,17 +513,30 @@ export default function TeacherCreateQuiz({
             </motion.div>
           </div>
 
-          {/* Launch Button */}
+          {/* Dual Action Buttons */}
           <div style={styles.submitSection}>
-            <TactileButton
-              theme="orange"
-              size="lg"
-              fullWidth
-              disabled={isGenerating}
-              onClick={handleStartGeneration}
-            >
-              {isGenerating ? 'Создание...' : 'Начать викторину'}
-            </TactileButton>
+            <div style={styles.dualSubmitRow}>
+              <TactileButton
+                theme="orange"
+                size="lg"
+                fullWidth
+                disabled={isGenerating}
+                onClick={handleStartGeneration}
+                iconBefore={<Sparkles size={18} />}
+              >
+                {isGenerating ? 'Создание...' : 'Создать с ИИ'}
+              </TactileButton>
+              <TactileButton
+                theme="blue"
+                size="lg"
+                fullWidth
+                disabled={isGenerating}
+                onClick={handleCreateManualQuiz}
+                iconBefore={<Edit3 size={18} />}
+              >
+                Создать самим
+              </TactileButton>
+            </div>
           </div>
         </div>
       )}
@@ -937,7 +987,13 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
   },
   submitSection: {
-    marginTop: 10,
+    marginTop: 12,
+  },
+  dualSubmitRow: {
+    display: 'flex',
+    flexDirection: 'column' as const,
+    gap: 10,
+    width: '100%',
   },
   quizzesList: {
     display: 'flex',
