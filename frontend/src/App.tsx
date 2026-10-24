@@ -121,7 +121,10 @@ export default function App() {
     const handleGameFinished = (data: any) => {
       haptics.notification('success');
       if (role === 'teacher') {
+        socketService.disconnect();
         setLastFinishedRoomCode(activePin);
+        setActivePin('');
+        setTeacherToken('');
         setSubScreen(null);
         setTab('stats');
       } else {
@@ -517,9 +520,11 @@ export default function App() {
           subject={quizSubject}
           classNameTitle={quizClass}
           onFinishQuiz={() => {
+            socketService.disconnect();
             setLastFinishedRoomCode(activePin);
-            setSubScreen(null);
+            setActivePin('');
             setTeacherToken('');
+            setSubScreen(null);
             setTab('stats');
           }}
         />
@@ -712,6 +717,9 @@ export default function App() {
               topic={quizSubject}
               grade={quizGrade}
               onBackToLobby={() => {
+                socketService.disconnect();
+                setActivePin('');
+                setTeacherToken('');
                 setSubScreen(null);
                 setTab('leaderboard');
               }}

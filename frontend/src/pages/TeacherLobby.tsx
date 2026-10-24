@@ -73,19 +73,18 @@ export default function TeacherLobby({
 }: TeacherLobbyProps) {
   const [activePin, setActivePin] = useState<string>(propPin && propPin !== '482915' ? propPin : '');
   const [currentQuizTitle, setCurrentQuizTitle] = useState<string>(quizTitle);
-  const [students, setStudents] = useState<ConnectedStudent[]>(() => {
-    const cached = socketService.getLastSyncState();
-    if (cached && cached.players) {
-      return Object.values(cached.players)
-        .filter((p: any) => p.connected !== false)
-        .map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          avatar: p.avatar,
-        }));
+  const [students, setStudents] = useState<ConnectedStudent[]>([]);
+
+  // Синхронизация PIN при внешнем сбросе/смене комнаты
+  useEffect(() => {
+    if (!propPin) {
+      setActivePin('');
+      setStudents([]);
+      setupDoneRef.current = null;
+    } else {
+      setActivePin(propPin);
     }
-    return [];
-  });
+  }, [propPin]);
   const [copied, setCopied] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
@@ -156,11 +155,16 @@ export default function TeacherLobby({
 
       if (!validRoom) {
         try {
+          if (isMounted) {
+            setActivePin('');
+            setStudents([]);
+          }
           const res = await roomApi.createRoom();
           code = res.room_code;
           token = res.teacher_token;
           if (isMounted) {
             setActivePin(code);
+            setStudents([]);
             onRoomReady?.(code, token);
           }
         } catch (e) {
@@ -217,6 +221,8 @@ export default function TeacherLobby({
                 avatar: p.avatar,
               }));
             setStudents(list);
+          } else {
+            setStudents([]);
           }
         };
 
@@ -284,6 +290,7 @@ export default function TeacherLobby({
 
     return () => {
       isMounted = false;
+      setupDoneRef.current = null;
       if (syncInterval) clearInterval(syncInterval);
       if (handleSync) socketService.off('SYNC_STATE', handleSync);
       if (handleJoined) socketService.off('PLAYER_JOINED', handleJoined);
