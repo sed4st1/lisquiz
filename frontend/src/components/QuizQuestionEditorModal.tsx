@@ -45,38 +45,45 @@ export default function QuizQuestionEditorModal({
   );
   const [activeQIndex, setActiveQIndex] = useState<number>(0);
 
-  if (!isOpen) return null;
-
-  const currentQ = questions[activeQIndex] || questions[0];
+  const currentQ = questions[activeQIndex] ?? questions[0];
+  if (!isOpen || !currentQ) return null;
 
   const handleSetCorrectOption = (optId: number) => {
     haptics.selection();
     setQuestions((prev) => {
+      const q = prev[activeQIndex];
+      if (!q) return prev;
       const next = [...prev];
-      const q = { ...next[activeQIndex] };
-      q.options = q.options.map((opt) => ({
-        ...opt,
-        is_correct: opt.id === optId,
-      }));
-      next[activeQIndex] = q;
+      next[activeQIndex] = {
+        ...q,
+        options: q.options.map((opt) => ({
+          ...opt,
+          is_correct: opt.id === optId,
+        })),
+      };
       return next;
     });
   };
 
   const handleUpdateQuestionText = (text: string) => {
     setQuestions((prev) => {
+      const q = prev[activeQIndex];
+      if (!q) return prev;
       const next = [...prev];
-      next[activeQIndex] = { ...next[activeQIndex], text };
+      next[activeQIndex] = { ...q, text };
       return next;
     });
   };
 
   const handleUpdateOptionText = (optId: number, text: string) => {
     setQuestions((prev) => {
+      const q = prev[activeQIndex];
+      if (!q) return prev;
       const next = [...prev];
-      const q = { ...next[activeQIndex] };
-      q.options = q.options.map((opt) => (opt.id === optId ? { ...opt, text } : opt));
-      next[activeQIndex] = q;
+      next[activeQIndex] = {
+        ...q,
+        options: q.options.map((opt) => (opt.id === optId ? { ...opt, text } : opt)),
+      };
       return next;
     });
   };
@@ -242,7 +249,7 @@ export default function QuizQuestionEditorModal({
               {/* Options Grid (4 neat rows) */}
               <div style={styles.optionsGrid}>
                 {currentQ.options.map((opt, optIdx) => {
-                  const theme = OPTION_THEMES[optIdx % OPTION_THEMES.length];
+                  const theme = OPTION_THEMES[optIdx % OPTION_THEMES.length] ?? OPTION_THEMES[0]!;
                   const isCorrect = Boolean(opt.is_correct);
 
                   return (

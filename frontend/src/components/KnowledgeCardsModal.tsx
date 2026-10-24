@@ -58,7 +58,7 @@ export default function KnowledgeCardsModal({
     try {
       const result = await groveApi.pullCard(studentId, 50);
       setPulledResult(result);
-      if (onAcornsChange) onAcornsChange(result.remaining_acorns);
+      if (onAcornsChange && result.remaining_acorns !== undefined) onAcornsChange(result.remaining_acorns);
       await fetchInventory();
     } catch (err: any) {
       setErrorMsg(err.message || 'Не удалось открыть карточку');
@@ -156,7 +156,7 @@ export default function KnowledgeCardsModal({
 
         {/* Pulled Card Result Popup / Card Reveal */}
         <AnimatePresence>
-          {pulledResult && (
+          {pulledResult && pulledResult.card && (
             <motion.div
               initial={{ scale: 0.8, opacity: 0, y: 15 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -218,8 +218,8 @@ export default function KnowledgeCardsModal({
           </div>
 
           <div style={styles.cardsGrid}>
-            {inventory?.cards.map((card) => {
-              const rarityInfo = RARITY_LABELS[card.rarity] || RARITY_LABELS.common;
+            {inventory?.cards.map((card: KnowledgeCard) => {
+              const rarityInfo = RARITY_LABELS[card.rarity] ?? RARITY_LABELS['common']!;
               return (
                 <motion.div
                   key={card.card_id}

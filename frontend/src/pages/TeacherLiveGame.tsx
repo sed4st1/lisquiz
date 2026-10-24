@@ -370,7 +370,7 @@ export default function TeacherLiveGame({
             {/* 2x2 Tactile Answer Buttons Grid (Matching Student Layout) */}
             <div style={styles.answersGrid}>
               {curQ.options?.map((opt: any, idx: number) => {
-                const theme = TEACHER_OPTION_THEMES[idx % TEACHER_OPTION_THEMES.length];
+                const theme = TEACHER_OPTION_THEMES[idx % TEACHER_OPTION_THEMES.length] ?? TEACHER_OPTION_THEMES[0]!;
                 const isCorrect = Boolean(opt.is_correct);
                 const textLen = opt.text?.length || 0;
                 const fontSize = textLen <= 4 ? 24 : textLen <= 10 ? 20 : textLen <= 22 ? 16 : 14;
@@ -551,7 +551,7 @@ export default function TeacherLiveGame({
             {/* Distribution bars matching colors and shapes */}
             <div style={styles.distributionList}>
               {curQ.options?.map((opt: any, idx: number) => {
-                const theme = TEACHER_OPTION_THEMES[idx % TEACHER_OPTION_THEMES.length];
+                const theme = TEACHER_OPTION_THEMES[idx % TEACHER_OPTION_THEMES.length] ?? TEACHER_OPTION_THEMES[0]!;
                 const count = resultsData?.distribution?.[String(opt.id)] ?? resultsData?.distribution?.[opt.id] ?? 0;
                 const isCorrect = Boolean(opt.is_correct || resultsData?.correct_option_id === opt.id);
                 const totalVotes = Object.values(resultsData?.distribution || {}).reduce(

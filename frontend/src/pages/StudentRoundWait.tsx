@@ -238,7 +238,7 @@ export default function StudentRoundWait({
               <div style={styles.distList}>
                 {Object.entries(resultsData.distribution).map(([key, val], idx) => {
                   const count = Number(val) || 0;
-                  const theme = SHAPE_THEMES[idx % SHAPE_THEMES.length];
+                  const theme = SHAPE_THEMES[idx % SHAPE_THEMES.length] ?? SHAPE_THEMES[0]!;
                   const total = Object.values(resultsData.distribution).reduce(
                     (acc: number, c: any) => acc + Number(c),
                     0

@@ -33,7 +33,7 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
       const saved = sessionStorage.getItem('lisquiz_student_name');
       if (saved) return saved;
       const pool = ['Иван К', 'Анна С', 'Михаил В', 'София М', 'Даниил Р', 'Алиса Т', 'Максим Д'];
-      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      const chosen = pool[Math.floor(Math.random() * pool.length)] ?? 'Иван К';
       sessionStorage.setItem('lisquiz_student_name', chosen);
       return chosen;
     } catch {

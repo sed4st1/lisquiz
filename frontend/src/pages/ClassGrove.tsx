@@ -12,8 +12,6 @@ import {
   CheckCircle2,
   Gift,
   HelpCircle,
-  Timer,
-  Target,
   RefreshCw,
   Sun,
   Leaf,
@@ -60,7 +58,7 @@ interface ClassGroveProps {
 
 export default function ClassGrove({
   onBack,
-  onStartQuiz,
+  onStartQuiz: _onStartQuiz,
   classId = '5A',
 }: ClassGroveProps) {
   // Live State

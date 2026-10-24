@@ -456,7 +456,14 @@ export type StudentContribution = StudentLeaderboardEntry;
 export type LeaderboardData = GroveLeaderboardResponse;
 export type CardPullResult = CardPullResponse;
 export type StudentInventory = StudentInventoryResponse;
-export type RevivalResult = RevivalResponse;
+export interface RevivalResult {
+  class_id: string;
+  revived: boolean;
+  bonus_xp: number;
+  new_total_xp: number;
+  animation: string;
+  mascot_speech: string;
+}
 
 export const groveApi = {
   getGroveState: (classId: string = 'class_7a') => fetchGroveState(classId),
