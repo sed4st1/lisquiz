@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { quizApi } from '../services/quizApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Copy,
@@ -82,8 +83,10 @@ export default function TeacherLobby({
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>(() => quizStorage.getSavedQuizzes());
   const [activeQuizId, setActiveQuizId] = useState<string>(() => {
     const list = quizStorage.getSavedQuizzes();
-    return list[0]?.id || '';
+    const active = list.find((q) => q.is_active);
+    return active?.id || list[0]?.id || '';
   });
+  const setupDoneRef = useRef<string | null>(null);
 
   const activeQuiz = savedQuizzes.find((q) => q.id === activeQuizId) || (savedQuizzes.length > 0 ? savedQuizzes[0] : null);
   const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
@@ -102,12 +105,11 @@ export default function TeacherLobby({
     quizStorage.syncFromDb().then((dbQuizzes) => {
       if (dbQuizzes && dbQuizzes.length > 0) {
         setSavedQuizzes(dbQuizzes);
-        if (!activeQuizId) {
-          setActiveQuizId(dbQuizzes[0].id);
-        }
-      } else {
-        setSavedQuizzes([]);
-        setActiveQuizId('');
+        setActiveQuizId((prev) => {
+          if (prev && dbQuizzes.some((q) => q.id === prev)) return prev;
+          const active = dbQuizzes.find((q) => q.is_active);
+          return active?.id || dbQuizzes[0].id;
+        });
       }
     });
   }, []);
@@ -126,11 +128,13 @@ export default function TeacherLobby({
 
       // Verify that the existing room is truly alive on backend
       let validRoom = false;
+      let existingRoomQuizTitle = '';
       if (code && token) {
         try {
           const info = await roomApi.getRoomInfo(code);
           if (info && info.status === 'lobby') {
             validRoom = true;
+            existingRoomQuizTitle = info.quiz_title || '';
           }
         } catch {
           validRoom = false;
@@ -153,39 +157,33 @@ export default function TeacherLobby({
       }
 
       if (!code || !token) return;
+      if (setupDoneRef.current === code && socketService.isConnected()) {
+        return;
+      }
+      setupDoneRef.current = code;
 
-      // Sync real quizzes from DB and assign active room quiz
+      // Sync real quizzes from DB and align active room quiz
       try {
         const dbQuizzes = await quizStorage.syncFromDb();
-        if (isMounted) {
+        if (isMounted && dbQuizzes.length > 0) {
           setSavedQuizzes(dbQuizzes);
-          const currentActive = dbQuizzes.find((q) => q.is_active);
-          if (currentActive) {
-            setActiveQuizId(currentActive.id);
-            setCurrentQuizTitle(currentActive.title);
-            onQuizTitleChange?.(currentActive.title);
-            await roomApi.updateRoomQuiz(code, {
-              title: currentActive.title,
-              subject: currentActive.subject,
-              grade: currentActive.grade,
-              topic: currentActive.topic,
-              questions: currentActive.questions,
-            }).catch(() => {});
-          } else if (dbQuizzes.length > 0) {
-            setActiveQuizId(dbQuizzes[0].id);
-            setCurrentQuizTitle(dbQuizzes[0].title);
-            onQuizTitleChange?.(dbQuizzes[0].title);
-            quizStorage.setActiveQuiz(dbQuizzes[0].id);
-            await roomApi.updateRoomQuiz(code, {
-              title: dbQuizzes[0].title,
-              subject: dbQuizzes[0].subject,
-              grade: dbQuizzes[0].grade,
-              topic: dbQuizzes[0].topic,
-              questions: dbQuizzes[0].questions,
-            }).catch(() => {});
-          } else {
-            setActiveQuizId('');
-            setCurrentQuizTitle('');
+          // Find matching quiz by existing room quiz or active status
+          const matchQuiz =
+            dbQuizzes.find((q) => q.title === existingRoomQuizTitle) ||
+            dbQuizzes.find((q) => q.is_active) ||
+            dbQuizzes[0];
+          if (matchQuiz) {
+            setActiveQuizId(matchQuiz.id);
+            setCurrentQuizTitle(matchQuiz.title);
+            if (!validRoom) {
+              await roomApi.updateRoomQuiz(code, {
+                title: matchQuiz.title,
+                subject: matchQuiz.subject,
+                grade: matchQuiz.grade,
+                topic: matchQuiz.topic,
+                questions: matchQuiz.questions,
+              }).catch(() => {});
+            }
           }
         }
       } catch (e) {
@@ -340,6 +338,11 @@ export default function TeacherLobby({
     haptics.notification('success');
     const list = quizStorage.upsertQuiz(updatedQuiz);
     setSavedQuizzes(list);
+    try {
+      await quizApi.saveQuiz(updatedQuiz);
+    } catch (e) {
+      console.warn('Failed to save quiz to DB in lobby:', e);
+    }
     setIsEditorOpen(false);
     setEditingQuiz(null);
 

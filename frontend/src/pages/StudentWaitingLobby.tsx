@@ -90,28 +90,37 @@ export default function StudentWaitingLobby({
 
     const handleDisconnect = (data: any) => {
       if (!isMounted) return;
-      if (data?.code === 4004 || data?.code === 4001 || data?.code === 4003) {
+      // Only kick student if room was explicitly deleted/finished on backend (code 4004)
+      if (data?.code === 4004) {
         socketService.disconnect();
         onLeaveRoom();
       }
     };
 
-    // Auto-detect if room ceases to exist on the server
+    // Auto-detect if room ceases to exist on the server (only if WS is disconnected)
+    let consecutive404Count = 0;
     const roomPollInterval = setInterval(async () => {
       if (!isMounted) return;
+      if (socketService.isConnected()) {
+        consecutive404Count = 0;
+        return;
+      }
       try {
         const res = await fetch(`/api/rooms/${roomCode}`);
-        if (!res.ok) {
-          clearInterval(roomPollInterval);
-          socketService.disconnect();
-          onLeaveRoom();
+        if (res.status === 404) {
+          consecutive404Count += 1;
+          if (consecutive404Count >= 2) {
+            clearInterval(roomPollInterval);
+            socketService.disconnect();
+            onLeaveRoom();
+          }
+        } else if (res.ok) {
+          consecutive404Count = 0;
         }
       } catch {
-        clearInterval(roomPollInterval);
-        socketService.disconnect();
-        onLeaveRoom();
+        // Do not kick on temporary network/fetch hiccups
       }
-    }, 2500);
+    }, 3000);
 
     socketService.on('SYNC_STATE', handleSync);
     socketService.on('PLAYER_JOINED', handlePlayerJoined);

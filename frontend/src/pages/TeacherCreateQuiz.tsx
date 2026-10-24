@@ -21,6 +21,7 @@ import { haptics } from '../services/haptics';
 import { roomApi } from '../services/roomApi';
 import { classApi, ClassItem } from '../services/classApi';
 import { quizStorage, SavedQuiz } from '../services/quizStorage';
+import { quizApi } from '../services/quizApi';
 import QuizQuestionEditorModal from '../components/QuizQuestionEditorModal';
 
 export interface TextbookItem {
@@ -207,18 +208,21 @@ export default function TeacherCreateQuiz({
           questions: roomData.quiz.questions || [],
         };
         const updatedList = quizStorage.upsertQuiz(newQuiz);
-        setSavedQuizzes(updatedList);
         quizStorage.setActiveQuiz(newQuiz.id);
+        setSavedQuizzes(updatedList);
+        try {
+          await quizApi.saveQuiz(newQuiz);
+        } catch (e) {
+          console.warn('Failed to save generated quiz to DB:', e);
+        }
       }
 
-      setTimeout(() => {
-        setIsGenerating(false);
-        if (onQuizCreated) {
-          onQuizCreated(roomData);
-        } else if (onNavigateToLobby) {
-          onNavigateToLobby();
-        }
-      }, 400);
+      setIsGenerating(false);
+      if (onQuizCreated) {
+        onQuizCreated(roomData);
+      } else if (onNavigateToLobby) {
+        onNavigateToLobby();
+      }
     } catch (err) {
       console.error('Failed to create room:', err);
       setTimeout(() => {
@@ -294,10 +298,15 @@ export default function TeacherCreateQuiz({
     }
   };
 
-  const handleSaveEditedQuiz = (updated: SavedQuiz) => {
+  const handleSaveEditedQuiz = async (updated: SavedQuiz) => {
     const list = quizStorage.upsertQuiz(updated);
     quizStorage.setActiveQuiz(updated.id);
     setSavedQuizzes(list);
+    try {
+      await quizApi.saveQuiz(updated);
+    } catch (e) {
+      console.warn('Failed to save edited quiz to DB:', e);
+    }
     setIsEditorOpen(false);
     setEditingQuiz(null);
     setActiveTab('saved');

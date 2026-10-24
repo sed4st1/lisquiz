@@ -238,6 +238,12 @@ async def websocket_room_endpoint(
                                         "top_players": top_players,
                                     },
                                 )
+                        elif action == "CLOSE_ROOM":
+                            await ws_manager.broadcast_students(
+                                room_code,
+                                "ROOM_CLOSED",
+                                {"reason": "Учитель закрыл комнату"},
+                            )
                     except Exception as err:
                         logger.error(f"Ошибка при обработке TEACHER_ACTION '{action}': {err}", exc_info=True)
 
@@ -322,11 +328,7 @@ async def websocket_room_endpoint(
                 },
             )
         elif disc_session and disc_session.role == UserRole.TEACHER:
-            await ws_manager.broadcast_students(
-                room_code,
-                "ROOM_CLOSED",
-                {"reason": "Учитель закрыл комнату"},
-            )
+            logger.info(f"Учитель комнаты {room_code} временно отключил WS. Сессия комнаты сохранена.")
     except Exception as e:
         logger.error(f"Неожиданная ошибка в WS обработчике комнаты {room_code}: {e}")
         disc_session = ws_manager.disconnect(websocket, room_code)

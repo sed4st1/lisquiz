@@ -160,7 +160,7 @@ export default function App() {
 
     const handleStudentDisconnect = (data: any) => {
       if (role === 'student' && subScreen) {
-        if (data?.code === 4004 || data?.code === 4001 || data?.code === 4003) {
+        if (data?.code === 4004) {
           socketService.disconnect();
           setSubScreen(null);
           setPersonalAnswerResult(null);

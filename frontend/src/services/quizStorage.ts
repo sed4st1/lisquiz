@@ -158,10 +158,28 @@ export const quizStorage = {
             !q.id.startsWith('makarychev_') &&
             !q.id.startsWith('atanasyan_') &&
             !q.id.startsWith('ladyzhenskaya_') &&
-              !q.id.startsWith('room_quiz_')
+            !q.id.startsWith('room_quiz_')
         );
-        this.saveQuizzes(cleaned);
-        return cleaned;
+
+        // Do not wipe newly created local quizzes before DB sync completes
+        const currentLocal = this.getSavedQuizzes();
+        const activeQuiz = currentLocal.find((q) => q.is_active);
+        const dbIds = new Set(cleaned.map((q) => q.id));
+        const pendingLocal = currentLocal.filter((q) => !dbIds.has(q.id));
+
+        for (const pq of pendingLocal) {
+          quizApi.saveQuiz(pq).catch(() => {});
+        }
+
+        const merged = [...pendingLocal, ...cleaned];
+        if (activeQuiz) {
+          for (const m of merged) {
+            m.is_active = m.id === activeQuiz.id;
+          }
+        }
+
+        this.saveQuizzes(merged);
+        return merged;
       }
     } catch (e) {
       console.warn('Failed to sync quizzes from DB:', e);

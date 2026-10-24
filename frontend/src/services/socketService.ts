@@ -10,6 +10,15 @@ class SocketService {
   private isExplicitDisconnect: boolean = false;
 
   public connect(roomCode: string, token: string): Promise<void> {
+    if (
+      this.ws &&
+      this.ws.readyState === WebSocket.OPEN &&
+      this.currentRoomCode === roomCode &&
+      this.currentToken === token
+    ) {
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       this.disconnect();
       this.isExplicitDisconnect = false;
@@ -74,6 +83,8 @@ class SocketService {
     }
     if (this.ws) {
       try {
+        this.ws.onclose = null;
+        this.ws.onerror = null;
         this.ws.close();
       } catch {}
       this.ws = null;
