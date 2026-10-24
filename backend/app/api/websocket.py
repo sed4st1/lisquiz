@@ -321,6 +321,12 @@ async def websocket_room_endpoint(
                     "total_players": active_players,
                 },
             )
+        elif disc_session and disc_session.role == UserRole.TEACHER:
+            await ws_manager.broadcast_students(
+                room_code,
+                "ROOM_CLOSED",
+                {"reason": "Учитель закрыл комнату"},
+            )
     except Exception as e:
         logger.error(f"Неожиданная ошибка в WS обработчике комнаты {room_code}: {e}")
         disc_session = ws_manager.disconnect(websocket, room_code)

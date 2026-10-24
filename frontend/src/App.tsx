@@ -66,7 +66,7 @@ export default function App() {
   const [authFeedback, setAuthFeedback] = useState<string | null>(null);
 
   // Live session state
-  const [activePin, setActivePin] = useState<string>('482915');
+  const [activePin, setActivePin] = useState<string>('');
   const [teacherToken, setTeacherToken] = useState<string>('');
   const [studentPlayerId, setStudentPlayerId] = useState<string>('');
   const [studentName, setStudentName] = useState<string>(() => authService.getCachedUser()?.display_name || 'Иван К');
@@ -148,14 +148,44 @@ export default function App() {
       }
     };
 
+    const handleStudentKickOrClose = (data: any) => {
+      if (role === 'student' && subScreen) {
+        socketService.disconnect();
+        setSubScreen(null);
+        setPersonalAnswerResult(null);
+        setCurrentQuestionData(null);
+        setAuthFeedback(data?.reason || 'Комната была закрыта или больше не существует');
+      }
+    };
+
+    const handleStudentDisconnect = (data: any) => {
+      if (role === 'student' && subScreen) {
+        if (data?.code === 4004 || data?.code === 4001 || data?.code === 4003) {
+          socketService.disconnect();
+          setSubScreen(null);
+          setPersonalAnswerResult(null);
+          setCurrentQuestionData(null);
+          setAuthFeedback('Комната больше не существует');
+        }
+      }
+    };
+
     socketService.on('QUESTION_START', handleQuestionStart);
     socketService.on('PERSONAL_ANSWER_RESULT', handleAnswerResult);
     socketService.on('GAME_FINISHED', handleGameFinished);
+    socketService.on('DISCONNECT', handleStudentDisconnect);
+    socketService.on('KICKED', handleStudentKickOrClose);
+    socketService.on('ROOM_CLOSED', handleStudentKickOrClose);
+    socketService.on('TEACHER_LEFT', handleStudentKickOrClose);
 
     return () => {
       socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('PERSONAL_ANSWER_RESULT', handleAnswerResult);
       socketService.off('GAME_FINISHED', handleGameFinished);
+      socketService.off('DISCONNECT', handleStudentDisconnect);
+      socketService.off('KICKED', handleStudentKickOrClose);
+      socketService.off('ROOM_CLOSED', handleStudentKickOrClose);
+      socketService.off('TEACHER_LEFT', handleStudentKickOrClose);
     };
   }, [role, studentName, studentPlayerId]);
 

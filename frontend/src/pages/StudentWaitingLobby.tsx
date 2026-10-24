@@ -82,17 +82,57 @@ export default function StudentWaitingLobby({
       }, 1000);
     };
 
+    const handleKickOrExit = () => {
+      if (!isMounted) return;
+      socketService.disconnect();
+      onLeaveRoom();
+    };
+
+    const handleDisconnect = (data: any) => {
+      if (!isMounted) return;
+      if (data?.code === 4004 || data?.code === 4001 || data?.code === 4003) {
+        socketService.disconnect();
+        onLeaveRoom();
+      }
+    };
+
+    // Auto-detect if room ceases to exist on the server
+    const roomPollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}`);
+        if (!res.ok) {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onLeaveRoom();
+        }
+      } catch {
+        clearInterval(roomPollInterval);
+        socketService.disconnect();
+        onLeaveRoom();
+      }
+    }, 2500);
+
     socketService.on('SYNC_STATE', handleSync);
     socketService.on('PLAYER_JOINED', handlePlayerJoined);
     socketService.on('PLAYER_LEFT', handlePlayerLeft);
     socketService.on('COUNTDOWN_START', handleCountdownStart);
+    socketService.on('DISCONNECT', handleDisconnect);
+    socketService.on('KICKED', handleKickOrExit);
+    socketService.on('ROOM_CLOSED', handleKickOrExit);
+    socketService.on('TEACHER_LEFT', handleKickOrExit);
 
     return () => {
       isMounted = false;
+      clearInterval(roomPollInterval);
       socketService.off('SYNC_STATE', handleSync);
       socketService.off('PLAYER_JOINED', handlePlayerJoined);
       socketService.off('PLAYER_LEFT', handlePlayerLeft);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
+      socketService.off('DISCONNECT', handleDisconnect);
+      socketService.off('KICKED', handleKickOrExit);
+      socketService.off('ROOM_CLOSED', handleKickOrExit);
+      socketService.off('TEACHER_LEFT', handleKickOrExit);
     };
   }, [onGameStart]);
 

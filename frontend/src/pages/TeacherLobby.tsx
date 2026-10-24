@@ -70,7 +70,7 @@ export default function TeacherLobby({
   onQuizTitleChange,
   onNavigateToCreateQuiz,
 }: TeacherLobbyProps) {
-  const [activePin, setActivePin] = useState<string>(propPin || '');
+  const [activePin, setActivePin] = useState<string>(propPin && propPin !== '482915' ? propPin : '');
   const [currentQuizTitle, setCurrentQuizTitle] = useState<string>(quizTitle);
   const [students, setStudents] = useState<ConnectedStudent[]>([]);
   const [copied, setCopied] = useState<boolean>(false);
@@ -121,10 +121,23 @@ export default function TeacherLobby({
     let handleCountdown: ((data: any) => void) | null = null;
 
     const setupRoom = async () => {
-      let code = propPin;
-      let token = propToken;
+      let code = propPin && propPin !== '482915' ? propPin : '';
+      let token = propToken && propToken !== 'mock_teacher_token' ? propToken : '';
 
-      if (!code || !token) {
+      // Verify that the existing room is truly alive on backend
+      let validRoom = false;
+      if (code && token) {
+        try {
+          const info = await roomApi.getRoomInfo(code);
+          if (info && info.status === 'lobby') {
+            validRoom = true;
+          }
+        } catch {
+          validRoom = false;
+        }
+      }
+
+      if (!validRoom) {
         try {
           const res = await roomApi.createRoom();
           code = res.room_code;
@@ -135,11 +148,7 @@ export default function TeacherLobby({
           }
         } catch (e) {
           console.error('Failed to create room:', e);
-          code = '482915';
-          token = 'mock_teacher_token';
-          if (isMounted) {
-            setActivePin(code);
-          }
+          return;
         }
       }
 
