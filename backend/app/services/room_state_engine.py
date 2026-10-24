@@ -252,6 +252,7 @@ class RoomStateEngine:
         quiz: Quiz,
         teacher_name: str = "Учитель",
         teacher_pseudonym_id: str = "teacher_host",
+        class_id: Optional[str] = None,
     ) -> Tuple[GameRoom, str]:
         """
         Создание новой игровой комнаты учителем.
@@ -274,9 +275,25 @@ class RoomStateEngine:
             time_remaining=20,
             grove_energy=0,
             teacher_pseudonym_id=teacher_pseudonym_id,
+            class_id=class_id,
             players={},
             answered_player_ids=[],
         )
+        try:
+            from ..db.session import async_session_maker
+            from ..db.models import GameRoomModel
+            async with async_session_maker() as db:
+                db_room = GameRoomModel(
+                    room_code=room_code,
+                    quiz_id=quiz.id if quiz else None,
+                    class_id=class_id,
+                    status="lobby",
+                    teacher_pseudonym_id=teacher_pseudonym_id,
+                )
+                db.add(db_room)
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"DB sync room notice: {e}")
         self.rooms[room_code] = room
         self.answers[room_code] = []
         await self._sync_room_to_redis(room)

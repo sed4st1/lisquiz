@@ -9,12 +9,14 @@ export interface CreateRoomOptions {
   question_count?: number;
   textbook_id?: string;
   paragraph_num?: number;
+  class_id?: string;
 }
 
 export interface CreateRoomResponse {
   room_code: string;
   status: string;
   quiz_title: string;
+  class_id?: string;
   subject?: string;
   grade?: number;
   total_questions?: number;
@@ -26,6 +28,7 @@ export interface RoomInfoResponse {
   room_code: string;
   status: string;
   quiz_title: string;
+  class_id?: string;
   subject?: string;
   grade?: number;
   total_questions: number;
@@ -52,6 +55,7 @@ export const roomApi = {
           question_count: options.question_count,
           textbook_id: options.textbook_id,
           paragraph_num: options.paragraph_num,
+          class_id: options.class_id,
         }
       : {
           quiz: options || undefined,

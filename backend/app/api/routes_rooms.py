@@ -72,6 +72,7 @@ class RoomCreateRequest(BaseModel):
     question_count: Optional[int] = None
     textbook_id: Optional[str] = None
     paragraph_num: Optional[int] = None
+    class_id: Optional[str] = None
 
 
 class JoinRoomRequest(BaseModel):
@@ -185,11 +186,13 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
         quiz=target_quiz,
         teacher_name=teacher_name,
         teacher_pseudonym_id=teacher_p_id,
+        class_id=req.class_id if req else None,
     )
 
     return {
         "room_code": room.room_code,
         "status": room.status.value,
+        "class_id": room.class_id,
         "quiz_title": room.quiz.title,
         "subject": room.quiz.subject,
         "grade": room.quiz.grade,
@@ -212,6 +215,7 @@ async def get_room_info(room_code: str):
     return {
         "room_code": room.room_code,
         "status": room.status.value,
+        "class_id": room.class_id,
         "quiz_title": room.quiz.title,
         "subject": room.quiz.subject,
         "grade": room.quiz.grade,

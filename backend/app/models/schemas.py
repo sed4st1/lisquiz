@@ -105,6 +105,7 @@ class GameRoom(BaseModel):
     time_remaining: int = 20
     grove_energy: int = 0  # Энергия «Рощи класса» (0..100)
     teacher_pseudonym_id: str = "teacher_host"
+    class_id: Optional[str] = None
     question_start_epoch_ms: Optional[int] = None
     answered_player_ids: List[str] = []
     players: Dict[str, Player] = {}

@@ -13,6 +13,7 @@ from sqlalchemy import (
     JSON,
     func,
     Index,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .session import Base
@@ -90,12 +91,56 @@ class AnswerOptionModel(Base):
     question: Mapped["QuestionModel"] = relationship("QuestionModel", back_populates="options")
 
 
+class ClassModel(Base):
+    """Модель школьного класса (например, 7А, 8Б) для долгосрочной статистики."""
+    __tablename__ = "classes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: f"cls_{uuid.uuid4().hex[:8]}")
+    teacher_pseudonym_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)  # e.g. "7А"
+    subject: Mapped[str] = mapped_column(String(100), default="Математика", nullable=False)
+    grade: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
+    invite_code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)  # e.g. "7A-4829"
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Связи
+    students: Mapped[List["ClassStudentModel"]] = relationship(
+        "ClassStudentModel",
+        back_populates="class_group",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+    rooms: Mapped[List["GameRoomModel"]] = relationship(
+        "GameRoomModel",
+        back_populates="class_group",
+        lazy="selectin",
+    )
+
+
+class ClassStudentModel(Base):
+    """Связующая таблица учеников класса (152-ФЗ Zero-PII)."""
+    __tablename__ = "class_students"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    class_id: Mapped[str] = mapped_column(String(36), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    pseudonym_id: Mapped[str] = mapped_column(String(64), ForeignKey("users.pseudonym_id", ondelete="CASCADE"), nullable=False, index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Связи
+    class_group: Mapped["ClassModel"] = relationship("ClassModel", back_populates="students")
+    user: Mapped[Optional["UserModel"]] = relationship("UserModel", back_populates="class_memberships")
+
+
+Index("uq_class_student", ClassStudentModel.class_id, ClassStudentModel.pseudonym_id, unique=True)
+
+
 class GameRoomModel(Base):
     """Модель игровой сессии (комнаты с 6-значным кодом)."""
     __tablename__ = "game_rooms"
 
     room_code: Mapped[str] = mapped_column(String(6), primary_key=True)
     quiz_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("quizzes.id", ondelete="SET NULL"), nullable=True, index=True)
+    class_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("classes.id", ondelete="SET NULL"), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(20), default="lobby", nullable=False)  # lobby, playing, finished
     teacher_pseudonym_id: Mapped[str] = mapped_column(String(64), default="teacher_host", nullable=False)
     current_question_index: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -105,6 +150,7 @@ class GameRoomModel(Base):
 
     # Связи
     quiz: Mapped[Optional["QuizModel"]] = relationship("QuizModel", back_populates="rooms")
+    class_group: Mapped[Optional["ClassModel"]] = relationship("ClassModel", back_populates="rooms")
     participants: Mapped[List["RoomParticipantModel"]] = relationship(
         "RoomParticipantModel",
         back_populates="room",
@@ -223,6 +269,13 @@ class UserModel(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Связи
+    class_memberships: Mapped[List["ClassStudentModel"]] = relationship(
+        "ClassStudentModel",
+        back_populates="user",
+        lazy="selectin",
+    )
 
 
 class AuthTicketModel(Base):

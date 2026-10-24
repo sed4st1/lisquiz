@@ -31,6 +31,8 @@ import TeacherLiveGame from './pages/TeacherLiveGame';
 import StudentRoundWait from './pages/StudentRoundWait';
 import StudentQuizFinish from './pages/StudentQuizFinish';
 import SleepScreen from './pages/SleepScreen';
+import TeacherClassManagement from './pages/TeacherClassManagement';
+import { classApi } from './services/classApi';
 import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
 
@@ -44,7 +46,8 @@ type SubScreenType =
   | 'feedback_wrong'
   | 'student_round_wait'
   | 'student_quiz_finish'
-  | 'sleep_screen';
+  | 'sleep_screen'
+  | 'teacher_classes';
 
 export default function App() {
   const [role, setRole] = useState<'teacher' | 'student'>('student');
@@ -169,8 +172,20 @@ export default function App() {
       return;
     }
 
-    // 2. Query param ticket: ?ticket=tkt_...
     const urlParams = new URLSearchParams(window.location.search);
+
+    // 1.5 Check query param join_class: ?join_class=7A-X9K2
+    const joinClassCode = urlParams.get('join_class');
+    if (joinClassCode) {
+      classApi.joinClass(joinClassCode)
+        .then((res) => {
+          haptics.notification('success');
+          setAuthFeedback(`🎉 Вы успешно привязаны к классу ${res.name}! Ваши результаты теперь идут в общий зачет.`);
+        })
+        .catch((e) => console.warn('Join class error:', e));
+    }
+
+    // 2. Query param ticket: ?ticket=tkt_...
     const ticketParam = urlParams.get('ticket');
     if (ticketParam) {
       setAuthLoading(true);
@@ -255,6 +270,20 @@ export default function App() {
 
   // Render content according to active Tab & Role
   const renderTabContent = () => {
+    if (subScreen === 'teacher_classes') {
+      return (
+        <TeacherClassManagement
+          onBack={() => setSubScreen(null)}
+          onSelectClassForQuiz={(cls) => {
+            setQuizSubject(cls.subject);
+            setQuizGrade(cls.grade);
+            setQuizClass(cls.name);
+            setSubScreen(null);
+            setTab('home');
+          }}
+        />
+      );
+    }
     if (subScreen === 'student_waiting') {
       return (
         <StudentWaitingLobby
@@ -1010,6 +1039,16 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => {
+              setRole('teacher');
+              setSubScreen('teacher_classes');
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            🏫 Классы и рейтинг (152-ФЗ)
+          </button>
+
+          <button
             onClick={() => setAuthModalOpen(true)}
             style={{ ...styles.devBtn, borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
           >
@@ -1183,6 +1222,16 @@ export default function App() {
               style={styles.mobileDevBtn}
             >
               🌙 Сон
+            </button>
+            <button
+              onClick={() => {
+                setRole('teacher');
+                setSubScreen('teacher_classes');
+                setIsMobileDevOpen(false);
+              }}
+              style={{ ...styles.mobileDevBtn, color: '#93C5FD' }}
+            >
+              🏫 Классы
             </button>
             <button
               onClick={() => {
