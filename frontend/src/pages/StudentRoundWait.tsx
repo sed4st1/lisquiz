@@ -27,7 +27,7 @@ export interface StudentRoundWaitProps {
     streak?: number;
   } | null;
   onNextQuestion: (questionData: any) => void;
-  onGameFinished: () => void;
+  onGameFinished: (finishData?: any) => void;
 }
 
 type StudentRoundMode = 'waiting' | 'results' | 'leaderboard' | 'finished';
@@ -49,6 +49,7 @@ export default function StudentRoundWait({
   const [mode, setMode] = useState<StudentRoundMode>('waiting');
   const [resultsData, setResultsData] = useState<any>(null);
   const [leaderboardData, setLeaderboardData] = useState<any>(null);
+  const [finishData, setFinishData] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
   const isCorrect = personalResult?.is_correct ?? true;
@@ -111,9 +112,10 @@ export default function StudentRoundWait({
       onNextQuestion(data);
     };
 
-    const handleGameFinished = () => {
+    const handleGameFinished = (data: any) => {
       if (!isMounted) return;
       haptics.notification('success');
+      setFinishData(data);
       try {
         confetti({
           particleCount: 160,
@@ -377,7 +379,7 @@ export default function StudentRoundWait({
 
             <div style={{ marginTop: 12 }}>
               <TactileButton
-                onClick={onGameFinished}
+                onClick={() => onGameFinished(finishData)}
                 theme="green"
                 size="lg"
                 fullWidth

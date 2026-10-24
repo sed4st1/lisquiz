@@ -54,9 +54,9 @@ class QuizVariant(BaseModel):
 class Quiz(BaseModel):
     id: Optional[str] = None
     title: str
-    subject: str
-    grade: int
-    topic: str
+    subject: str = "Математика"
+    grade: int = 7
+    topic: str = "Школьная программа"
     questions: List[Question]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source: Optional[str] = "bank"  # "bank", "gigachat", "ocr"

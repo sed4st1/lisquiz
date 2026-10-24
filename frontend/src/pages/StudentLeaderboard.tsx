@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { TrendingUp, Sparkles, Crown, Star } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { groveApi, LeaderboardData, StudentContribution } from '../services/groveApi';
@@ -13,9 +13,31 @@ const AVATAR_MAP: Record<string, string> = {
   squirrel: '/assets/avatars/students/squirrel.png',
 };
 
-export default function StudentLeaderboard() {
+export interface StudentLeaderboardProps {
+  boostPoints?: number | null;
+  boostRank?: number | null;
+  onClearBoost?: () => void;
+}
+
+export default function StudentLeaderboard({
+  boostPoints,
+  boostRank,
+  onClearBoost,
+}: StudentLeaderboardProps = {}) {
   const [leaderboard, setLeaderboard] = useState<LeaderboardData | null>(null);
-  const [activeDivision, setActiveDivision] = useState<'all' | 'council' | 'guardians' | 'sprouts'>('all');
+  const [showBoost, setShowBoost] = useState<boolean>(Boolean(boostPoints && boostPoints > 0));
+
+  useEffect(() => {
+    if (boostPoints && boostPoints > 0) {
+      setShowBoost(true);
+      const timer = setTimeout(() => {
+        setShowBoost(false);
+      }, 4500);
+      return () => clearTimeout(timer);
+    } else {
+      setShowBoost(false);
+    }
+  }, [boostPoints]);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -57,14 +79,6 @@ export default function StudentLeaderboard() {
   const top3 = allStudents[2];
   const mostImproved = leaderboard?.most_improved;
 
-  const filteredStudents = () => {
-    if (!leaderboard) return allStudents;
-    if (activeDivision === 'council') return leaderboard.divisions.council_of_groves;
-    if (activeDivision === 'guardians') return leaderboard.divisions.forest_guardians;
-    if (activeDivision === 'sprouts') return leaderboard.divisions.sprout_keepers;
-    return allStudents;
-  };
-
   const getAvatarSrc = (avatar: string) => {
     return AVATAR_MAP[avatar] || AVATAR_MAP.raccoon;
   };
@@ -75,6 +89,53 @@ export default function StudentLeaderboard() {
       <header style={styles.header}>
         <h1 style={styles.headerTitle}>Рейтинг и дивизионы недели</h1>
       </header>
+
+      {/* Temporary Animated Rank Growth Notification Banner */}
+      <AnimatePresence onExitComplete={onClearBoost}>
+        {showBoost && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -10, marginBottom: 0 }}
+            animate={{ opacity: 1, height: 'auto', y: 0, marginBottom: 14 }}
+            exit={{
+              opacity: 0,
+              height: 0,
+              y: -8,
+              paddingTop: 0,
+              paddingBottom: 0,
+              marginTop: 0,
+              marginBottom: 0,
+              borderWidth: 0,
+            }}
+            transition={{
+              duration: 0.55,
+              ease: [0.16, 1, 0.3, 1],
+            }}
+            style={{
+              ...styles.rankBoostBanner,
+              width: '100%',
+              boxSizing: 'border-box',
+              overflow: 'hidden',
+            }}
+          >
+            <div style={styles.rankBoostLeft}>
+              <div style={styles.rankBoostIconBox}>
+                <TrendingUp size={16} color="#34D399" />
+              </div>
+              <div style={styles.rankBoostTextCol}>
+                <span style={styles.rankBoostTitle}>Рейтинг обновлен</span>
+                <span style={styles.rankBoostDesc}>
+                  {boostRank
+                    ? `${boostRank}-е место в викторине`
+                    : currentStudent?.rank
+                    ? `${currentStudent.rank}-е место в классе`
+                    : 'Отличный результат!'}
+                </span>
+              </div>
+            </div>
+            <span style={styles.rankDeltaPill}>+{boostPoints || 150} XP</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Hero: My Rank in Class */}
       <motion.div
@@ -133,7 +194,7 @@ export default function StudentLeaderboard() {
               </div>
             </div>
 
-            {/* 1st Place MVP */}
+            {/* 1st Place with Crown and '1' */}
             <div style={styles.podiumColumn}>
               <Crown size={22} color="#F59E0B" style={{ marginBottom: 2 }} />
               <div style={styles.podiumAvatarGold}>
@@ -150,7 +211,7 @@ export default function StudentLeaderboard() {
                 {top1.weekly_xp} б
               </span>
               <div style={{ ...styles.podiumBlock, ...styles.podiumGold, height: 95 }}>
-                <span style={{ ...styles.podiumMedal, fontSize: 14 }}>👑 MVP</span>
+                <span style={{ ...styles.podiumMedal, fontSize: 14 }}>👑 1</span>
               </div>
             </div>
 
@@ -175,84 +236,14 @@ export default function StudentLeaderboard() {
         </div>
       )}
 
-      {/* Division Tabs */}
-      <div style={styles.tabsRow}>
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveDivision('all');
-          }}
-          style={{
-            ...styles.tabBtn,
-            backgroundColor: activeDivision === 'all' ? '#10B981' : '#1E293B',
-            color: activeDivision === 'all' ? '#FFFFFF' : '#94A3B8',
-          }}
-        >
-          Все ({allStudents.length})
-        </button>
-
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveDivision('council');
-          }}
-          style={{
-            ...styles.tabBtn,
-            backgroundColor: activeDivision === 'council' ? '#D97706' : '#1E293B',
-            color: activeDivision === 'council' ? '#FFFFFF' : '#94A3B8',
-          }}
-        >
-          Совет Дубрав (25%)
-        </button>
-
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveDivision('guardians');
-          }}
-          style={{
-            ...styles.tabBtn,
-            backgroundColor: activeDivision === 'guardians' ? '#2563EB' : '#1E293B',
-            color: activeDivision === 'guardians' ? '#FFFFFF' : '#94A3B8',
-          }}
-        >
-          Стражи (50%)
-        </button>
-
-        <button
-          onClick={() => {
-            haptics.selection();
-            setActiveDivision('sprouts');
-          }}
-          style={{
-            ...styles.tabBtn,
-            backgroundColor: activeDivision === 'sprouts' ? '#059669' : '#1E293B',
-            color: activeDivision === 'sprouts' ? '#FFFFFF' : '#94A3B8',
-          }}
-        >
-          Хранители (25%)
-        </button>
-      </div>
-
-      {/* Division Role Explain Banner */}
+      {/* Division Role Explain Banner (Закон Либиха) */}
       <div style={styles.divisionExplainer}>
-        {activeDivision === 'council' && (
-          <span>☀️ <b>Совет Дубрав</b> поставляет Солнечный Свет за олимпиадные задачи Tier 3</span>
-        )}
-        {activeDivision === 'guardians' && (
-          <span>🍂 <b>Лесные Стражи</b> питают почву Гумусом за стандартные задачи Tier 2</span>
-        )}
-        {activeDivision === 'sprouts' && (
-          <span>💧 <b>Хранители Ростков</b> насыщают корни Водой за базовые задачи Tier 1</span>
-        )}
-        {activeDivision === 'all' && (
-          <span>🌿 Закон Либиха: класс побеждает только когда все три дивизиона работают вместе</span>
-        )}
+        <span>🌿 <b>Закон Либиха:</b> класс побеждает только когда все три дивизиона работают вместе</span>
       </div>
 
       {/* Ranking List */}
       <div style={styles.rankingList}>
-        {filteredStudents().map((s) => {
+        {allStudents.map((s) => {
           const isMe = s.student_id === 'std_ivan';
           const isMvp = s.rank === 1;
           const isTop3 = s.rank === 2 || s.rank === 3;
@@ -371,6 +362,57 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#FFFFFF',
     margin: 0,
     letterSpacing: '-0.3px',
+  },
+  rankBoostBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    boxSizing: 'border-box',
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    border: '1.5px solid rgba(52, 211, 153, 0.45)',
+    borderRadius: 18,
+    padding: '13px 16px',
+    boxShadow: '0 4px 16px rgba(16, 185, 129, 0.25)',
+  },
+  rankBoostLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+  },
+  rankBoostIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: 'rgba(52, 211, 153, 0.25)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  rankBoostTextCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1,
+  },
+  rankBoostTitle: {
+    fontSize: 12.5,
+    fontWeight: 900,
+    color: '#34D399',
+  },
+  rankBoostDesc: {
+    fontSize: 11,
+    color: '#CBD5E1',
+    fontWeight: 600,
+  },
+  rankDeltaPill: {
+    backgroundColor: '#065F46',
+    color: '#34D399',
+    borderRadius: 999,
+    padding: '3px 8px',
+    fontSize: 11,
+    fontWeight: 900,
+    border: '1px solid rgba(52, 211, 153, 0.5)',
   },
   myRankCard: {
     display: 'flex',

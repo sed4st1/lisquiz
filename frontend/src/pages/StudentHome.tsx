@@ -28,7 +28,18 @@ const AVATARS = [
 export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProps) {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [selectedAvatar, setSelectedAvatar] = useState('fox_smart');
-  const [studentName] = useState('Иван К');
+  const [studentName, setStudentName] = useState<string>(() => {
+    try {
+      const saved = sessionStorage.getItem('lisquiz_student_name');
+      if (saved) return saved;
+      const pool = ['Иван К', 'Анна С', 'Михаил В', 'София М', 'Даниил Р', 'Алиса Т', 'Максим Д'];
+      const chosen = pool[Math.floor(Math.random() * pool.length)];
+      sessionStorage.setItem('lisquiz_student_name', chosen);
+      return chosen;
+    } catch {
+      return 'Иван К';
+    }
+  });
   const [isJoining, setIsJoining] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -71,13 +82,14 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
     setIsJoining(true);
     setErrorMsg(null);
 
+    const trimmedName = studentName.trim() || 'Ученик';
     try {
-      const joinData = await roomApi.joinRoom(fullPin, studentName, selectedAvatar);
+      const joinData = await roomApi.joinRoom(fullPin, trimmedName, selectedAvatar);
       setIsJoining(false);
       onJoinGame?.({
         pin: fullPin,
         joinData,
-        name: studentName,
+        name: trimmedName,
         avatar: selectedAvatar,
       });
     } catch (err: any) {
@@ -158,6 +170,35 @@ export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProp
             {errorMsg}
           </div>
         )}
+
+        {/* Name Input */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+          <span style={styles.avatarLabel}>Твое имя:</span>
+          <input
+            type="text"
+            value={studentName}
+            maxLength={20}
+            onChange={(e) => {
+              const val = e.target.value;
+              setStudentName(val);
+              try { sessionStorage.setItem('lisquiz_student_name', val); } catch {}
+            }}
+            placeholder="Введи свое имя..."
+            style={{
+              padding: '10px 14px',
+              borderRadius: 12,
+              backgroundColor: '#1B2742',
+              border: '1.5px solid #33446B',
+              borderBottom: '3px solid #23304E',
+              color: '#FFFFFF',
+              fontSize: 14,
+              fontWeight: 700,
+              outline: 'none',
+              boxSizing: 'border-box',
+              width: '100%',
+            }}
+          />
+        </div>
 
         {/* Avatar Picker Chips */}
         <div style={styles.avatarSection}>

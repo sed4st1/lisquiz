@@ -45,3 +45,7 @@ docs/guide/
 # Local design references
 образцы дизайна/
 
+
+*.code-workspace
+.agents/
+.mcp.json

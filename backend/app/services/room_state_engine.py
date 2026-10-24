@@ -310,6 +310,14 @@ class RoomStateEngine:
             if len(room.players) >= 50:
                 raise ValueError("Комната переполнена (максимум 50 участников)")
 
+            # Очистка предыдущих неактивных/дублирующихся сессий с тем же именем в лобби
+            ghost_ids = [
+                pid for pid, p in room.players.items()
+                if p.name.strip().lower() == name.strip().lower() and not p.connected
+            ]
+            for gid in ghost_ids:
+                room.players.pop(gid, None)
+
             player_id = f"p_{secrets.token_hex(4)}"
             avatars_pool = ["fox_1", "fox_smart", "fox_happy", "fox_detective", "hedgehog", "raccoon", "owl", "bear"]
             selected_avatar = avatar if avatar in avatars_pool else secrets.choice(avatars_pool)
@@ -346,8 +354,24 @@ class RoomStateEngine:
             return
         room = await self.get_room(session.room_code)
         if room and session.player_id in room.players:
-            room.players[session.player_id].connected = connected
+            if not connected and room.status == RoomStatus.LOBBY:
+                # В лобби вышедший ученик сразу удаляется из комнаты, чтобы не висеть призраком
+                room.players.pop(session.player_id, None)
+            else:
+                room.players[session.player_id].connected = connected
             await self._sync_room_to_redis(room)
+
+    async def update_room_quiz(self, room_code: str, quiz: Quiz) -> GameRoom:
+        """Обновление или замена викторины в комнате (разрешено только в статусе LOBBY)."""
+        async with self.get_room_lock(room_code):
+            room = await self.get_room(room_code)
+            if not room:
+                raise ValueError("Комната не найдена")
+            if room.status != RoomStatus.LOBBY:
+                raise InvalidStateTransitionError("Нельзя изменять викторину после начала игры")
+            room.quiz = quiz
+            await self._sync_room_to_redis(room)
+            return room
 
     # ==========================================
     # Игровой процесс, Скоринг и Анти-чит
@@ -596,6 +620,32 @@ class RoomStateEngine:
                 }
             else:
                 await self.transition_state(room_code, RoomStatus.FINISHED)
+                # Связка с Классной Рощей 2.0 (Ivan's Class Grove & Liebig Balance)
+                try:
+                    from .grove_service import grove_service
+                    class_id = f"class_{room.quiz.grade}a"
+                    room_answers = self.answers.get(room_code, [])
+                    student_results = []
+                    for p in room.players.values():
+                        p_answers = [a for a in room_answers if a.player_id == p.id]
+                        t1_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 1)
+                        t2_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 2)
+                        t3_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 3)
+                        student_results.append({
+                            "student_id": p.id,
+                            "student_name": p.name,
+                            "avatar": p.avatar or "hedgehog",
+                            "points_earned": p.score,
+                            "tier1_correct": t1_corr,
+                            "tier2_correct": t2_corr,
+                            "tier3_correct": t3_corr,
+                            "total_questions": len(room.quiz.questions),
+                        })
+                    if student_results:
+                        grove_service.apply_quiz_session(class_id=class_id, student_results=student_results)
+                except Exception as ge:
+                    logger.warning("Grove service integration error on FINISHED: %s", ge)
+
                 return {
                     "has_next": False,
                     "status": room.status.value,

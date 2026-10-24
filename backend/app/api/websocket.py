@@ -40,6 +40,7 @@ async def broadcast_question(room_code: str, q_idx: int):
         opt["is_correct"] = False
 
     active_students = len([p for p in room.players.values() if p.connected])
+    class_name = f"{room.quiz.grade}А"
     await ws_manager.broadcast_teacher(
         room_code,
         "QUESTION_START",
@@ -52,6 +53,10 @@ async def broadcast_question(room_code: str, q_idx: int):
             "time_limit_sec": time_limit_sec,
             "total_players": active_students,
             "answered_count": len(room.answered_player_ids),
+            "subject": room.quiz.subject,
+            "grade": room.quiz.grade,
+            "class_name": class_name,
+            "quiz_title": room.quiz.title,
         },
     )
     await ws_manager.broadcast_students(
@@ -66,6 +71,10 @@ async def broadcast_question(room_code: str, q_idx: int):
             "time_limit_sec": time_limit_sec,
             "total_players": active_students,
             "answered_count": len(room.answered_player_ids),
+            "subject": room.quiz.subject,
+            "grade": room.quiz.grade,
+            "class_name": class_name,
+            "quiz_title": room.quiz.title,
         },
     )
 
@@ -209,10 +218,25 @@ async def websocket_room_endpoint(
                                 asyncio.create_task(_delayed_start_next(room_code, next_idx))
                             else:
                                 gap_rep = await room_state_engine.generate_gap_report(room_code)
+                                sorted_players = sorted(room.players.values(), key=lambda p: p.score, reverse=True)
+                                top_players = [
+                                    {
+                                        "rank": idx + 1,
+                                        "id": p.id,
+                                        "name": p.name,
+                                        "avatar": p.avatar,
+                                        "score": p.score,
+                                        "streak": p.streak,
+                                    }
+                                    for idx, p in enumerate(sorted_players)
+                                ]
                                 await ws_manager.broadcast_room(
                                     room_code,
                                     "GAME_FINISHED",
-                                    {"gap_report": gap_rep.model_dump() if gap_rep else {}},
+                                    {
+                                        "gap_report": gap_rep.model_dump() if gap_rep else {},
+                                        "top_players": top_players,
+                                    },
                                 )
                     except Exception as err:
                         logger.error(f"Ошибка при обработке TEACHER_ACTION '{action}': {err}", exc_info=True)
@@ -235,8 +259,8 @@ async def websocket_room_endpoint(
                     # Персональный результат ученику
                     await ws_manager.send_personal(websocket, "PERSONAL_ANSWER_RESULT", res)
 
-                    # Оповещение учителя об инкременте ответов
-                    await ws_manager.broadcast_teacher(
+                    # Оповещение учителя и учеников об инкременте ответов
+                    await ws_manager.broadcast_room(
                         room_code,
                         "ANSWER_COLLECTED",
                         {
@@ -263,10 +287,30 @@ async def websocket_room_endpoint(
                             },
                         )
 
+                elif event == "LEAVE_ROOM":
+                    # Ученик явно выходит из лобби
+                    if room.status == RoomStatus.LOBBY:
+                        room.players.pop(session.player_id, None)
+                    await room_state_engine.set_player_connection(token, False)
+                    ws_manager.disconnect(websocket, room_code)
+                    active_players = len([p for p in room.players.values() if p.connected])
+                    await ws_manager.broadcast_room(
+                        room_code,
+                        "PLAYER_LEFT",
+                        {
+                            "player_id": session.player_id,
+                            "name": session.name,
+                            "reason": "left",
+                            "total_players": active_players,
+                        },
+                    )
+                    break
+
     except WebSocketDisconnect:
         disc_session = ws_manager.disconnect(websocket, room_code)
         if disc_session and disc_session.role == UserRole.STUDENT:
             await room_state_engine.set_player_connection(token, False)
+            active_players = len([p for p in room.players.values() if p.connected])
             await ws_manager.broadcast_room(
                 room_code,
                 "PLAYER_LEFT",
@@ -274,9 +318,22 @@ async def websocket_room_endpoint(
                     "player_id": disc_session.player_id,
                     "name": disc_session.name,
                     "reason": "disconnect",
-                    "total_players": len(room.players),
+                    "total_players": active_players,
                 },
             )
     except Exception as e:
         logger.error(f"Неожиданная ошибка в WS обработчике комнаты {room_code}: {e}")
-        ws_manager.disconnect(websocket, room_code)
+        disc_session = ws_manager.disconnect(websocket, room_code)
+        if disc_session and disc_session.role == UserRole.STUDENT:
+            await room_state_engine.set_player_connection(token, False)
+            active_players = len([p for p in room.players.values() if p.connected])
+            await ws_manager.broadcast_room(
+                room_code,
+                "PLAYER_LEFT",
+                {
+                    "player_id": disc_session.player_id,
+                    "name": disc_session.name,
+                    "reason": "disconnect",
+                    "total_players": active_players,
+                },
+            )

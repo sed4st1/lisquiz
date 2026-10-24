@@ -20,6 +20,8 @@ import { haptics } from '../services/haptics';
 export interface TeacherLiveGameProps {
   roomCode: string;
   initialQuestionData: any;
+  subject?: string;
+  classNameTitle?: string;
   onFinishQuiz: () => void;
 }
 
@@ -46,8 +48,10 @@ const DEFAULT_TEACHER_QUESTION = {
 };
 
 export default function TeacherLiveGame({
-  roomCode,
+  roomCode: _roomCode,
   initialQuestionData,
+  subject = 'Математика',
+  classNameTitle = '7А',
   onFinishQuiz,
 }: TeacherLiveGameProps) {
   const [questionData, setQuestionData] = useState<any>(initialQuestionData);
@@ -227,9 +231,9 @@ export default function TeacherLiveGame({
           </div>
 
           <div style={styles.headerTitles}>
-            <span style={styles.brandTitle}>Lisquiz • Учитель</span>
+            <span style={styles.brandTitle}>Lisquiz</span>
             <span style={styles.brandSub}>
-              Комната {roomCode} • 7А, Математика
+              {questionData?.class_name || classNameTitle}, {questionData?.subject || subject}
             </span>
           </div>
         </div>
@@ -323,12 +327,6 @@ export default function TeacherLiveGame({
                     strokeDashoffset={144.5 * (1 - Math.max(0, timeLeft) / (initialTimeLimit || 25))}
                     strokeLinecap="round"
                     style={{
-                      filter:
-                        timeLeft <= (isBoss ? 8 : 3)
-                          ? 'drop-shadow(0 0 8px #EF4444)'
-                          : isBoss
-                          ? 'drop-shadow(0 0 8px #F97316)'
-                          : 'drop-shadow(0 0 8px #F59E0B)',
                       transform: 'rotate(-90deg)',
                       transformOrigin: '50% 50%',
                       transition: 'stroke-dashoffset 0.8s ease, stroke 0.3s ease',
@@ -355,7 +353,7 @@ export default function TeacherLiveGame({
                       style={{ width: 14, height: 14 }}
                     />
                   </div>
-                  <span style={styles.categoryText}>Математика</span>
+                  <span style={styles.categoryText}>{questionData?.subject || subject}</span>
                 </div>
 
                 <h2 style={styles.questionHeading}>{curQ.text}</h2>
@@ -928,7 +926,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     position: 'relative',
     zIndex: 3,
-    marginBottom: 6,
+    marginBottom: 0,
   },
   teacherCorrectPill: {
     position: 'absolute',
@@ -948,10 +946,10 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 2,
   },
   actionRowColumn: {
-    marginTop: 6,
+    marginTop: 14,
     display: 'flex',
     flexDirection: 'column',
-    gap: 8,
+    gap: 14,
     zIndex: 3,
   },
   waitingNotice: {

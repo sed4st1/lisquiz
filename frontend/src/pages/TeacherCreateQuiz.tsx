@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
-import type { Quiz } from '../types/quiz';
+import { roomApi } from '../services/roomApi';
 
 export interface TextbookItem {
   id: string;
@@ -45,7 +45,7 @@ const FALLBACK_TEXTBOOKS: TextbookItem[] = [
 ];
 
 export interface TeacherCreateQuizProps {
-  onQuizCreated?: (quiz?: Quiz) => void;
+  onQuizCreated?: (roomData?: any) => void;
   onNavigateToLobby?: () => void;
 }
 
@@ -64,7 +64,7 @@ const SUBJECTS = [
 ];
 
 const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-const QUESTION_COUNTS = [5, 8, 10, 15];
+const QUESTION_COUNTS = [3, 5, 8, 10];
 
 const TOPIC_PRESETS: Record<string, string[]> = {
   'Математика': ['Дроби', 'Линейные уравнения', 'Треугольники', 'Проценты'],
@@ -80,7 +80,7 @@ export default function TeacherCreateQuiz({
   const [subject, setSubject] = useState<string>('Математика');
   const [grade, setGrade] = useState<number>(7);
   const [topic, setTopic] = useState<string>('Дроби');
-  const [questionCount, setQuestionCount] = useState<number>(10);
+  const [questionCount, setQuestionCount] = useState<number>(3);
   const [isPhotoUploaded, setIsPhotoUploaded] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [textbooks, setTextbooks] = useState<TextbookItem[]>(FALLBACK_TEXTBOOKS);
@@ -128,19 +128,35 @@ export default function TeacherCreateQuiz({
     setActiveModal(null);
   };
 
-  const handleStartGeneration = () => {
+  const handleStartGeneration = async () => {
     haptics.notification('success');
     setIsGenerating(true);
 
-    // Simulate AI generation with Sleeping Fox screen
-    setTimeout(() => {
-      setIsGenerating(false);
-      if (onQuizCreated) {
-        onQuizCreated();
-      } else if (onNavigateToLobby) {
-        onNavigateToLobby();
-      }
-    }, 2800);
+    try {
+      const roomData = await roomApi.createRoom({
+        subject,
+        grade,
+        topic,
+        question_count: questionCount,
+        textbook_id: selectedTextbook?.id,
+        paragraph_num: selectedParagraph?.num,
+      });
+
+      setTimeout(() => {
+        setIsGenerating(false);
+        if (onQuizCreated) {
+          onQuizCreated(roomData);
+        } else if (onNavigateToLobby) {
+          onNavigateToLobby();
+        }
+      }, 1200);
+    } catch (err) {
+      console.error('Failed to create room with options:', err);
+      setTimeout(() => {
+        setIsGenerating(false);
+        onQuizCreated?.();
+      }, 1200);
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

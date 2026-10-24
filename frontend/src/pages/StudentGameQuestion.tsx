@@ -26,7 +26,7 @@ export interface StudentGameQuestionProps {
   onAnswerSubmit?: (optionId: string, isCorrect: boolean, responseTimeMs: number, tabBlurred: boolean) => void;
   onTimeUp?: () => void;
   onBack?: () => void;
-  onGameFinished?: () => void;
+  onGameFinished?: (data?: any) => void;
 }
 
 const DEFAULT_OPTIONS: QuizOption[] = [
@@ -84,6 +84,7 @@ export default function StudentGameQuestion({
   const [timeLeft, setTimeLeft] = useState<number>(initialTimeLimit);
   const [liveAnswered, setLiveAnswered] = useState<number>(answeredCount);
   const [liveTotal, setLiveTotal] = useState<number>(totalStudents);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const startTimeRef = useRef<number>(Date.now());
   const hasBlurredRef = useRef<boolean>(false);
@@ -97,7 +98,7 @@ export default function StudentGameQuestion({
     setLiveTotal(totalStudents);
   }, [totalStudents]);
 
-  // Real-time socket events for live player progress and game finish
+  // Real-time socket events for live player progress, countdown, and game finish
   useEffect(() => {
     const handleAnswerCollected = (data: any) => {
       if (typeof data.answered_count === 'number') {
@@ -108,16 +109,34 @@ export default function StudentGameQuestion({
       }
     };
 
-    const handleFinished = () => {
+    const handleCountdownStart = (data: any) => {
+      const sec = data.countdown_sec || 3;
+      setCountdown(sec);
+
+      let cur = sec;
+      const interval = setInterval(() => {
+        cur -= 1;
+        if (cur <= 0) {
+          clearInterval(interval);
+          setCountdown(null);
+        } else {
+          setCountdown(cur);
+        }
+      }, 1000);
+    };
+
+    const handleFinished = (data: any) => {
       haptics.notification('success');
-      onGameFinished?.();
+      onGameFinished?.(data);
     };
 
     socketService.on('ANSWER_COLLECTED', handleAnswerCollected);
+    socketService.on('COUNTDOWN_START', handleCountdownStart);
     socketService.on('GAME_FINISHED', handleFinished);
 
     return () => {
       socketService.off('ANSWER_COLLECTED', handleAnswerCollected);
+      socketService.off('COUNTDOWN_START', handleCountdownStart);
       socketService.off('GAME_FINISHED', handleFinished);
     };
   }, [onGameFinished]);
@@ -227,16 +246,18 @@ export default function StudentGameQuestion({
           </div>
         </div>
 
-        {/* Live Online Players Count Pill */}
+        {/* Live Answered Count Pill with Bouncy Animation */}
         <div style={styles.playerCountPill}>
           <Users size={14} color="#D1D5DB" />
-          <span>
-            {liveAnswered > 0
-              ? `${liveAnswered} из ${liveTotal > 0 ? liveTotal : 1}`
-              : liveTotal > 0
-              ? `${liveTotal} онлайн`
-              : '1 онлайн'}
-          </span>
+          <motion.span
+            key={liveAnswered}
+            initial={{ scale: 1.25, color: '#34D399' }}
+            animate={{ scale: 1, color: '#FFFFFF' }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+            style={{ display: 'inline-block' }}
+          >
+            {liveAnswered} из {liveTotal > 0 ? liveTotal : 1}
+          </motion.span>
         </div>
       </header>
 
@@ -315,12 +336,6 @@ export default function StudentGameQuestion({
               strokeDashoffset={144.5 * (1 - Math.max(0, timeLeft) / (initialTimeLimit || 25))}
               strokeLinecap="round"
               style={{
-                filter:
-                  timeLeft <= (isBossQuestion ? 8 : 3)
-                    ? 'drop-shadow(0 0 8px #EF4444)'
-                    : isBossQuestion
-                    ? 'drop-shadow(0 0 8px #F97316)'
-                    : 'drop-shadow(0 0 8px #F59E0B)',
                 transform: 'rotate(-90deg)',
                 transformOrigin: '50% 50%',
                 transition: 'stroke-dashoffset 0.8s ease, stroke 0.3s ease',
@@ -437,6 +452,23 @@ export default function StudentGameQuestion({
           )}
         </AnimatePresence>
       </div>
+
+      {/* Countdown overlay between rounds */}
+      {countdown !== null && (
+        <div style={styles.countdownOverlay}>
+          <motion.div
+            key={countdown}
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 1.4, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+            style={styles.countdownNumber}
+          >
+            {countdown}
+          </motion.div>
+          <span style={styles.countdownLabel}>Следующий вопрос!</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -706,5 +738,31 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 6px 20px rgba(0, 0, 0, 0.45)',
     whiteSpace: 'nowrap',
     marginBottom: 16,
+  },
+  countdownOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    backdropFilter: 'blur(8px)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 999,
+  },
+  countdownNumber: {
+    fontSize: 84,
+    fontWeight: 900,
+    color: '#F59E0B',
+    lineHeight: 1,
+    marginBottom: 10,
+  },
+  countdownLabel: {
+    fontSize: 18,
+    fontWeight: 800,
+    color: '#FFFFFF',
   },
 };

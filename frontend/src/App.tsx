@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Home, Sprout, Crown, BarChart2, Wrench, X, Flame, Droplets, Sparkles } from 'lucide-react';
 
@@ -15,6 +15,7 @@ import TeacherLobby from './pages/TeacherLobby';
 import TeacherGapReport from './pages/TeacherGapReport';
 import TeacherLiveGame from './pages/TeacherLiveGame';
 import StudentRoundWait from './pages/StudentRoundWait';
+import StudentQuizFinish from './pages/StudentQuizFinish';
 import SleepScreen from './pages/SleepScreen';
 import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
@@ -28,6 +29,7 @@ type SubScreenType =
   | 'feedback_correct'
   | 'feedback_wrong'
   | 'student_round_wait'
+  | 'student_quiz_finish'
   | 'sleep_screen';
 
 export default function App() {
@@ -39,16 +41,32 @@ export default function App() {
   // Live session state
   const [activePin, setActivePin] = useState<string>('482915');
   const [teacherToken, setTeacherToken] = useState<string>('');
+  const [studentPlayerId, setStudentPlayerId] = useState<string>('');
   const [studentName, setStudentName] = useState<string>('Иван К');
   const [studentAvatar, setStudentAvatar] = useState<string>('fox_smart');
   const [currentQuestionData, setCurrentQuestionData] = useState<any>(null);
   const [personalAnswerResult, setPersonalAnswerResult] = useState<any>(null);
+  const [quizFinishData, setQuizFinishData] = useState<any>(null);
+  const [quizSubject, setQuizSubject] = useState<string>('Математика');
+  const [quizGrade, setQuizGrade] = useState<number>(7);
+  const [quizClass, setQuizClass] = useState<string>('7А');
+  const [quizTitle, setQuizTitle] = useState<string>('Викторина по математике');
+  const [leaderboardBoostPoints, setLeaderboardBoostPoints] = useState<number | null>(null);
+  const [leaderboardBoostRank, setLeaderboardBoostRank] = useState<number | null>(null);
+  const studentQuizStatsRef = useRef<{ correct: number; wrong: number; total: number; score: number }>({ correct: 0, wrong: 0, total: 3, score: 0 });
 
   // Listen to incoming WebSocket events
   useEffect(() => {
     const handleQuestionStart = (data: any) => {
       setCurrentQuestionData(data);
       setPersonalAnswerResult(null);
+      if (data?.subject) setQuizSubject(data.subject);
+      if (data?.class_name) setQuizClass(data.class_name);
+      if (data?.grade) setQuizGrade(data.grade);
+      if (data?.quiz_title) setQuizTitle(data.quiz_title);
+      if (data?.question_index === 0) {
+        studentQuizStatsRef.current = { correct: 0, wrong: 0, total: data?.total_questions || 3, score: 0 };
+      }
       if (role === 'teacher') {
         setSubScreen('teacher_game');
       } else {
@@ -58,17 +76,44 @@ export default function App() {
 
     const handleAnswerResult = (data: any) => {
       setPersonalAnswerResult(data);
+      if (data?.is_correct) {
+        studentQuizStatsRef.current.correct += 1;
+      } else {
+        studentQuizStatsRef.current.wrong += 1;
+      }
+      if (data?.total_score != null) {
+        studentQuizStatsRef.current.score = data.total_score;
+      } else if (data?.points_awarded != null) {
+        studentQuizStatsRef.current.score += data.points_awarded;
+      }
     };
 
-    const handleGameFinished = () => {
+    const handleGameFinished = (data: any) => {
       haptics.notification('success');
       if (role === 'teacher') {
         setSubScreen(null);
         setTab('stats');
       } else {
-        socketService.disconnect();
-        setSubScreen(null);
-        setTab('grove');
+        const topPlayers = data?.top_players || [];
+        const myPlayer = topPlayers.find((p: any) =>
+          (studentPlayerId && p.id === studentPlayerId) ||
+          (p.name && p.name.trim().toLowerCase() === studentName.trim().toLowerCase())
+        );
+        const myScore = myPlayer?.score ?? (studentQuizStatsRef.current.score > 0 ? studentQuizStatsRef.current.score : (personalAnswerResult?.total_score || 850));
+        const myRank = myPlayer?.rank ?? (
+          topPlayers.length > 0
+            ? topPlayers.filter((p: any) => (p.score ?? 0) > myScore).length + 1
+            : 1
+        );
+        setQuizFinishData({
+          top_players: topPlayers,
+          myScore: myScore,
+          myRank: myRank,
+          correctCount: studentQuizStatsRef.current.correct,
+          wrongCount: studentQuizStatsRef.current.wrong,
+          totalQuestions: currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3,
+        });
+        setSubScreen('student_quiz_finish');
       }
     };
 
@@ -81,7 +126,7 @@ export default function App() {
       socketService.off('PERSONAL_ANSWER_RESULT', handleAnswerResult);
       socketService.off('GAME_FINISHED', handleGameFinished);
     };
-  }, [role]);
+  }, [role, studentName, studentPlayerId]);
 
   const handleRoleSwitch = (newRole: 'teacher' | 'student') => {
     haptics.impact('light');
@@ -154,6 +199,8 @@ export default function App() {
           key={`q_${qIndex}_${qObj?.id || 0}`}
           questionNumber={qIndex + 1}
           totalQuestions={totalQ}
+          subjectTitle={currentQuestionData?.subject || quizSubject}
+          classNameTitle={currentQuestionData?.class_name || quizClass}
           questionText={qObj?.text}
           latex={qObj?.latex}
           options={options}
@@ -163,11 +210,28 @@ export default function App() {
           answeredCount={currentQuestionData?.answered_count ?? 0}
           totalStudents={currentQuestionData?.total_players ?? 0}
           onBack={() => setSubScreen(null)}
-          onGameFinished={() => {
+          onGameFinished={(finishData) => {
             haptics.notification('success');
-            socketService.disconnect();
-            setSubScreen(null);
-            setTab('grove');
+            const topPlayers = finishData?.top_players || [];
+            const myPlayer = topPlayers.find((p: any) =>
+              (studentPlayerId && p.id === studentPlayerId) ||
+              (p.name && p.name.trim().toLowerCase() === studentName.trim().toLowerCase())
+            );
+            const myScore = myPlayer?.score ?? (studentQuizStatsRef.current.score > 0 ? studentQuizStatsRef.current.score : (personalAnswerResult?.total_score || 850));
+            const myRank = myPlayer?.rank ?? (
+              topPlayers.length > 0
+                ? topPlayers.filter((p: any) => (p.score ?? 0) > myScore).length + 1
+                : 1
+            );
+            setQuizFinishData({
+              top_players: topPlayers,
+              myScore: myScore,
+              myRank: myRank,
+              correctCount: studentQuizStatsRef.current.correct,
+              wrongCount: studentQuizStatsRef.current.wrong,
+              totalQuestions: currentQuestionData?.total_questions || studentQuizStatsRef.current.total || totalQ,
+            });
+            setSubScreen('student_quiz_finish');
           }}
           onAnswerSubmit={(optionId, _isCorrect, responseTimeMs, tabBlurred) => {
             const parsed = parseInt(optionId.replace('opt_', ''), 10);
@@ -191,6 +255,8 @@ export default function App() {
         <TeacherLiveGame
           roomCode={activePin}
           initialQuestionData={currentQuestionData}
+          subject={quizSubject}
+          classNameTitle={quizClass}
           onFinishQuiz={() => {
             setSubScreen(null);
             setTeacherToken('');
@@ -222,10 +288,50 @@ export default function App() {
             setPersonalAnswerResult(null);
             setSubScreen('student_game');
           }}
-          onGameFinished={() => {
+          onGameFinished={(finishData) => {
+            haptics.notification('success');
+            const topPlayers = finishData?.top_players || [];
+            const myPlayer = topPlayers.find((p: any) =>
+              (studentPlayerId && p.id === studentPlayerId) ||
+              (p.name && p.name.trim().toLowerCase() === studentName.trim().toLowerCase())
+            );
+            const myScore = myPlayer?.score ?? (studentQuizStatsRef.current.score > 0 ? studentQuizStatsRef.current.score : (personalAnswerResult?.total_score || 850));
+            const myRank = myPlayer?.rank ?? (
+              topPlayers.length > 0
+                ? topPlayers.filter((p: any) => (p.score ?? 0) > myScore).length + 1
+                : 1
+            );
+            setQuizFinishData({
+              top_players: topPlayers,
+              myScore: myScore,
+              myRank: myRank,
+              correctCount: studentQuizStatsRef.current.correct,
+              wrongCount: studentQuizStatsRef.current.wrong,
+              totalQuestions: currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3,
+            });
+            setSubScreen('student_quiz_finish');
+          }}
+        />
+      );
+    }
+    if (subScreen === 'student_quiz_finish') {
+      return (
+        <StudentQuizFinish
+          playerId={studentPlayerId}
+          playerName={studentName}
+          playerAvatar={studentAvatar}
+          topPlayers={quizFinishData?.top_players || []}
+          myScore={quizFinishData?.myScore || personalAnswerResult?.total_score || 850}
+          myRank={quizFinishData?.myRank}
+          correctCount={quizFinishData?.correctCount ?? 3}
+          wrongCount={quizFinishData?.wrongCount ?? 0}
+          totalQuestions={quizFinishData?.totalQuestions ?? 3}
+          onGoToLeaderboard={(earnedPoints, rank) => {
             socketService.disconnect();
+            setLeaderboardBoostPoints(earnedPoints || quizFinishData?.myScore || 150);
+            setLeaderboardBoostRank(rank || quizFinishData?.myRank || null);
             setSubScreen(null);
-            setTab('home');
+            setTab('leaderboard');
           }}
         />
       );
@@ -249,6 +355,9 @@ export default function App() {
                 setActivePin(payload.pin);
                 setStudentName(payload.name);
                 setStudentAvatar(payload.avatar);
+                if (payload.joinData?.player_id) {
+                  setStudentPlayerId(payload.joinData.player_id);
+                }
                 socketService.connect(payload.pin, payload.joinData.session_token).catch(() => { });
                 setSubScreen('student_waiting');
               }}
@@ -264,7 +373,16 @@ export default function App() {
             />
           );
         case 'leaderboard':
-          return <StudentLeaderboard />;
+          return (
+            <StudentLeaderboard
+              boostPoints={leaderboardBoostPoints}
+              boostRank={leaderboardBoostRank}
+              onClearBoost={() => {
+                setLeaderboardBoostPoints(null);
+                setLeaderboardBoostRank(null);
+              }}
+            />
+          );
         case 'stats':
           return <StudentStats />;
       }
@@ -280,6 +398,12 @@ export default function App() {
                 if (roomData) {
                   setActivePin(roomData.room_code);
                   setTeacherToken(roomData.teacher_token);
+                  if (roomData.subject) setQuizSubject(roomData.subject);
+                  if (roomData.grade) {
+                    setQuizGrade(roomData.grade);
+                    setQuizClass(`${roomData.grade}А`);
+                  }
+                  if (roomData.quiz_title) setQuizTitle(roomData.quiz_title);
                 }
                 setTab('leaderboard');
               }}
@@ -298,10 +422,14 @@ export default function App() {
             <TeacherLobby
               pin={activePin}
               teacherToken={teacherToken}
+              quizTitle={quizTitle}
+              subject={quizSubject}
+              grade={quizGrade}
               onRoomReady={(pin, token) => {
                 setActivePin(pin);
                 setTeacherToken(token);
               }}
+              onQuizTitleChange={(newTitle) => setQuizTitle(newTitle)}
               onStartQuiz={() => {
                 if (socketService.isConnected()) {
                   socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
@@ -567,6 +695,28 @@ export default function App() {
             style={styles.devBtn}
           >
             ⏳ Ожидание раунда (Ученик)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setQuizFinishData({
+                top_players: [
+                  { rank: 1, id: 's1', name: 'Иван К', avatar: 'fox_smart', score: 980 },
+                  { rank: 2, id: 's2', name: 'Аня Смирнова', avatar: 'owl', score: 870 },
+                  { rank: 3, id: 's3', name: 'Максим Петров', avatar: 'bear', score: 760 },
+                  { rank: 4, id: 's4', name: 'Лена Морозова', avatar: 'bunny', score: 620 },
+                ],
+                myScore: 980,
+                correctCount: 3,
+                wrongCount: 0,
+                totalQuestions: 3,
+              });
+              setSubScreen('student_quiz_finish');
+            }}
+            style={styles.devBtn}
+          >
+            🥇 Итоги викторины (Пьедестал)
           </button>
 
           <button

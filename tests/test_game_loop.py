@@ -116,6 +116,8 @@ async def test_full_game_loop_two_players(two_question_quiz):
                 assert col1["event"] == "ANSWER_COLLECTED"
                 assert col1["data"]["answered_count"] == 1
                 assert col1["data"]["all_answered"] is False
+                assert ws_p1.receive_json()["event"] == "ANSWER_COLLECTED"
+                assert ws_p2.receive_json()["event"] == "ANSWER_COLLECTED"
 
                 ws_p2.send_json({
                     "event": "SUBMIT_ANSWER",
@@ -130,6 +132,8 @@ async def test_full_game_loop_two_players(two_question_quiz):
                 assert col2["event"] == "ANSWER_COLLECTED"
                 assert col2["data"]["answered_count"] == 2
                 assert col2["data"]["all_answered"] is True
+                assert ws_p1.receive_json()["event"] == "ANSWER_COLLECTED"
+                assert ws_p2.receive_json()["event"] == "ANSWER_COLLECTED"
 
                 # 6. Учитель показывает результаты вопроса
                 ws_t.send_json({"event": "TEACHER_ACTION", "data": {"action": "SHOW_RESULTS"}})
@@ -177,6 +181,8 @@ async def test_full_game_loop_two_players(two_question_quiz):
                 })
                 ws_p1.receive_json()  # PERSONAL_ANSWER_RESULT
                 ws_t.receive_json()   # ANSWER_COLLECTED
+                assert ws_p1.receive_json()["event"] == "ANSWER_COLLECTED"
+                assert ws_p2.receive_json()["event"] == "ANSWER_COLLECTED"
 
                 ws_p2.send_json({
                     "event": "SUBMIT_ANSWER",
@@ -184,6 +190,8 @@ async def test_full_game_loop_two_players(two_question_quiz):
                 })
                 ws_p2.receive_json()  # PERSONAL_ANSWER_RESULT
                 ws_t.receive_json()   # ANSWER_COLLECTED
+                assert ws_p1.receive_json()["event"] == "ANSWER_COLLECTED"
+                assert ws_p2.receive_json()["event"] == "ANSWER_COLLECTED"
 
                 # Результаты и Лидерборд вопроса 2
                 ws_t.send_json({"event": "TEACHER_ACTION", "data": {"action": "SHOW_RESULTS"}})

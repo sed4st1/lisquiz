@@ -101,6 +101,15 @@ export default function StudentWaitingLobby({
     return AVATAR_MAP[av] || AVATAR_MAP.raccoon;
   };
 
+  const handleLeave = () => {
+    haptics.impact('light');
+    try {
+      socketService.send('LEAVE_ROOM', { room_code: roomCode });
+    } catch {}
+    socketService.disconnect();
+    onLeaveRoom();
+  };
+
   return (
     <div style={styles.container}>
       {/* Top Header */}
@@ -109,7 +118,7 @@ export default function StudentWaitingLobby({
           <span style={styles.roomTag}>Комната: {roomCode}</span>
         </div>
 
-        <button onClick={onLeaveRoom} style={styles.leaveBtn} title="Выйти из комнаты">
+        <button onClick={handleLeave} style={styles.leaveBtn} title="Выйти из комнаты">
           <LogOut size={16} color="#94A3B8" />
           <span>Выйти</span>
         </button>

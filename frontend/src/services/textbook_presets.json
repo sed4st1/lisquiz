@@ -1,0 +1,1022 @@
+[
+  {
+    "id": "quiz_tb_peryshkin_phys_7_p22",
+    "textbook_id": "peryshkin_phys_7",
+    "paragraph_num": 22,
+    "title": "Пёрышкин А.В.: § 22. Расчет массы и плотности",
+    "subject": "Физика",
+    "grade": 7,
+    "topic": "§ 22. Расчет массы и плотности",
+    "author": "Пёрышкин А.В.",
+    "group_label": "Пёрышкин 7 кл",
+    "is_active": true,
+    "questions": [
+      {
+        "id": 1,
+        "text": "Найдите объем детали массой 10000 кг, изготовленной из металла плотностью 500 кг/м³:",
+        "explanation": "По формуле плотности m = rho * V, соответственно искомая величина вычисляется однозначно: 20 м³.",
+        "time_limit_sec": 15,
+        "tier": 1,
+        "is_boss": false,
+        "topic": "Расчет массы и объема",
+        "options": [
+          {
+            "id": 0,
+            "text": "22 м³",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "0.05 м³",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "5000000 м³",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "20 м³",
+            "is_correct": true
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "text": "Тело объемом 4 м³ имеет массу 4000 кг. Найдите плотность вещества:",
+        "explanation": "По формуле плотности m = rho * V, соответственно искомая величина вычисляется однозначно: 1000 кг/м³.",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Расчет массы и объема",
+        "options": [
+          {
+            "id": 0,
+            "text": "16000 кг/м³",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "1000 кг/м³",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "1100 кг/м³",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "0.001 кг/м³",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "text": "Определите массу бруска объемом 5 м³, если плотность материала составляет 1000 кг/м³:",
+        "explanation": "По формуле плотности m = rho * V, соответственно искомая величина вычисляется однозначно: 5000 кг.",
+        "time_limit_sec": 40,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Расчет массы и объема",
+        "options": [
+          {
+            "id": 0,
+            "text": "200.0 кг",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "0.005 кг",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "4995 кг",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "5000 кг",
+            "is_correct": true
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "text": "Найдите объем детали массой 10000 кг, изготовленной из металла плотностью 2500 кг/м³:",
+        "explanation": "По формуле плотности m = rho * V, соответственно искомая величина вычисляется однозначно: 4 м³.",
+        "time_limit_sec": 15,
+        "tier": 1,
+        "is_boss": false,
+        "topic": "Расчет массы и объема",
+        "options": [
+          {
+            "id": 0,
+            "text": "25000000 м³",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "4 м³",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "6 м³",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "0.25 м³",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "text": "Определите массу бруска объемом 10 м³, если плотность материала составляет 800 кг/м³:",
+        "explanation": "По формуле плотности m = rho * V, соответственно искомая величина вычисляется однозначно: 8000 кг.",
+        "time_limit_sec": 35,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Расчет массы и объема",
+        "options": [
+          {
+            "id": 0,
+            "text": "80.0 кг",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "0.0125 кг",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "8000 кг",
+            "is_correct": true
+          },
+          {
+            "id": 3,
+            "text": "7990 кг",
+            "is_correct": false
+          }
+        ]
+      }
+    ],
+    "count": 5
+  },
+  {
+    "id": "quiz_tb_vilenkin_math_6_p7",
+    "textbook_id": "vilenkin_math_6",
+    "paragraph_num": 7,
+    "title": "Виленкин Н.Я.: § 7. Сложение и вычитание дробей",
+    "subject": "Математика",
+    "grade": 6,
+    "topic": "§ 7. Сложение и вычитание дробей",
+    "author": "Виленкин Н.Я.",
+    "group_label": "Виленкин 6 кл",
+    "is_active": false,
+    "questions": [
+      {
+        "id": 1,
+        "text": "Сколько уникальных чисел можно получить, создав дробь с $ 2,3,4, $ или $ 6 $ в числителе и $ 2,3,4, $ или $ 6$ в знаменателе?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Сокращение дробей",
+        "options": [
+          {
+            "id": 1,
+            "text": "1",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "9",
+            "is_correct": true
+          },
+          {
+            "id": 3,
+            "text": "2",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "10",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "text": "Упростите дробь, рационализировав знаменатель: $$\\frac{4}{\\sqrt{108}+2\\sqrt{12}+2\\sqrt{27}}.$$",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Сокращение дробей",
+        "options": [
+          {
+            "id": 1,
+            "text": "\\frac{4\\sqrt{3}}{33}",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "\\frac{\\sqrt{3}}{12}",
+            "is_correct": true
+          },
+          {
+            "id": 3,
+            "text": "2\\sqrt{27}",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "\\frac{1}{4\\sqrt{3}}",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "text": "Запишите 8 целых две четвертых как неправильную дробь в простейшей форме.",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Сокращение дробей",
+        "options": [
+          {
+            "id": 1,
+            "text": "семнадцать вторых",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "тридцать четыре четвертых",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "семнадцать четвертых",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "девятнадцать вторых",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "text": "Какая дробь показывает процентное отношение 3 собак от 5 собак?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Сокращение дробей",
+        "options": [
+          {
+            "id": 1,
+            "text": "пять третьих",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "три восьмых",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "две пятых",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "три пятых",
+            "is_correct": true
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "text": "Какая дробь больше, чем 2 над 5?",
+        "explanation": "",
+        "time_limit_sec": 35,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Сокращение дробей",
+        "options": [
+          {
+            "id": 1,
+            "text": "1 над 5",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "1 над 10",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "4 над 10",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "5 над 10",
+            "is_correct": true
+          }
+        ]
+      }
+    ],
+    "count": 5
+  },
+  {
+    "id": "quiz_tb_merzlyak_math_6_p8",
+    "textbook_id": "merzlyak_math_6",
+    "paragraph_num": 8,
+    "title": "Мерзляк А.Г.: § 8. Отношения и пропорции",
+    "subject": "Математика",
+    "grade": 6,
+    "topic": "§ 8. Отношения и пропорции",
+    "author": "Мерзляк А.Г.",
+    "group_label": "Мерзляк 6 кл",
+    "is_active": false,
+    "questions": [
+      {
+        "id": 1,
+        "text": "Вычислите значение частного: 3/8 : 6/5",
+        "explanation": "По правилам действий с обыкновенными дробями: правильный ответ 5/16.",
+        "time_limit_sec": 15,
+        "tier": 1,
+        "is_boss": false,
+        "topic": "Умножение дробей",
+        "options": [
+          {
+            "id": 0,
+            "text": "16/5",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "5/16",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "9/20",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "9/13",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "text": "Вычислите значение частного: 4/7 : 5/7",
+        "explanation": "По правилам действий с обыкновенными дробями: правильный ответ 4/5.",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Умножение дробей",
+        "options": [
+          {
+            "id": 0,
+            "text": "9/14",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "4/5",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "5/4",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "20/49",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "text": "Вычислите значение частного: 5/7 : 4/7",
+        "explanation": "По правилам действий с обыкновенными дробями: правильный ответ 5/4.",
+        "time_limit_sec": 40,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Умножение дробей",
+        "options": [
+          {
+            "id": 0,
+            "text": "20/49",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "5/4",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "9/14",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "4/5",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "text": "Вычислите значение частного: 3/8 : 4/8",
+        "explanation": "По правилам действий с обыкновенными дробями: правильный ответ 3/4.",
+        "time_limit_sec": 15,
+        "tier": 1,
+        "is_boss": false,
+        "topic": "Умножение дробей",
+        "options": [
+          {
+            "id": 0,
+            "text": "3/16",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "4/3",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "7/16",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "3/4",
+            "is_correct": true
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "text": "Вычислите значение частного: 4/9 : 4/5",
+        "explanation": "По правилам действий с обыкновенными дробями: правильный ответ 5/9.",
+        "time_limit_sec": 35,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Умножение дробей",
+        "options": [
+          {
+            "id": 0,
+            "text": "9/5",
+            "is_correct": false
+          },
+          {
+            "id": 1,
+            "text": "4/7",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "16/45",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "5/9",
+            "is_correct": true
+          }
+        ]
+      }
+    ],
+    "count": 5
+  },
+  {
+    "id": "quiz_tb_makarychev_alg_7_p3",
+    "textbook_id": "makarychev_alg_7",
+    "paragraph_num": 3,
+    "title": "Макарычев Ю.Н.: § 3. Выражения с переменными",
+    "subject": "Алгебра",
+    "grade": 7,
+    "topic": "§ 3. Выражения с переменными",
+    "author": "Макарычев Ю.Н.",
+    "group_label": "Макарычев 7 кл",
+    "is_active": false,
+    "questions": [
+      {
+        "id": 1,
+        "text": "Переменная x изменяется прямо пропорционально квадрату y, а y изменяется прямо пропорционально кубу z. Если x равно −16, когда z равно 2, то чему равно x, когда z равно 1/2?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Выражения с переменными",
+        "options": [
+          {
+            "id": 1,
+            "text": "-1",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "16",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "-1/256",
+            "is_correct": true
+          },
+          {
+            "id": 4,
+            "text": "1/16",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "text": "Каково минимальное значение выражения x + 4z как функции, определенной на R^3, с учетом ограничения x^2 + y^2 + z^2 <= 2?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Выражения с переменными",
+        "options": [
+          {
+            "id": 1,
+            "text": "0",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "-2",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "-sqrt(34)",
+            "is_correct": true
+          },
+          {
+            "id": 4,
+            "text": "-sqrt(35)",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "text": "Используйте приведенное ниже выражение, чтобы ответить на вопрос. 3 × [(2 × 6 – 5) + (8 ÷ 4)] – 1 Каково значение выражения?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Выражения с переменными",
+        "options": [
+          {
+            "id": 1,
+            "text": "9",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "11",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "26",
+            "is_correct": true
+          },
+          {
+            "id": 4,
+            "text": "32",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "text": "Найдите значение выражения 2,16 ÷ 0,06.",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Выражения с переменными",
+        "options": [
+          {
+            "id": 1,
+            "text": "3,6",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "36",
+            "is_correct": true
+          },
+          {
+            "id": 3,
+            "text": "0,01272",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "12,72",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "text": "Каково значение выражения 2(3(4^2 + 1)) - 2^3?",
+        "explanation": "",
+        "time_limit_sec": 35,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Выражения с переменными",
+        "options": [
+          {
+            "id": 1,
+            "text": "156",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "110",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "94",
+            "is_correct": true
+          },
+          {
+            "id": 4,
+            "text": "48",
+            "is_correct": false
+          }
+        ]
+      }
+    ],
+    "count": 5
+  },
+  {
+    "id": "quiz_tb_atanasyan_geom_7_9_p2",
+    "textbook_id": "atanasyan_geom_7_9",
+    "paragraph_num": 2,
+    "title": "Атанасян Л.С.: § 2. Измерение отрезков",
+    "subject": "Геометрия",
+    "grade": 7,
+    "topic": "§ 2. Измерение отрезков",
+    "author": "Атанасян Л.С.",
+    "group_label": "Атанасян 7 кл",
+    "is_active": false,
+    "questions": [
+      {
+        "id": 1,
+        "text": "Рассмотрим отрезок длиной 10. Точки A и B выбираются случайным образом таким образом, чтобы A и B делили отрезок на три меньших сегмента. Какова вероятность того, что три меньших сегмента могли бы образовать стороны треугольника?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Измерение отрезков",
+        "options": [
+          {
+            "id": 1,
+            "text": "0",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "10%",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "25%",
+            "is_correct": true
+          },
+          {
+            "id": 4,
+            "text": "50%",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "text": "Миранда пропорционально увеличила изображение. Исходное изображение имеет ширину 4 см и длину 6 см. Если новое, увеличенное изображение имеет ширину 10 см, то какова его длина?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Измерение отрезков",
+        "options": [
+          {
+            "id": 1,
+            "text": "8 см",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "12 см",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "15 см",
+            "is_correct": true
+          },
+          {
+            "id": 4,
+            "text": "20 см",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "text": "Мистер Фуллер хочет установить ограждение вокруг своего двора прямоугольной формы. Ширина двора составляет 55 футов, а длина - 75 футов. Сколько футов ограждения нужно мистеру Фуллеру?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Измерение отрезков",
+        "options": [
+          {
+            "id": 1,
+            "text": "130",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "260",
+            "is_correct": true
+          },
+          {
+            "id": 3,
+            "text": "3905",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "4125",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "text": "Поле имеет форму трапеции. Длина более короткого основания трапеции составляет 130 ярдов, а более длинного - 390 ярдов. Расстояние между двумя основаниями составляет 75 ярдов. Какова площадь поля?",
+        "explanation": "",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Измерение отрезков",
+        "options": [
+          {
+            "id": 1,
+            "text": "9750 ярдов^2",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "19500 ярдов^2",
+            "is_correct": true
+          },
+          {
+            "id": 3,
+            "text": "29250 ярдов^2",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "39000 ярдов^2",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "text": "Доска объявлений может быть полностью покрыта 30 квадратными листами бумаги без каких-либо зазоров или перекрытий. Если длина сторон каждого листа бумаги составляет 1 фут, какова общая площадь доски объявлений?",
+        "explanation": "",
+        "time_limit_sec": 35,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Измерение отрезков",
+        "options": [
+          {
+            "id": 1,
+            "text": "1 фут",
+            "is_correct": false
+          },
+          {
+            "id": 2,
+            "text": "30 футов",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "1 квадратный фут",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "30 квадратных футов",
+            "is_correct": true
+          }
+        ]
+      }
+    ],
+    "count": 5
+  },
+  {
+    "id": "quiz_tb_ladyzhenskaya_rus_6_p12",
+    "textbook_id": "ladyzhenskaya_rus_6",
+    "paragraph_num": 12,
+    "title": "Ладыженская Т.А.: § 12. Морфемика и словообразование",
+    "subject": "Русский язык",
+    "grade": 6,
+    "topic": "§ 12. Морфемика и словообразование",
+    "author": "Ладыженская Т.А.",
+    "group_label": "Ладыженская 6 кл",
+    "is_active": false,
+    "questions": [
+      {
+        "id": 1,
+        "text": "В каком предложении допущена ошибка в написании приставки? 1) рисует 2) населяющие 3) образуют 4) жизненный",
+        "explanation": "В слове 'населяющие' пишется приставка 'нас-', так как корень начинается с гласной буквы",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Чередующиеся гласные в корне",
+        "options": [
+          {
+            "id": 1,
+            "text": "2",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "1",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "3",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "4",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "text": "В каких из перечисленных слов верно поставлено ударение? 1) туфлЯ 2) понЯв 3) донельзЯ 4) корЫсть 5) оптОвый",
+        "explanation": "Ударение в словах «поняв» и «корысть» ставится на второй слог согласно современным орфоэпическим нормам русского языка.",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Чередующиеся гласные в корне",
+        "options": [
+          {
+            "id": 1,
+            "text": "24",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "135",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "145",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "235",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "text": "В каком из предложений неверно употреблено выделенное слово? Подберите правильный пароним: «КРАСОЧНЫМИ» или «красящими».",
+        "explanation": "Слово «красочными» означает обладающими яркими цветами, живописными, а не способными придавать цвет, окрашивать, как в случае с минеральными веществами.",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Чередующиеся гласные в корне",
+        "options": [
+          {
+            "id": 1,
+            "text": "красящими",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "красочными",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "цветными",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "яркими",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "text": "Как правильно написать выделенное слово: «ПОДСКОЛЬЗНУТЬСЯ» или «ПОДСКОЛЬЗНУТЬ»?",
+        "explanation": "Глагол «поскользнуться» является возвратным и правильным вариантом написания.",
+        "time_limit_sec": 25,
+        "tier": 2,
+        "is_boss": false,
+        "topic": "Чередующиеся гласные в корне",
+        "options": [
+          {
+            "id": 1,
+            "text": "поскользнуться",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "подскользнут",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "подскользнутся",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "подскользнувшийся",
+            "is_correct": false
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "text": "Какое слово следует вставить вместо пропуска в предложении: 'сознание, привыкшее работать с мелкими кусочками и отдельными фрагментами, не связанными между собой, плохо справляется с большими текстами, ... времени и внимания.' ?",
+        "explanation": "Слово «вследствиеэтого» наиболее точно передает причинно-следственную связь в данном контексте.",
+        "time_limit_sec": 35,
+        "tier": 3,
+        "is_boss": true,
+        "topic": "Чередующиеся гласные в корне",
+        "options": [
+          {
+            "id": 1,
+            "text": "вследствиеэтого",
+            "is_correct": true
+          },
+          {
+            "id": 2,
+            "text": "поэтому",
+            "is_correct": false
+          },
+          {
+            "id": 3,
+            "text": "благодаряэтому",
+            "is_correct": false
+          },
+          {
+            "id": 4,
+            "text": "из-затого",
+            "is_correct": false
+          }
+        ]
+      }
+    ],
+    "count": 5
+  }
+]
