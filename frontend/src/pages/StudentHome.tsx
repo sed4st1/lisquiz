@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { LogIn, Sparkles, Flame, Droplets } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { roomApi, JoinRoomResponse } from '../services/roomApi';
+import { authService } from '../services/authService';
 
 export interface JoinRoomPayload {
   pin: string;
@@ -27,9 +28,11 @@ const AVATARS = [
 
 export default function StudentHome({ onJoinGame, onGoToGrove }: StudentHomeProps) {
   const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
-  const [selectedAvatar, setSelectedAvatar] = useState('fox_smart');
+  const [selectedAvatar, setSelectedAvatar] = useState(() => authService.getCachedUser()?.avatar || 'fox_smart');
   const [studentName, setStudentName] = useState<string>(() => {
     try {
+      const cached = authService.getCachedUser();
+      if (cached?.display_name) return cached.display_name;
       const saved = sessionStorage.getItem('lisquiz_student_name');
       if (saved) return saved;
       const pool = ['Иван К', 'Анна С', 'Михаил В', 'София М', 'Даниил Р', 'Алиса Т', 'Максим Д'];

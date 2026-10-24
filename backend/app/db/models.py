@@ -208,3 +208,32 @@ class SpacedRepetitionModel(Base):
     trigger_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class UserModel(Base):
+    """Модель пользователя платформы Лисквиз (152-ФЗ Zero-PII контур)."""
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: f"usr_{uuid.uuid4().hex[:8]}")
+    pseudonym_id: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="student", nullable=False)  # teacher, student
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    avatar: Mapped[str] = mapped_column(String(50), default="fox_smart", nullable=False)
+    auth_provider: Mapped[str] = mapped_column(String(30), default="dev_emulator", nullable=False)  # max_bot, dev_emulator
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+
+class AuthTicketModel(Base):
+    """Одноразовый тикет входа по команде /start из чата Сферума (TTL 5-10 минут)."""
+    __tablename__ = "auth_tickets"
+
+    ticket: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: f"tkt_{uuid.uuid4().hex[:12]}")
+    pseudonym_id: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(20), default="student", nullable=False)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    avatar: Mapped[str] = mapped_column(String(50), default="fox_smart", nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

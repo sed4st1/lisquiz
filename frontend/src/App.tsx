@@ -1,6 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Home, Sprout, Crown, BarChart2, Wrench, X, Flame, Droplets, Sparkles } from 'lucide-react';
+import {
+  Home,
+  Sprout,
+  Crown,
+  BarChart2,
+  Wrench,
+  X,
+  Flame,
+  Droplets,
+  ShieldCheck,
+  Bot,
+  CheckCircle2,
+} from 'lucide-react';
+import { authService, UserProfile } from './services/authService';
+import { getWebApp } from './services/maxBridge';
 
 // Pages
 import ClassGrove from './pages/ClassGrove';
@@ -38,12 +52,18 @@ export default function App() {
   const [subScreen, setSubScreen] = useState<SubScreenType>(null);
   const [isMobileDevOpen, setIsMobileDevOpen] = useState(false);
 
+  // Auth & user state
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCachedUser());
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authFeedback, setAuthFeedback] = useState<string | null>(null);
+
   // Live session state
   const [activePin, setActivePin] = useState<string>('482915');
   const [teacherToken, setTeacherToken] = useState<string>('');
   const [studentPlayerId, setStudentPlayerId] = useState<string>('');
-  const [studentName, setStudentName] = useState<string>('Иван К');
-  const [studentAvatar, setStudentAvatar] = useState<string>('fox_smart');
+  const [studentName, setStudentName] = useState<string>(() => authService.getCachedUser()?.display_name || 'Иван К');
+  const [studentAvatar, setStudentAvatar] = useState<string>(() => authService.getCachedUser()?.avatar || 'fox_smart');
   const [currentQuestionData, setCurrentQuestionData] = useState<any>(null);
   const [personalAnswerResult, setPersonalAnswerResult] = useState<any>(null);
   const [quizFinishData, setQuizFinishData] = useState<any>(null);
@@ -130,11 +150,101 @@ export default function App() {
     };
   }, [role, studentName, studentPlayerId]);
 
+  // Handle auth on mount: check URL ticket param, MAX WebApp initData, or verify cached session
+  useEffect(() => {
+    // 1. MAX WebApp initData
+    const webApp = getWebApp();
+    if (webApp.initData) {
+      setAuthLoading(true);
+      authService.exchangeInitData(webApp.initData)
+        .then((res) => {
+          setCurrentUser(res.user);
+          setRole(res.user.role);
+          if (res.user.role === 'student' && res.user.display_name) {
+            setStudentName(res.user.display_name);
+          }
+        })
+        .catch((e) => console.warn('MAX WebApp initData exchange error:', e))
+        .finally(() => setAuthLoading(false));
+      return;
+    }
+
+    // 2. Query param ticket: ?ticket=tkt_...
+    const urlParams = new URLSearchParams(window.location.search);
+    const ticketParam = urlParams.get('ticket');
+    if (ticketParam) {
+      setAuthLoading(true);
+      authService.exchangeTicket(ticketParam)
+        .then((res) => {
+          setCurrentUser(res.user);
+          setRole(res.user.role);
+          if (res.user.role === 'student' && res.user.display_name) {
+            setStudentName(res.user.display_name);
+          }
+          setAuthFeedback(`Успешный вход по тикету бота: ${res.user.display_name}`);
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, document.title, cleanUrl);
+        })
+        .catch((e) => {
+          console.error('Ticket exchange error:', e);
+          setAuthFeedback('Не удалось обменять тикет бота');
+        })
+        .finally(() => setAuthLoading(false));
+      return;
+    }
+
+    // 3. Restore existing session or create dev user
+    authService.getMe().then((user) => {
+      if (user) {
+        setCurrentUser(user);
+        setRole(user.role);
+        if (user.role === 'student' && user.display_name) {
+          setStudentName(user.display_name);
+        }
+      } else {
+        authService.quickLogin('student', 'Иван К', 'fox_smart')
+          .then((res) => setCurrentUser(res.user))
+          .catch(() => {});
+      }
+    });
+  }, []);
+
   const handleRoleSwitch = (newRole: 'teacher' | 'student') => {
     haptics.impact('light');
     setRole(newRole);
     setSubScreen(null);
     setTab(newRole === 'teacher' ? 'home' : 'grove');
+
+    const name = newRole === 'teacher' ? 'Марья Ивановна' : (studentName || 'Иван К');
+    const avatar = newRole === 'teacher' ? 'owl' : studentAvatar;
+    authService.quickLogin(newRole, name, avatar)
+      .then((res) => setCurrentUser(res.user))
+      .catch((err) => console.warn('Role switch quickLogin error:', err));
+  };
+
+  const handleSimulateBotStart = async (targetRole: 'teacher' | 'student') => {
+    setAuthLoading(true);
+    setAuthFeedback(null);
+    try {
+      const name = targetRole === 'teacher' ? 'Марья Ивановна' : 'Иван К';
+      const avatar = targetRole === 'teacher' ? 'owl' : 'fox_smart';
+      const botRes = await authService.simulateBotStart('/start', targetRole, name, avatar);
+      const exchangeRes = await authService.exchangeTicket(botRes.ticket);
+      setCurrentUser(exchangeRes.user);
+      setRole(exchangeRes.user.role);
+      if (exchangeRes.user.role === 'student' && exchangeRes.user.display_name) {
+        setStudentName(exchangeRes.user.display_name);
+      }
+      setSubScreen(null);
+      setTab(exchangeRes.user.role === 'teacher' ? 'home' : 'grove');
+      setAuthFeedback(`✅ Успех! Команда /start обработана. Тикет ${botRes.ticket.slice(0, 10)}... обменян на JWT!`);
+      haptics.notification('success');
+    } catch (e: any) {
+      setAuthFeedback(`❌ Ошибка: ${e.message || 'Сбой симуляции'}`);
+      haptics.notification('error');
+    } finally {
+      setAuthLoading(false);
+    }
   };
 
   const handleTabChange = (newTab: TabType) => {
@@ -478,47 +588,191 @@ export default function App() {
           backgroundRepeat: 'no-repeat',
         }}
       >
-        {/* Mobile Top App Bar: Grove Stats + Role Switch */}
+        {/* Mobile Top App Bar: Grove Stats + User ID + Role Switch */}
         <header style={styles.topHeader}>
           <div style={styles.topStatsGroup}>
             <div style={styles.topStatPill} title="Стрик 5 дней">
-              <Flame size={15} color="#FF7A00" />
+              <Flame size={14} color="#FF7A00" />
               <span style={styles.topStatVal}>5</span>
             </div>
             <div style={styles.topStatPill} title="Здоровье Древа 95%">
-              <Droplets size={14} color="#34D399" />
+              <Droplets size={13} color="#34D399" />
               <span style={styles.topStatVal}>95%</span>
-            </div>
-            <div style={styles.topStatPill} title="Стадия Дерева 4">
-              <Sparkles size={13} color="#FBBF24" />
-              <span style={styles.topStatVal}>Ур. 4</span>
             </div>
           </div>
 
-          {/* Role switcher toggle: Учитель / Ученик */}
-          <div style={styles.roleToggleBox}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* User Profile / Zero-PII Badge Pill */}
             <button
-              onClick={() => handleRoleSwitch('teacher')}
-              style={{
-                ...styles.roleBtn,
-                background: role === 'teacher' ? '#FF7A00' : 'transparent',
-                color: role === 'teacher' ? '#FFFFFF' : '#9CA3AF',
+              onClick={() => {
+                haptics.impact('light');
+                setAuthModalOpen(true);
               }}
+              style={styles.userProfilePill}
+              title="Профиль и авторизация Сферум / MAX"
             >
-              Учитель
+              <span style={{ fontSize: 13 }}>{role === 'teacher' ? '🦉' : '🦊'}</span>
+              <span style={styles.userNamePillText}>
+                {currentUser?.display_name || (role === 'teacher' ? 'Учитель' : studentName)}
+              </span>
+              <div style={styles.userOnlineDot} title="152-ФЗ Zero-PII защищен" />
             </button>
-            <button
-              onClick={() => handleRoleSwitch('student')}
-              style={{
-                ...styles.roleBtn,
-                background: role === 'student' ? '#FF7A00' : 'transparent',
-                color: role === 'student' ? '#FFFFFF' : '#9CA3AF',
-              }}
-            >
-              Ученик
-            </button>
+
+            {/* Role switcher toggle: Учитель / Ученик */}
+            <div style={styles.roleToggleBox}>
+              <button
+                onClick={() => handleRoleSwitch('teacher')}
+                style={{
+                  ...styles.roleBtn,
+                  background: role === 'teacher' ? '#FF7A00' : 'transparent',
+                  color: role === 'teacher' ? '#FFFFFF' : '#9CA3AF',
+                }}
+              >
+                Учитель
+              </button>
+              <button
+                onClick={() => handleRoleSwitch('student')}
+                style={{
+                  ...styles.roleBtn,
+                  background: role === 'student' ? '#FF7A00' : 'transparent',
+                  color: role === 'student' ? '#FFFFFF' : '#9CA3AF',
+                }}
+              >
+                Ученик
+              </button>
+            </div>
           </div>
         </header>
+
+        {/* ========================================================
+            SFERUM / MAX AUTHENTICATION & ZERO-PII MODAL
+           ======================================================== */}
+        <AnimatePresence>
+          {authModalOpen && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={styles.authModalBackdrop}
+              onClick={() => setAuthModalOpen(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.92, y: 16 }}
+                animate={{ scale: 1, y: 0 }}
+                exit={{ scale: 0.92, y: 16 }}
+                style={styles.authModalCard}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div style={styles.authModalHeader}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ShieldCheck size={20} color="#10B981" />
+                    <span style={styles.authModalTitle}>Сферум / MAX ID</span>
+                  </div>
+                  <button
+                    onClick={() => setAuthModalOpen(false)}
+                    style={styles.authModalCloseBtn}
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* User Info Card */}
+                <div style={styles.authModalProfileCard}>
+                  <div style={styles.authAvatarBadge}>
+                    {role === 'teacher' ? '🦉' : '🦊'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={styles.authModalName}>
+                        {currentUser?.display_name || (role === 'teacher' ? 'Марья Ивановна' : studentName)}
+                      </span>
+                      <span style={role === 'teacher' ? styles.authRoleBadgeTeacher : styles.authRoleBadgeStudent}>
+                        {role === 'teacher' ? 'Учитель' : 'Ученик'}
+                      </span>
+                    </div>
+                    <div style={styles.authZeroPiiId} title="152-ФЗ Zero-PII Хеш">
+                      <span style={{ color: '#9CA3AF' }}>Zero-PII ID:</span>{' '}
+                      <code>{currentUser?.pseudonym_id || 'pid_pending'}</code>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Security compliance banner */}
+                <div style={styles.authSecurityNote}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#10B981', fontWeight: 700, fontSize: 11, marginBottom: 3 }}>
+                    <CheckCircle2 size={13} color="#10B981" />
+                    <span>Соответствие 152-ФЗ (Zero-PII)</span>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', lineHeight: 1.4 }}>
+                    Телефон, паспорт и персональные данные не сохраняются. Авторизация происходит по защищенному крипто-тикету бота.
+                  </p>
+                </div>
+
+                {/* Status banner */}
+                <div style={styles.authStatusRow}>
+                  <span style={{ fontSize: 11, color: '#9CA3AF' }}>Статус сессии:</span>
+                  <span style={{ fontSize: 11, color: '#34D399', fontWeight: 700 }}>
+                    🟢 Активна (JWT токен)
+                  </span>
+                </div>
+
+                {/* Bot Simulation Section */}
+                <div style={styles.authSimSection}>
+                  <span style={styles.authSimTitle}>🤖 Симуляция /start (Тест без токена)</span>
+                  <p style={styles.authSimDesc}>
+                    Когда токен бота выдадут — вход будет работать автоматически по команде <code>/start</code> в боте. Сейчас вы можете проверить этот сценарий кнопкой ниже:
+                  </p>
+                  
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      onClick={() => handleSimulateBotStart(role)}
+                      disabled={authLoading}
+                      style={styles.authSimBtnPrimary}
+                    >
+                      <Bot size={15} />
+                      <span>{authLoading ? 'Обработка...' : `Симулировать /start (${role === 'teacher' ? 'Учитель' : 'Ученик'})`}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {authFeedback && (
+                  <div style={styles.authFeedbackAlert}>
+                    {authFeedback}
+                  </div>
+                )}
+
+                {/* Switch quick roles */}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button
+                    onClick={() => {
+                      handleRoleSwitch('teacher');
+                      setAuthFeedback('Переключено на профиль Учителя');
+                    }}
+                    style={{
+                      ...styles.authQuickSwitchBtn,
+                      borderColor: role === 'teacher' ? '#3B82F6' : 'rgba(255,255,255,0.12)',
+                    }}
+                  >
+                    🦉 Как Учитель
+                  </button>
+                  <button
+                    onClick={() => {
+                      handleRoleSwitch('student');
+                      setAuthFeedback('Переключено на профиль Ученика');
+                    }}
+                    style={{
+                      ...styles.authQuickSwitchBtn,
+                      borderColor: role === 'student' ? '#10B981' : 'rgba(255,255,255,0.12)',
+                    }}
+                  >
+                    🦊 Как Ученик
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Scrollable Screen Body */}
         <main style={styles.mainContent}>
@@ -755,6 +1009,19 @@ export default function App() {
             📊 Статистика ученика (Ачивки)
           </button>
 
+          <button
+            onClick={() => setAuthModalOpen(true)}
+            style={{ ...styles.devBtn, borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
+          >
+            🔐 Авторизация Сферум / MAX
+          </button>
+          <button
+            onClick={() => handleSimulateBotStart(role)}
+            style={{ ...styles.devBtn, borderColor: 'rgba(168, 85, 247, 0.4)', color: '#D8B4FE' }}
+          >
+            🤖 Симулировать /start в боте
+          </button>
+
           <div style={styles.devDivider} />
 
           <button
@@ -916,6 +1183,24 @@ export default function App() {
               style={styles.mobileDevBtn}
             >
               🌙 Сон
+            </button>
+            <button
+              onClick={() => {
+                setAuthModalOpen(true);
+                setIsMobileDevOpen(false);
+              }}
+              style={{ ...styles.mobileDevBtn, color: '#6EE7B7' }}
+            >
+              🔐 Сферум ID
+            </button>
+            <button
+              onClick={() => {
+                handleSimulateBotStart(role);
+                setIsMobileDevOpen(false);
+              }}
+              style={{ ...styles.mobileDevBtn, color: '#D8B4FE' }}
+            >
+              🤖 Бот /start
             </button>
           </div>
         </div>
@@ -1094,5 +1379,194 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     fontWeight: 700,
     cursor: 'pointer',
+  },
+  userProfilePill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.16)',
+    borderRadius: 999,
+    padding: '4px 8px',
+    cursor: 'pointer',
+    color: '#FFFFFF',
+  },
+  userNamePillText: {
+    fontSize: 11,
+    fontWeight: 700,
+    maxWidth: 68,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  userOnlineDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    backgroundColor: '#10B981',
+    boxShadow: '0 0 6px #10B981',
+  },
+  authModalBackdrop: {
+    position: 'absolute',
+    inset: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backdropFilter: 'blur(8px)',
+    WebkitBackdropFilter: 'blur(8px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    zIndex: 100,
+  },
+  authModalCard: {
+    backgroundColor: '#111827',
+    border: '1px solid rgba(255, 255, 255, 0.12)',
+    borderRadius: 20,
+    padding: '18px 16px',
+    width: '100%',
+    maxWidth: 380,
+    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+  },
+  authModalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  authModalTitle: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: '#FFFFFF',
+  },
+  authModalCloseBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#9CA3AF',
+    cursor: 'pointer',
+    padding: 4,
+    display: 'flex',
+  },
+  authModalProfileCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 12,
+  },
+  authAvatarBadge: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 22,
+    flexShrink: 0,
+  },
+  authModalName: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#FFFFFF',
+  },
+  authRoleBadgeTeacher: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    color: '#93C5FD',
+    fontSize: 10,
+    fontWeight: 700,
+    padding: '2px 7px',
+    borderRadius: 999,
+    border: '1px solid rgba(59, 130, 246, 0.35)',
+  },
+  authRoleBadgeStudent: {
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    color: '#6EE7B7',
+    fontSize: 10,
+    fontWeight: 700,
+    padding: '2px 7px',
+    borderRadius: 999,
+    border: '1px solid rgba(16, 185, 129, 0.35)',
+  },
+  authZeroPiiId: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  authSecurityNote: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    border: '1px solid rgba(16, 185, 129, 0.22)',
+    borderRadius: 10,
+    padding: '8px 10px',
+    marginBottom: 10,
+  },
+  authStatusRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 8,
+    padding: '6px 10px',
+    marginBottom: 12,
+  },
+  authSimSection: {
+    backgroundColor: 'rgba(255, 122, 0, 0.08)',
+    border: '1px solid rgba(255, 122, 0, 0.25)',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+  },
+  authSimTitle: {
+    fontSize: 12,
+    fontWeight: 800,
+    color: '#FF7A00',
+    display: 'block',
+    marginBottom: 4,
+  },
+  authSimDesc: {
+    margin: 0,
+    fontSize: 11,
+    color: '#D1D5DB',
+    lineHeight: 1.4,
+  },
+  authSimBtnPrimary: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FF7A00',
+    border: 'none',
+    color: '#FFFFFF',
+    fontWeight: 700,
+    fontSize: 12,
+    padding: '9px 12px',
+    borderRadius: 10,
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(255, 122, 0, 0.3)',
+  },
+  authFeedbackAlert: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    border: '1px solid rgba(16, 185, 129, 0.35)',
+    color: '#34D399',
+    borderRadius: 8,
+    padding: '8px 10px',
+    fontSize: 11,
+    fontWeight: 600,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  authQuickSwitchBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid',
+    borderRadius: 10,
+    padding: '8px',
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+    textAlign: 'center',
   },
 };

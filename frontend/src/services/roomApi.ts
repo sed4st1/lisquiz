@@ -1,3 +1,5 @@
+import { authService } from './authService';
+
 export interface CreateRoomOptions {
   quiz?: any;
   teacher_name?: string;
@@ -58,7 +60,7 @@ export const roomApi = {
 
     const res = await fetch('/api/rooms', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authService.getAuthHeaders() },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -80,7 +82,7 @@ export const roomApi = {
   async joinRoom(roomCode: string, name: string, avatar: string): Promise<JoinRoomResponse> {
     const res = await fetch(`/api/rooms/${roomCode}/join`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authService.getAuthHeaders() },
       body: JSON.stringify({ name, avatar }),
     });
     if (!res.ok) {
@@ -102,7 +104,7 @@ export const roomApi = {
   async updateRoomQuiz(roomCode: string, quiz: any): Promise<any> {
     const res = await fetch(`/api/rooms/${roomCode}/quiz`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authService.getAuthHeaders() },
       body: JSON.stringify(quiz),
     });
     if (!res.ok) {
