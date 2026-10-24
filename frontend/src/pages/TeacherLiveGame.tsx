@@ -12,7 +12,9 @@ import {
   Check,
   Sprout,
   Clock,
+  Bot,
 } from 'lucide-react';
+import { testHarness } from '../services/testHarness';
 import { TactileButton } from '../components/TactileButton';
 import { socketService } from '../services/socketService';
 import { haptics } from '../services/haptics';
@@ -182,6 +184,23 @@ export default function TeacherLiveGame({
   }, [qIndex, onFinishQuiz]);
 
   // Actions
+  const [isSimulatingBots, setIsSimulatingBots] = useState(false);
+
+  const handleSimulateBotAnswers = async () => {
+    setIsSimulatingBots(true);
+    haptics.impact('light');
+    try {
+      const count = await testHarness.simulateBotAnswers(_roomCode, 0.75);
+      if (count > 0) {
+        setAnsweredCount((prev) => Math.max(prev + count, totalStudents > 0 ? totalStudents : count));
+      }
+    } catch (e) {
+      console.warn('Bot answer simulation error:', e);
+    } finally {
+      setIsSimulatingBots(false);
+    }
+  };
+
   const handleShowResults = () => {
     haptics.impact('medium');
     if (socketService.isConnected()) {
@@ -495,6 +514,22 @@ export default function TeacherLiveGame({
 
             {/* Teacher Control Actions Immediately Below 2x2 Grid */}
             <div style={styles.actionRowColumn}>
+              {/* QA / Testing: Simulate Bot Answers */}
+              <button
+                type="button"
+                onClick={handleSimulateBotAnswers}
+                disabled={isSimulatingBots || allAnswered}
+                style={{
+                  ...styles.simulateBotsBtn,
+                  opacity: allAnswered ? 0.5 : 1,
+                  cursor: allAnswered ? 'default' : 'pointer',
+                }}
+                title="Ответить за всех подключенных ботов (75% верных)"
+              >
+                <Bot size={15} color="#93C5FD" />
+                <span>{isSimulatingBots ? 'Боты отвечают...' : `⚡ Симулировать ответы ботов (${answeredCount}/${totalStudents > 0 ? totalStudents : 'все'})`}</span>
+              </button>
+
               <TactileButton
                 theme="green"
                 size="lg"
@@ -944,6 +979,22 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
     border: '1.5px solid #FFFFFF',
     zIndex: 2,
+  },
+  simulateBotsBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    border: '1px dashed rgba(59, 130, 246, 0.45)',
+    borderRadius: 12,
+    padding: '9px 12px',
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+    width: '100%',
+    transition: 'all 0.15s ease',
   },
   actionRowColumn: {
     marginTop: 14,

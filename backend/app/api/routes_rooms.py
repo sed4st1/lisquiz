@@ -420,3 +420,139 @@ async def control_room(room_code: str, req: RoomControlRequest):
 
     else:
         raise HTTPException(status_code=400, detail=f"Неизвестное действие: {req.action}")
+
+
+
+# ==========================================
+# Developer Testing Endpoints (Для тестирования)
+# ==========================================
+
+MOCK_STUDENTS_POOL = [
+    ("Иван К", "fox_smart"),
+    ("Аня Смирнова", "owl"),
+    ("Максим Петров", "bear"),
+    ("София Морозова", "bunny"),
+    ("Даниил Романов", "raccoon"),
+    ("Алиса Тарасова", "hedgehog"),
+    ("Кирилл Белов", "squirrel"),
+    ("Полина Волкова", "fox_smart"),
+]
+
+
+class AddMockPlayersRequest(BaseModel):
+    count: int = Field(default=3, ge=1, le=10)
+
+
+@router.post("/{room_code}/test/add_mock_players")
+async def add_mock_players_endpoint(room_code: str, req: Optional[AddMockPlayersRequest] = None):
+    """
+    Добавляет n тестовых ботов-учеников в лобби комнаты для быстрого тестирования.
+    """
+    room = await room_state_engine.get_room(room_code)
+    if not room:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+
+    count = req.count if req else 3
+    existing_names = {p.name for p in room.players.values()}
+    added_players = []
+
+    for name, avatar in MOCK_STUDENTS_POOL:
+        if len(added_players) >= count:
+            break
+        if name in existing_names:
+            continue
+
+        player, token = await room_state_engine.join_room(
+            room_code=room_code,
+            name=name,
+            avatar=avatar,
+            pseudonym_id=f"pid_{hash(name) % 1000000}",
+        )
+        added_players.append({
+            "player_id": player.id,
+            "name": player.name,
+            "avatar": player.avatar,
+        })
+        # Бродкаст в лобби учителя
+        await ws_manager.broadcast_room(
+            room_code,
+            "PLAYER_JOINED",
+            {
+                "player_id": player.id,
+                "name": player.name,
+                "avatar": player.avatar,
+                "total_players": len(room.players),
+            },
+        )
+
+    return {
+        "status": "ok",
+        "added_count": len(added_players),
+        "total_players": len(room.players),
+        "players": added_players,
+    }
+
+
+class SimulateAnswersRequest(BaseModel):
+    accuracy: float = Field(default=0.75, ge=0.0, le=1.0, description="Доля правильных ответов ботов")
+
+
+@router.post("/{room_code}/test/simulate_answers")
+async def simulate_answers_endpoint(room_code: str, req: Optional[SimulateAnswersRequest] = None):
+    """
+    Эмулирует отправку ответов всеми подключенными учениками на текущий вопрос.
+    """
+    from ..models.schemas import AnswerSubmission
+    room = await room_state_engine.get_room(room_code)
+    if not room:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+
+    if room.status != RoomStatus.QUESTION:
+        raise HTTPException(status_code=400, detail="Комната не находится в статусе активного вопроса")
+
+    q_idx = room.current_question_index
+    if q_idx >= len(room.quiz.questions):
+        raise HTTPException(status_code=400, detail="Вопрос вне диапазона")
+
+    cur_q = room.quiz.questions[q_idx]
+    correct_opt = next((o for o in cur_q.options if o.is_correct), cur_q.options[0])
+    wrong_opts = [o for o in cur_q.options if not o.is_correct] or [correct_opt]
+    acc_ratio = req.accuracy if req else 0.75
+
+    answered = []
+    for p_id, player in room.players.items():
+        if p_id in room.answered_player_ids:
+            continue
+
+        is_bot_correct = random.random() < acc_ratio
+        chosen_opt = correct_opt if is_bot_correct else random.choice(wrong_opts)
+        time_taken = round(random.uniform(2.5, 9.0), 2)
+
+        sub = AnswerSubmission(
+            room_code=room_code,
+            player_id=p_id,
+            question_id=cur_q.id,
+            option_id=chosen_opt.id,
+            time_taken_sec=time_taken,
+            tab_blurred=False,
+        )
+        res = await room_state_engine.record_answer(sub)
+        answered.append({"player_id": p_id, "name": player.name, "is_correct": is_bot_correct})
+
+        await ws_manager.broadcast_room(
+            room_code,
+            "ANSWER_COLLECTED",
+            {
+                "player_id": p_id,
+                "answered_count": len(room.answered_player_ids),
+                "total_players": len([p for p in room.players.values() if p.connected]),
+                "all_answered": res.get("all_answered", False),
+            },
+        )
+
+    return {
+        "status": "ok",
+        "simulated_count": len(answered),
+        "total_answered": len(room.answered_player_ids),
+        "total_players": len(room.players),
+    }

@@ -10,7 +10,9 @@ import {
   BookOpen,
   CheckCircle2,
   Trash2,
+  Bot,
 } from 'lucide-react';
+import { testHarness } from '../services/testHarness';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
 import { socketService } from '../services/socketService';
@@ -87,6 +89,21 @@ export default function TeacherLobby({
   const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isAddingBots, setIsAddingBots] = useState(false);
+
+  const handleAddMockBots = async (count: number) => {
+    if (!activePin) return;
+    setIsAddingBots(true);
+    haptics.impact('light');
+    try {
+      const added = await testHarness.addMockStudents(activePin, count);
+      showToast(`🤖 Добавлено ${added} тестовых учеников!`);
+    } catch {
+      showToast('Ошибка подключения ботов');
+    } finally {
+      setIsAddingBots(false);
+    }
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -474,6 +491,40 @@ export default function TeacherLobby({
           </button>
         </div>
       </motion.div>
+
+      {/* QA & Testing Quick Bots Bar */}
+      <div style={styles.testBotsBar}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Bot size={14} color="#60A5FA" />
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#93C5FD' }}>Тест:</span>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => handleAddMockBots(3)}
+            disabled={isAddingBots}
+            style={styles.testBotBtn}
+          >
+            +3 бота
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddMockBots(5)}
+            disabled={isAddingBots}
+            style={styles.testBotBtn}
+          >
+            +5 ботов
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddMockBots(8)}
+            disabled={isAddingBots}
+            style={{ ...styles.testBotBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            Класс (8)
+          </button>
+        </div>
+      </div>
 
       {/* Students Avatar Strip */}
       <div style={styles.studentsCard}>
@@ -885,6 +936,28 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     cursor: 'pointer',
     flexShrink: 0,
+  },
+  testBotsBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    border: '1px solid rgba(59, 130, 246, 0.25)',
+    borderRadius: 12,
+    padding: '8px 12px',
+    marginBottom: 4,
+    gap: 8,
+  },
+  testBotBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: 8,
+    padding: '4px 9px',
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
   },
   studentsCard: {
     backgroundColor: '#0F172A',

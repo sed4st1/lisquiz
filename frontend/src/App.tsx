@@ -33,6 +33,8 @@ import StudentQuizFinish from './pages/StudentQuizFinish';
 import SleepScreen from './pages/SleepScreen';
 import TeacherClassManagement from './pages/TeacherClassManagement';
 import { classApi } from './services/classApi';
+import { testHarness } from './services/testHarness';
+import { roomApi } from './services/roomApi';
 import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
 
@@ -259,6 +261,42 @@ export default function App() {
       haptics.notification('error');
     } finally {
       setAuthLoading(false);
+    }
+  };
+
+  const handleQuickBotGame = async () => {
+    haptics.notification('success');
+    setRole('teacher');
+    try {
+      let pin = activePin;
+      if (!pin || pin === '482915') {
+        const room = await roomApi.createRoom({
+          subject: 'Математика',
+          grade: 7,
+          topic: 'Дроби и проценты',
+        });
+        pin = room.room_code;
+        setActivePin(pin);
+        setTeacherToken(room.teacher_token);
+      }
+      await testHarness.addMockStudents(pin, 4);
+      setSubScreen('teacher_game');
+    } catch (e: any) {
+      console.warn('handleQuickBotGame notice:', e);
+      setSubScreen('teacher_game');
+    }
+  };
+
+  const handleSeedClassAndAnalytics = async () => {
+    haptics.notification('success');
+    setRole('teacher');
+    try {
+      await testHarness.seedDemoClass();
+      setSubScreen('teacher_classes');
+      setAuthFeedback('✅ Демо-класс 7А засеян! Открыт экран долгосрочной аналитики.');
+    } catch (e: any) {
+      console.warn('handleSeedClassAndAnalytics notice:', e);
+      setSubScreen('teacher_classes');
     }
   };
 
@@ -932,6 +970,40 @@ export default function App() {
         <p style={styles.devSub}>Быстрый переход к экранам и мокам:</p>
 
         <div style={styles.devList}>
+          {/* QA Test Scenarios Header */}
+          <div style={{ padding: '4px 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#FBBF24', textTransform: 'uppercase' }}>
+              ⚡ Тест-сценарии (Демо)
+            </span>
+          </div>
+
+          <button
+            onClick={handleQuickBotGame}
+            style={{ ...styles.devBtn, borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
+          >
+            🎮 Запустить игру с 4 ботами
+          </button>
+
+          <button
+            onClick={handleSeedClassAndAnalytics}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            🏫 Засеять класс 7А (аналитика)
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setTab('leaderboard');
+              setSubScreen(null);
+              setTimeout(() => testHarness.addMockStudents(activePin, 5), 300);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(245, 158, 11, 0.4)', color: '#FDE68A' }}
+          >
+            🤖 +5 ботов в лобби
+          </button>
+
+          <div style={styles.devDivider} />
           <button
             onClick={() => {
               setRole('student');
@@ -1140,6 +1212,28 @@ export default function App() {
               <X size={16} />
             </button>
           </div>
+          {/* Quick QA Actions */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 8 }}>
+            <button
+              onClick={() => {
+                handleQuickBotGame();
+                setIsMobileDevOpen(false);
+              }}
+              style={{ ...styles.mobileDevBtn, backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10B981', color: '#6EE7B7' }}
+            >
+              🎮 Игра с ботами
+            </button>
+            <button
+              onClick={() => {
+                handleSeedClassAndAnalytics();
+                setIsMobileDevOpen(false);
+              }}
+              style={{ ...styles.mobileDevBtn, backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: '#3B82F6', color: '#93C5FD' }}
+            >
+              🏫 Засеять 7А
+            </button>
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <button
               onClick={() => {
