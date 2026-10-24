@@ -127,17 +127,51 @@ export default function StudentGameQuestion({
 
     const handleFinished = (data: any) => {
       haptics.notification('success');
+      socketService.disconnect();
       onGameFinished?.(data);
+    };
+
+    const handleRoomClosedOrKicked = () => {
+      socketService.disconnect();
+      onGameFinished?.();
     };
 
     socketService.on('ANSWER_COLLECTED', handleAnswerCollected);
     socketService.on('COUNTDOWN_START', handleCountdownStart);
     socketService.on('GAME_FINISHED', handleFinished);
+    socketService.on('ROOM_CLOSED', handleRoomClosedOrKicked);
+    socketService.on('KICKED', handleRoomClosedOrKicked);
+    socketService.on('TEACHER_LEFT', handleRoomClosedOrKicked);
+
+    const roomPollInterval = setInterval(async () => {
+      try {
+        const pin = socketService.getRoomCode();
+        if (!pin) return;
+        const res = await fetch(`/api/rooms/${pin}`);
+        if (!res.ok) {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onGameFinished?.();
+          return;
+        }
+        const info = await res.json();
+        if (info && info.status === 'finished') {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onGameFinished?.(info);
+          return;
+        }
+      } catch {}
+    }, 1500);
 
     return () => {
+      clearInterval(roomPollInterval);
       socketService.off('ANSWER_COLLECTED', handleAnswerCollected);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
       socketService.off('GAME_FINISHED', handleFinished);
+      socketService.off('ROOM_CLOSED', handleRoomClosedOrKicked);
+      socketService.off('KICKED', handleRoomClosedOrKicked);
+      socketService.off('TEACHER_LEFT', handleRoomClosedOrKicked);
     };
   }, [onGameFinished]);
 

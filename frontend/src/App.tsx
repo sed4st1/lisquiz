@@ -125,6 +125,21 @@ export default function App() {
         setSubScreen(null);
         setTab('stats');
       } else {
+        // Ученик: если он всё ещё в лобби ожидания, немедленно выкидываем его из комнаты
+        if (subScreen === 'student_waiting' || !subScreen) {
+          socketService.disconnect();
+          setActivePin('');
+          setSubScreen(null);
+          setPersonalAnswerResult(null);
+          setCurrentQuestionData(null);
+          setAuthFeedback('Викторина завершена учителем');
+          return;
+        }
+
+        // Если ученик играл, сразу разрываем соединение с комнатой, чтобы не висеть в сокетах
+        socketService.disconnect();
+        setActivePin('');
+
         const topPlayers = data?.top_players || [];
         const myPlayer = topPlayers.find((p: any) =>
           (studentPlayerId && p.id === studentPlayerId) ||
@@ -154,22 +169,22 @@ export default function App() {
     const handleStudentKickOrClose = (data: any) => {
       if (role === 'student' && subScreen) {
         socketService.disconnect();
+        setActivePin('');
         setSubScreen(null);
         setPersonalAnswerResult(null);
         setCurrentQuestionData(null);
-        setAuthFeedback(data?.reason || 'Комната была закрыта или больше не существует');
+        setAuthFeedback(data?.reason || 'Викторина завершена учителем');
       }
     };
 
-    const handleStudentDisconnect = (data: any) => {
-      if (role === 'student' && subScreen) {
-        if (data?.code === 4004) {
-          socketService.disconnect();
-          setSubScreen(null);
-          setPersonalAnswerResult(null);
-          setCurrentQuestionData(null);
-          setAuthFeedback('Комната больше не существует');
-        }
+    const handleStudentDisconnect = (_data?: any) => {
+      if (role === 'student' && subScreen && subScreen !== 'student_quiz_finish') {
+        socketService.disconnect();
+        setActivePin('');
+        setSubScreen(null);
+        setPersonalAnswerResult(null);
+        setCurrentQuestionData(null);
+        setAuthFeedback('Соединение с викториной закрыто');
       }
     };
 
@@ -573,6 +588,7 @@ export default function App() {
           totalQuestions={quizFinishData?.totalQuestions ?? 3}
           onGoToLeaderboard={(earnedPoints, rank) => {
             socketService.disconnect();
+            setActivePin('');
             setLeaderboardBoostPoints(earnedPoints || quizFinishData?.myScore || 150);
             setLeaderboardBoostRank(rank || quizFinishData?.myRank || null);
             setSubScreen(null);

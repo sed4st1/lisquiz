@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
+import { socketService } from '../services/socketService';
 
 export interface StudentQuizFinishProps {
   playerId?: string;
@@ -55,6 +56,26 @@ export default function StudentQuizFinish({
   totalQuestions = 3,
   onGoToLeaderboard,
 }: StudentQuizFinishProps) {
+  const [autoExitSeconds, setAutoExitSeconds] = React.useState(10);
+
+  useEffect(() => {
+    // Немедленно разрываем связь с завершенной комнатой, чтобы ученик не висел в сети
+    socketService.disconnect();
+
+    const exitTimer = setInterval(() => {
+      setAutoExitSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(exitTimer);
+          onGoToLeaderboard(myScore, myRankProp);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(exitTimer);
+  }, [myScore, myRankProp, onGoToLeaderboard]);
+
   useEffect(() => {
     haptics.notification('success');
     // Multi-stage confetti celebration
@@ -301,8 +322,11 @@ export default function StudentQuizFinish({
           }}
           iconAfter={<ArrowRight size={18} />}
         >
-          Перейти в рейтинг класса
+          {autoExitSeconds > 0 ? `Перейти в рейтинг класса (${autoExitSeconds}с)` : 'Перейти в рейтинг класса'}
         </TactileButton>
+        <span style={styles.actionHint}>
+          {autoExitSeconds > 0 ? `Автоматический переход в класс через ${autoExitSeconds}с` : 'Завершение...'}
+        </span>
       </motion.div>
     </div>
   );

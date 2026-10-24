@@ -235,6 +235,15 @@ async def get_room_info(room_code: str):
     }
 
 
+@router.post("/{room_code}/close")
+@router.delete("/{room_code}")
+async def close_room(room_code: str):
+    """Закрытие комнаты учителем и отключение всех учеников."""
+    await ws_manager.close_room_connections(room_code, reason="Учитель закрыл комнату")
+    await room_state_engine.close_room(room_code)
+    return {"status": "closed", "room_code": room_code}
+
+
 @router.get("/{room_code}/quiz", response_model=Quiz)
 async def get_room_quiz(room_code: str):
     """Получение текущей викторины комнаты для предпросмотра и редактирования учителем."""

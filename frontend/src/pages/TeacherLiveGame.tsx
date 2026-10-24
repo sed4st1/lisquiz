@@ -47,7 +47,7 @@ const DEFAULT_TEACHER_QUESTION = {
 };
 
 export default function TeacherLiveGame({
-  roomCode: _roomCode,
+  roomCode,
   initialQuestionData,
   subject = 'Математика',
   classNameTitle = '7А',
@@ -158,6 +158,7 @@ export default function TeacherLiveGame({
     const handleGameFinished = () => {
       if (!isMounted) return;
       haptics.notification('success');
+      fetch(`/api/rooms/${roomCode}/close`, { method: 'POST' }).catch(() => {});
       onFinishQuiz();
     };
 
@@ -203,6 +204,10 @@ export default function TeacherLiveGame({
     haptics.impact('medium');
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'NEXT_QUESTION' });
+      if (isLastQuestion) {
+        socketService.send('TEACHER_ACTION', { action: 'CLOSE_ROOM' });
+        fetch(`/api/rooms/${roomCode}/close`, { method: 'POST' }).catch(() => {});
+      }
     }
   };
 

@@ -14,6 +14,10 @@ class SocketService {
     return this.lastSyncState;
   }
 
+  public getRoomCode(): string | null {
+    return this.currentRoomCode;
+  }
+
   public connect(roomCode: string, token: string): Promise<void> {
     if (
       this.ws &&

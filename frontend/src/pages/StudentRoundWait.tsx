@@ -117,16 +117,14 @@ export default function StudentRoundWait({
       if (!isMounted) return;
       haptics.notification('success');
       setFinishData(data);
-      try {
-        confetti({
-          particleCount: 160,
-          spread: 90,
-          origin: { y: 0.45 },
-          colors: ['#F59E0B', '#10B981', '#FF7A00', '#60A5FA', '#EC4899'],
-        });
-      } catch {}
-      setMode('finished');
+      socketService.disconnect();
       onGameFinished?.(data);
+    };
+
+    const handleRoomClosedOrKicked = () => {
+      if (!isMounted) return;
+      socketService.disconnect();
+      onGameFinished?.();
     };
 
     socketService.on('QUESTION_RESULTS', handleQuestionResults);
@@ -134,16 +132,46 @@ export default function StudentRoundWait({
     socketService.on('COUNTDOWN_START', handleCountdownStart);
     socketService.on('QUESTION_START', handleQuestionStart);
     socketService.on('GAME_FINISHED', handleGameFinished);
+    socketService.on('ROOM_CLOSED', handleRoomClosedOrKicked);
+    socketService.on('KICKED', handleRoomClosedOrKicked);
+    socketService.on('TEACHER_LEFT', handleRoomClosedOrKicked);
+    socketService.on('DISCONNECT', handleRoomClosedOrKicked);
+
+    // Автоматическое обнаружение завершения/закрытия комнаты через опрос бэкенда
+    const roomPollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}`);
+        if (!res.ok) {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onGameFinished?.();
+          return;
+        }
+        const info = await res.json();
+        if (info && info.status === 'finished') {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onGameFinished?.(info);
+          return;
+        }
+      } catch {}
+    }, 1500);
 
     return () => {
       isMounted = false;
+      clearInterval(roomPollInterval);
       socketService.off('QUESTION_RESULTS', handleQuestionResults);
       socketService.off('LEADERBOARD_UPDATE', handleLeaderboardUpdate);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
       socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('GAME_FINISHED', handleGameFinished);
+      socketService.off('ROOM_CLOSED', handleRoomClosedOrKicked);
+      socketService.off('KICKED', handleRoomClosedOrKicked);
+      socketService.off('TEACHER_LEFT', handleRoomClosedOrKicked);
+      socketService.off('DISCONNECT', handleRoomClosedOrKicked);
     };
-  }, [onNextQuestion]);
+  }, [onNextQuestion, onGameFinished, roomCode]);
 
   return (
     <div style={styles.container}>

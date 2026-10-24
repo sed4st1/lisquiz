@@ -245,12 +245,15 @@ async def websocket_room_endpoint(
                                         "top_players": top_players,
                                     },
                                 )
+                                # Принудительно отключаем учеников через 2 секунды (после доставки GAME_FINISHED)
+                                async def _delayed_kick(rc: str):
+                                    await asyncio.sleep(2.0)
+                                    await ws_manager.close_room_connections(rc, reason="Викторина завершена")
+                                    await room_state_engine.close_room(rc)
+                                asyncio.create_task(_delayed_kick(room_code))
                         elif action == "CLOSE_ROOM":
-                            await ws_manager.broadcast_students(
-                                room_code,
-                                "ROOM_CLOSED",
-                                {"reason": "Учитель закрыл комнату"},
-                            )
+                            await ws_manager.close_room_connections(room_code, reason="Учитель закрыл комнату")
+                            await room_state_engine.close_room(room_code)
                     except Exception as err:
                         logger.error(f"Ошибка при обработке TEACHER_ACTION '{action}': {err}", exc_info=True)
 

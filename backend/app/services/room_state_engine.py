@@ -668,6 +668,26 @@ class RoomStateEngine:
                     "status": room.status.value,
                 }
 
+    async def close_room(self, room_code: str):
+        """Полное закрытие комнаты, отключение игроков и очистка сессий."""
+        async with self.get_room_lock(room_code):
+            room = self.rooms.get(room_code)
+            if room:
+                room.status = RoomStatus.FINISHED
+                for p in room.players.values():
+                    p.connected = False
+            # Удаляем сессии этой комнаты
+            tokens_to_del = [tok for tok, sess in self.sessions.items() if sess.room_code == room_code]
+            for tok in tokens_to_del:
+                self.sessions.pop(tok, None)
+            if self.redis_available and self.redis_client:
+                try:
+                    await self.redis_client.delete(f"room:{room_code}:state")
+                    await self.redis_client.delete(f"room:{room_code}:leaderboard")
+                except Exception:
+                    pass
+            logger.info("Room %s successfully closed and sessions cleaned up.", room_code)
+
     # ==========================================
     # Восстановление состояния (SYNC_STATE)
     # ==========================================
