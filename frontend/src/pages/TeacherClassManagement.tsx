@@ -131,8 +131,8 @@ export default function TeacherClassManagement({
           <ArrowLeft size={18} />
         </button>
         <div style={{ flex: 1 }}>
-          <h2 style={styles.title}>🏫 Мои классы (152-ФЗ)</h2>
-          <p style={styles.subtitle}>Постоянные группы и накопительный рейтинг</p>
+          <h2 style={styles.title}>🏫 Классы</h2>
+          <p style={styles.subtitle}>Ученики и рейтинг</p>
         </div>
         <button
           onClick={() => {
@@ -287,7 +287,7 @@ export default function TeacherClassManagement({
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={styles.studentName}>{student.display_name}</div>
                     <div style={styles.studentSub}>
-                      <span>152-ФЗ ID: <code>{student.pseudonym_id.slice(0, 10)}...</code></span>
+                      <span>ID: <code>{student.pseudonym_id.slice(0, 10)}...</code></span>
                     </div>
                   </div>
                   <div style={styles.studentStatPill}>

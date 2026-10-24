@@ -25,6 +25,7 @@ import StudentStats from './pages/StudentStats';
 import StudentGameQuestion from './pages/StudentGameQuestion';
 import FeedbackStreak from './pages/FeedbackStreak';
 import TeacherCreateQuiz from './pages/TeacherCreateQuiz';
+import TeacherHomeScreen from './pages/TeacherHomeScreen';
 import TeacherLobby from './pages/TeacherLobby';
 import TeacherGapReport from './pages/TeacherGapReport';
 import TeacherLiveGame from './pages/TeacherLiveGame';
@@ -49,7 +50,8 @@ type SubScreenType =
   | 'student_round_wait'
   | 'student_quiz_finish'
   | 'sleep_screen'
-  | 'teacher_classes';
+  | 'teacher_classes'
+  | 'teacher_quizzes';
 
 export default function App() {
   const [role, setRole] = useState<'teacher' | 'student'>('student');
@@ -323,8 +325,31 @@ export default function App() {
             setQuizGrade(cls.grade);
             setQuizClass(cls.name);
             setQuizClassId(cls.id);
+            setSubScreen('teacher_quizzes');
+          }}
+        />
+      );
+    }
+    if (subScreen === 'teacher_quizzes') {
+      return (
+        <TeacherCreateQuiz
+          initialClassId={quizClassId}
+          initialClassName={quizClass}
+          onBack={() => setSubScreen(null)}
+          onQuizCreated={(roomData: any) => {
+            if (roomData) {
+              setActivePin(roomData.room_code);
+              setTeacherToken(roomData.teacher_token);
+              if (roomData.class_id) setQuizClassId(roomData.class_id);
+              if (roomData.subject) setQuizSubject(roomData.subject);
+              if (roomData.grade) {
+                setQuizGrade(roomData.grade);
+                setQuizClass(`${roomData.grade}А`);
+              }
+              if (roomData.quiz_title) setQuizTitle(roomData.quiz_title);
+            }
             setSubScreen(null);
-            setTab('home');
+            setTab('leaderboard');
           }}
         />
       );
@@ -580,26 +605,14 @@ export default function App() {
       switch (tab) {
         case 'home':
           return (
-            <TeacherCreateQuiz
-              initialClassId={quizClassId}
-              initialClassName={quizClass}
-              onOpenClassManagement={(openCreate?: boolean) => {
-                setClassModalInitialOpen(!!openCreate);
+            <TeacherHomeScreen
+              onOpenClasses={() => {
+                haptics.impact('medium');
                 setSubScreen('teacher_classes');
               }}
-              onQuizCreated={(roomData: any) => {
-                if (roomData) {
-                  setActivePin(roomData.room_code);
-                  setTeacherToken(roomData.teacher_token);
-                  if (roomData.class_id) setQuizClassId(roomData.class_id);
-                  if (roomData.subject) setQuizSubject(roomData.subject);
-                  if (roomData.grade) {
-                    setQuizGrade(roomData.grade);
-                    setQuizClass(`${roomData.grade}А`);
-                  }
-                  if (roomData.quiz_title) setQuizTitle(roomData.quiz_title);
-                }
-                setTab('leaderboard');
+              onOpenQuizzes={() => {
+                haptics.impact('medium');
+                setSubScreen('teacher_quizzes');
               }}
             />
           );
@@ -696,7 +709,7 @@ export default function App() {
               <span style={styles.userNamePillText}>
                 {currentUser?.display_name || (role === 'teacher' ? 'Учитель' : studentName)}
               </span>
-              <div style={styles.userOnlineDot} title="152-ФЗ Zero-PII защищен" />
+              <div style={styles.userOnlineDot} title="В сети" />
             </button>
 
             {/* Role switcher toggle: Учитель / Ученик */}
@@ -772,8 +785,8 @@ export default function App() {
                         {role === 'teacher' ? 'Учитель' : 'Ученик'}
                       </span>
                     </div>
-                    <div style={styles.authZeroPiiId} title="152-ФЗ Zero-PII Хеш">
-                      <span style={{ color: '#9CA3AF' }}>Zero-PII ID:</span>{' '}
+                    <div style={styles.authZeroPiiId} title="ID пользователя">
+                      <span style={{ color: '#9CA3AF' }}>ID:</span>{' '}
                       <code>{currentUser?.pseudonym_id || 'pid_pending'}</code>
                     </div>
                   </div>
@@ -783,10 +796,10 @@ export default function App() {
                 <div style={styles.authSecurityNote}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#10B981', fontWeight: 700, fontSize: 11, marginBottom: 3 }}>
                     <CheckCircle2 size={13} color="#10B981" />
-                    <span>Соответствие 152-ФЗ (Zero-PII)</span>
+                    <span>Анонимная защита данных</span>
                   </div>
                   <p style={{ margin: 0, fontSize: 11, color: '#9CA3AF', lineHeight: 1.4 }}>
-                    Телефон, паспорт и персональные данные не сохраняются. Авторизация происходит по защищенному крипто-тикету бота.
+                    Телефон и персональные данные не сохраняются. Авторизация происходит по защищенному крипто-тикету бота.
                   </p>
                 </div>
 
@@ -1131,7 +1144,7 @@ export default function App() {
             }}
             style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
           >
-            🏫 Классы и рейтинг (152-ФЗ)
+            🏫 Классы и рейтинг
           </button>
 
           <button

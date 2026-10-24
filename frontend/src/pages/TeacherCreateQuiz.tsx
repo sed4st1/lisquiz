@@ -7,16 +7,20 @@ import {
   HelpCircle,
   ChevronRight,
   Camera,
-  Sparkles,
   Check,
   X,
   GraduationCap,
   ArrowLeft,
+  Edit3,
+  Play,
+  Trash2,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
 import { roomApi } from '../services/roomApi';
 import { classApi, ClassItem } from '../services/classApi';
+import { quizStorage, SavedQuiz } from '../services/quizStorage';
+import QuizQuestionEditorModal from '../components/QuizQuestionEditorModal';
 
 export interface TextbookItem {
   id: string;
@@ -37,18 +41,18 @@ export interface ParagraphItem {
 }
 
 const FALLBACK_TEXTBOOKS: TextbookItem[] = [
-  { id: 'peryshkin_phys_7', subject: 'Физика', grade: 7, author: 'Пёрышкин А.В., Иванов А.И.', title: 'Физика 7 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 3 },
-  { id: 'vilenkin_math_6', subject: 'Математика', grade: 6, author: 'Виленкин Н.Я. и др.', title: 'Математика 6 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 3 },
-  { id: 'merzlyak_math_6', subject: 'Математика', grade: 6, author: 'Мерзляк А.Г. и др.', title: 'Математика 6 класс (Вентана-Граф)', publisher: 'Вентана-Граф', chapters_count: 2 },
-  { id: 'ladyzhenskaya_rus_6', subject: 'Русский язык', grade: 6, author: 'Ладыженская Т.А. и др.', title: 'Русский язык 6 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 1 },
-  { id: 'makarychev_alg_7', subject: 'Алгебра', grade: 7, author: 'Макарычев Ю.Н. и др.', title: 'Алгебра 7 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 2 },
-  { id: 'atanasyan_geom_7_9', subject: 'Геометрия', grade: 7, author: 'Атанасян Л.С. и др.', title: 'Геометрия 7–9 класс (ФГОС/ФРП)', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'peryshkin_phys_7', subject: 'Физика', grade: 7, author: 'Пёрышкин А.В.', title: 'Физика 7 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'vilenkin_math_6', subject: 'Математика', grade: 6, author: 'Виленкин Н.Я.', title: 'Математика 6 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'merzlyak_math_6', subject: 'Математика', grade: 6, author: 'Мерзляк А.Г.', title: 'Математика 6 класс', publisher: 'Вентана-Граф', chapters_count: 2 },
+  { id: 'ladyzhenskaya_rus_6', subject: 'Русский язык', grade: 6, author: 'Ладыженская Т.А.', title: 'Русский язык 6 класс', publisher: 'Просвещение', chapters_count: 1 },
+  { id: 'makarychev_alg_7', subject: 'Алгебра', grade: 7, author: 'Макарычев Ю.Н.', title: 'Алгебра 7 класс', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'atanasyan_geom_7_9', subject: 'Геометрия', grade: 7, author: 'Атанасян Л.С.', title: 'Геометрия 7–9 класс', publisher: 'Просвещение', chapters_count: 2 },
 ];
 
 export interface TeacherCreateQuizProps {
+  onBack?: () => void;
   onQuizCreated?: (roomData?: any) => void;
   onNavigateToLobby?: () => void;
-  onOpenClassManagement?: (initialCreate?: boolean) => void;
   initialClassId?: string;
   initialClassName?: string;
 }
@@ -78,16 +82,25 @@ const TOPIC_PRESETS: Record<string, string[]> = {
 };
 
 export default function TeacherCreateQuiz({
+  onBack,
   onQuizCreated,
   onNavigateToLobby,
-  onOpenClassManagement,
   initialClassId,
   initialClassName,
 }: TeacherCreateQuizProps) {
+  // Main view mode: 'create' or 'saved'
+  const [activeTab, setActiveTab] = useState<'create' | 'saved'>('create');
+
+  // Classes state
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
-  const quizBuilderRef = useRef<HTMLDivElement | null>(null);
 
+  // Saved quizzes state & editor
+  const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>(() => quizStorage.getSavedQuizzes());
+  const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+
+  // Creation state
   const [subject, setSubject] = useState<string>('Математика');
   const [grade, setGrade] = useState<number>(7);
   const [topic, setTopic] = useState<string>('Дроби');
@@ -100,7 +113,6 @@ export default function TeacherCreateQuiz({
   const [inspectingTextbook, setInspectingTextbook] = useState<any | null>(null);
   const [textbookModalStep, setTextbookModalStep] = useState<'books' | 'paragraphs'>('books');
   const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | 'textbook' | 'class' | null>(null);
-  const [speechText, setSpeechText] = useState<string>('Привет! Я Спринт. Создайте класс для постоянного рейтинга или выберите учебник для викторины!');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -126,8 +138,6 @@ export default function TeacherCreateQuiz({
             const found = list.find((c) => c.name === initialClassName);
             if (found) setSelectedClass(found);
             else setSelectedClass(list[0]);
-          } else if (!selectedClass) {
-            setSelectedClass(list[0]);
           }
         }
       })
@@ -154,7 +164,6 @@ export default function TeacherCreateQuiz({
     if (inspectingTextbook?.subject) setSubject(inspectingTextbook.subject);
     if (inspectingTextbook?.grade) setGrade(inspectingTextbook.grade);
     setTopic(`§ ${para.num}. ${para.title}`);
-    setSpeechText(`Выбран § ${para.num} «${para.title}» из учебника ${inspectingTextbook?.author?.split(' ')[0]}. Готовлю проверенные задачи!`);
     setActiveModal(null);
   };
 
@@ -180,14 +189,59 @@ export default function TeacherCreateQuiz({
         } else if (onNavigateToLobby) {
           onNavigateToLobby();
         }
-      }, 1200);
+      }, 1000);
     } catch (err) {
-      console.error('Failed to create room with options:', err);
+      console.error('Failed to create room:', err);
       setTimeout(() => {
         setIsGenerating(false);
         onQuizCreated?.();
-      }, 1200);
+      }, 1000);
     }
+  };
+
+  const handleLaunchSavedQuiz = async (quiz: SavedQuiz) => {
+    haptics.notification('success');
+    setIsGenerating(true);
+
+    try {
+      const roomData = await roomApi.createRoom({
+        quiz,
+        subject: quiz.subject,
+        grade: quiz.grade,
+        topic: quiz.topic,
+        question_count: quiz.questions?.length || 5,
+        class_id: selectedClass?.id,
+      });
+
+      setTimeout(() => {
+        setIsGenerating(false);
+        if (onQuizCreated) {
+          onQuizCreated(roomData);
+        } else if (onNavigateToLobby) {
+          onNavigateToLobby();
+        }
+      }, 1000);
+    } catch (err) {
+      console.error('Failed to launch saved quiz:', err);
+      setTimeout(() => {
+        setIsGenerating(false);
+        onQuizCreated?.();
+      }, 1000);
+    }
+  };
+
+  const handleSaveEditedQuiz = (updated: SavedQuiz) => {
+    const list = quizStorage.upsertQuiz(updated);
+    setSavedQuizzes(list);
+    setIsEditorOpen(false);
+    setEditingQuiz(null);
+    haptics.notification('success');
+  };
+
+  const handleDeleteQuiz = (id: string) => {
+    const list = quizStorage.deleteQuiz(id);
+    setSavedQuizzes(list);
+    haptics.notification('success');
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -199,386 +253,325 @@ export default function TeacherCreateQuiz({
 
   return (
     <div style={styles.container}>
-      {/* Top Header */}
+      {/* Header */}
       <header style={styles.header}>
-        <div>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#FF7A00', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block' }}>
-            ЛисийКвиз • Меню учителя
-          </span>
-          <h1 style={styles.headerTitle}>Главная панель</h1>
-        </div>
-        <button
-          onClick={() => {
-            haptics.impact('light');
-            onOpenClassManagement?.(false);
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            borderRadius: 14,
-            backgroundColor: 'rgba(59, 130, 246, 0.15)',
-            border: '1px solid rgba(59, 130, 246, 0.35)',
-            color: '#93C5FD',
-            fontSize: 12,
-            fontWeight: 700,
-            cursor: 'pointer',
-          }}
-          title="Открыть реестр классов и аналитику"
-        >
-          <Users size={15} />
-          <span>Классы {classes.length > 0 ? `(${classes.length})` : ''}</span>
-        </button>
+        {onBack && (
+          <button onClick={onBack} style={styles.backBtn} title="Назад">
+            <ArrowLeft size={18} color="#FFFFFF" />
+          </button>
+        )}
+        <h1 style={styles.headerTitle}>Викторины</h1>
+        <div style={{ width: 36 }} />
       </header>
 
+      {/* Segmented Control: Создать / Мои викторины */}
+      <div style={styles.tabToggleBox}>
+        <button
+          onClick={() => {
+            haptics.selection();
+            setActiveTab('create');
+          }}
+          style={{
+            ...styles.tabBtn,
+            backgroundColor: activeTab === 'create' ? '#FF7A00' : 'transparent',
+            color: activeTab === 'create' ? '#FFFFFF' : '#9CA3AF',
+          }}
+        >
+          Создать викторину
+        </button>
+        <button
+          onClick={() => {
+            haptics.selection();
+            setActiveTab('saved');
+          }}
+          style={{
+            ...styles.tabBtn,
+            backgroundColor: activeTab === 'saved' ? '#FF7A00' : 'transparent',
+            color: activeTab === 'saved' ? '#FFFFFF' : '#9CA3AF',
+          }}
+        >
+          Мои викторины ({savedQuizzes.length})
+        </button>
+      </div>
+
       {/* ========================================================
-          TWO PROMINENT ENTRY BUTTONS: СОЗДАТЬ КЛАСС / СОЗДАТЬ ВИКТОРИНУ
+          TAB 1: СОЗДАНИЕ ВИКТОРИНЫ
          ======================================================== */}
-      <div style={styles.heroDualActionsContainer}>
-        {/* Button 1: Создать класс */}
-        <motion.button
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.96 }}
-          onClick={() => {
-            haptics.impact('medium');
-            onOpenClassManagement?.(true);
-          }}
-          style={styles.heroActionCardClass}
-        >
-          <div style={styles.actionIconCircleBlue}>
-            <GraduationCap size={22} color="#60A5FA" />
-          </div>
-          <div style={styles.actionCardContent}>
-            <div style={styles.actionHeaderRow}>
-              <span style={styles.actionCardTitle}>Создать класс</span>
-              <span style={styles.badge152}>152-ФЗ Zero-PII</span>
-            </div>
-            <p style={styles.actionCardSub}>
-              Постоянная группа, инвайт в Сферум, рейтинг четверти и матрица пробелов
-            </p>
-          </div>
-          <div style={styles.actionArrowCircleBlue}>
-            <ChevronRight size={18} color="#60A5FA" />
-          </div>
-        </motion.button>
-
-        {/* Button 2: Создать викторину */}
-        <motion.button
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.96 }}
-          onClick={() => {
-            haptics.impact('medium');
-            quizBuilderRef.current?.scrollIntoView({ behavior: 'smooth' });
-            setSpeechText('Отлично! Выберите класс, учебник ФГОС и тему для викторины ниже!');
-          }}
-          style={styles.heroActionCardQuiz}
-        >
-          <div style={styles.actionIconCircleOrange}>
-            <Sparkles size={22} color="#FBBF24" />
-          </div>
-          <div style={styles.actionCardContent}>
-            <div style={styles.actionHeaderRow}>
-              <span style={styles.actionCardTitle}>Создать викторину</span>
-              <span style={styles.badgeFgos}>ФГОС / ИИ</span>
-            </div>
-            <p style={styles.actionCardSub}>
-              По каталогу учебников РФ, параграфам, темам ФРП или фото страницы
-            </p>
-          </div>
-          <div style={styles.actionArrowCircleOrange}>
-            <ChevronRight size={18} color="#FBBF24" />
-          </div>
-        </motion.button>
-      </div>
-
-      {/* Mascot Hero Card */}
-      <motion.div
-        initial={{ y: 15, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 26 }}
-        style={styles.heroCard}
-      >
-        <div style={styles.mascotSpeechBubble}>
-          <p style={styles.speechText}>
-            {speechText}
-          </p>
-        </div>
-
-        <div style={styles.mascotWrapper}>
-          <img
-            src="/assets/mascot/sprint_idle.png"
-            alt="Спринт"
-            style={styles.mascotImage}
-          />
-        </div>
-      </motion.div>
-
-      {/* Section Header: Настройка викторины */}
-      <div ref={quizBuilderRef} style={styles.quizSectionHeader}>
-        <span style={styles.quizSectionTitle}>Параметры викторины</span>
-        {selectedClass ? (
-          <span style={styles.activeClassPill}>
-            Привязано к {selectedClass.name}
-          </span>
-        ) : (
-          <span style={{ ...styles.activeClassPill, color: '#9CA3AF', borderColor: 'rgba(255,255,255,0.15)', backgroundColor: 'rgba(255,255,255,0.06)' }}>
-            Быстрая игра
-          </span>
-        )}
-      </div>
-
-      {/* Interactive Selection Tiles */}
-      <div style={styles.tilesContainer}>
-        {/* Tile 0: Class Association (152-ФЗ) */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptics.impact('light');
-            setActiveModal('class');
-          }}
-          style={{
-            ...styles.tileCard,
-            borderColor: selectedClass ? '#3B82F6' : '#283756',
-            backgroundColor: selectedClass ? 'rgba(59, 130, 246, 0.08)' : '#151F36',
-          }}
-        >
-          <div style={styles.tileLeft}>
-            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(59, 130, 246, 0.22)', color: '#60A5FA' }}>
-              <Users size={20} />
-            </div>
-            <div style={styles.tileTexts}>
-              <span style={styles.tileLabel}>Привязка к классу (152-ФЗ)</span>
-              <span style={{ ...styles.tileValue, color: selectedClass ? '#60A5FA' : '#9CA3AF' }}>
-                {selectedClass
-                  ? `${selectedClass.name} • ${selectedClass.subject} (${selectedClass.grade} кл.)`
-                  : 'Без привязки (разовая игра)'}
-              </span>
-            </div>
-          </div>
-          <ChevronRight size={20} color="#9CA3AF" />
-        </motion.div>
-
-        {/* Tile: Russian Textbooks & Paragraphs */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptics.impact('light');
-            setTextbookModalStep('books');
-            setActiveModal('textbook');
-          }}
-          style={{
-            ...styles.tileCard,
-            borderColor: selectedParagraph ? '#EC4899' : '#283756',
-            backgroundColor: selectedParagraph ? 'rgba(236, 72, 153, 0.08)' : '#151F36',
-          }}
-        >
-          <div style={styles.tileLeft}>
-            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(236, 72, 153, 0.22)', color: '#F472B6' }}>
-              <GraduationCap size={20} />
-            </div>
-            <div style={styles.tileTexts}>
-              <span style={styles.tileLabel}>Учебник РФ и параграф</span>
-              <span style={{ ...styles.tileValue, color: selectedParagraph ? '#F472B6' : '#FFFFFF' }}>
-                {selectedParagraph
-                  ? `${selectedTextbook?.author?.split(' ')[0] || ''} § ${selectedParagraph.num}. ${selectedParagraph.title}`
-                  : 'Выбрать из каталога ФГОС'}
-              </span>
-            </div>
-          </div>
-          <ChevronRight size={20} color="#9CA3AF" />
-        </motion.div>
-
-        {/* Tile 1: Subject */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptics.impact('light');
-            setActiveModal('subject');
-          }}
-          style={styles.tileCard}
-        >
-          <div style={styles.tileLeft}>
-            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(59, 130, 246, 0.22)', color: '#60A5FA' }}>
-              <BookOpen size={20} />
-            </div>
-            <div style={styles.tileTexts}>
-              <span style={styles.tileLabel}>Предмет</span>
-              <span style={styles.tileValue}>{subject}</span>
-            </div>
-          </div>
-          <ChevronRight size={20} color="#9CA3AF" />
-        </motion.div>
-
-        {/* Tile 2: Grade */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptics.impact('light');
-            setActiveModal('grade');
-          }}
-          style={styles.tileCard}
-        >
-          <div style={styles.tileLeft}>
-            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(16, 185, 129, 0.22)', color: '#34D399' }}>
-              <Users size={20} />
-            </div>
-            <div style={styles.tileTexts}>
-              <span style={styles.tileLabel}>Класс</span>
-              <span style={styles.tileValue}>{grade} класс</span>
-            </div>
-          </div>
-          <ChevronRight size={20} color="#9CA3AF" />
-        </motion.div>
-
-        {/* Tile 3: FRP Topic */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptics.impact('light');
-            setActiveModal('topic');
-          }}
-          style={styles.tileCard}
-        >
-          <div style={styles.tileLeft}>
-            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(245, 158, 11, 0.22)', color: '#FBBF24' }}>
-              <Target size={20} />
-            </div>
-            <div style={styles.tileTexts}>
-              <span style={styles.tileLabel}>Тема ФРП</span>
-              <span style={styles.tileValue}>{topic}</span>
-            </div>
-          </div>
-          <ChevronRight size={20} color="#9CA3AF" />
-        </motion.div>
-
-        {/* Tile 4: Question Count */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptics.impact('light');
-            setActiveModal('count');
-          }}
-          style={styles.tileCard}
-        >
-          <div style={styles.tileLeft}>
-            <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(139, 92, 246, 0.22)', color: '#A78BFA' }}>
-              <HelpCircle size={20} />
-            </div>
-            <div style={styles.tileTexts}>
-              <span style={styles.tileLabel}>Количество вопросов</span>
-              <span style={styles.tileValue}>{questionCount}</span>
-            </div>
-          </div>
-          <ChevronRight size={20} color="#9CA3AF" />
-        </motion.div>
-
-        {/* Photo Upload Shortcut Card */}
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            haptics.impact('light');
-            fileInputRef.current?.click();
-          }}
-          style={{
-            ...styles.tileCard,
-            borderStyle: 'dashed',
-            borderColor: isPhotoUploaded ? '#10B981' : 'rgba(255, 255, 255, 0.22)',
-            backgroundColor: isPhotoUploaded ? 'rgba(16, 185, 129, 0.12)' : 'rgba(14, 25, 45, 0.6)',
-          }}
-        >
-          <div style={styles.tileLeft}>
-            <div style={{ ...styles.tileIconCircle, backgroundColor: isPhotoUploaded ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.1)', color: isPhotoUploaded ? '#34D399' : '#FFFFFF' }}>
-              <Camera size={20} />
-            </div>
-            <div style={styles.tileTexts}>
-              <span style={{ ...styles.tileLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
-                {isPhotoUploaded ? (
-                  <>
-                    Фото загружено
-                    <Check size={16} color="#34D399" strokeWidth={3} />
-                  </>
-                ) : (
-                  'Загрузить фото страницы'
-                )}
-              </span>
-              <span style={{ ...styles.tileValue, fontSize: 13, color: '#9CA3AF' }}>
-                {isPhotoUploaded ? 'ИИ извлечёт формулы и упражнения' : 'Из учебника или тетради'}
-              </span>
-            </div>
-          </div>
-          {isPhotoUploaded ? <Check size={20} color="#10B981" /> : <ChevronRight size={20} color="#9CA3AF" />}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            style={{ display: 'none' }}
-            onChange={handleFileChange}
-          />
-        </motion.div>
-      </div>
-
-      {/* Primary Action Button */}
-      <div style={styles.actionSection}>
-        <TactileButton
-          theme="orange"
-          size="lg"
-          fullWidth
-          onClick={handleStartGeneration}
-          iconAfter={<Sparkles size={20} />}
-        >
-          Создать с ИИ
-        </TactileButton>
-
-        <p style={styles.buttonHint}>
-          ИИ подберёт вопросы по теме, уровню и создаст интересную викторину
-        </p>
-      </div>
-
-      {/* Sleeping Fox AI Generation Modal */}
-      <AnimatePresence>
-        {isGenerating && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={styles.loadingModalOverlay}
-          >
+      {activeTab === 'create' && (
+        <div style={styles.tabBody}>
+          <div style={styles.tilesContainer}>
+            {/* Tile: Класс */}
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-              style={styles.loadingModalCard}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                haptics.impact('light');
+                setActiveModal('class');
+              }}
+              style={{
+                ...styles.tileCard,
+                borderColor: selectedClass ? '#3B82F6' : '#283756',
+              }}
             >
-              {/* Sleeping Fox Illustration */}
-              <div style={styles.sleepingFoxWrapper}>
-                <img
-                  src="/assets/backgrounds/sleep_screen.png"
-                  alt="Спящий Спринт"
-                  style={styles.sleepingFoxImg}
-                />
+              <div style={styles.tileLeft}>
+                <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(59, 130, 246, 0.22)', color: '#60A5FA' }}>
+                  <Users size={20} />
+                </div>
+                <div style={styles.tileTexts}>
+                  <span style={styles.tileLabel}>Класс</span>
+                  <span style={{ ...styles.tileValue, color: selectedClass ? '#60A5FA' : '#9CA3AF' }}>
+                    {selectedClass ? `${selectedClass.name} (${selectedClass.subject})` : 'Без привязки к классу'}
+                  </span>
+                </div>
               </div>
-
-              <h2 style={styles.loadingTitle}>Спринт составляет квиз...</h2>
-              <p style={styles.loadingSubtitle}>
-                Подбираем интересные задания по теме «{topic}» ({grade} класс) по стандартам ФРП.
-              </p>
-
-              {/* Glowing Pulse Bar */}
-              <div style={styles.loadingBarTrack}>
-                <motion.div
-                  animate={{ x: ['-100%', '100%'] }}
-                  transition={{ repeat: Infinity, duration: 1.4, ease: 'easeInOut' }}
-                  style={styles.loadingBarFill}
-                />
-              </div>
+              <ChevronRight size={20} color="#9CA3AF" />
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* Modal Selection Sheets */}
+            {/* Tile: Учебник РФ и параграф */}
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                haptics.impact('light');
+                setTextbookModalStep('books');
+                setActiveModal('textbook');
+              }}
+              style={{
+                ...styles.tileCard,
+                borderColor: selectedParagraph ? '#EC4899' : '#283756',
+              }}
+            >
+              <div style={styles.tileLeft}>
+                <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(236, 72, 153, 0.22)', color: '#F472B6' }}>
+                  <GraduationCap size={20} />
+                </div>
+                <div style={styles.tileTexts}>
+                  <span style={styles.tileLabel}>Учебник и параграф</span>
+                  <span style={{ ...styles.tileValue, color: selectedParagraph ? '#F472B6' : '#FFFFFF' }}>
+                    {selectedParagraph
+                      ? `${selectedTextbook?.author?.split(' ')[0] || ''} § ${selectedParagraph.num}. ${selectedParagraph.title}`
+                      : 'Выбрать из каталога'}
+                  </span>
+                </div>
+              </div>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </motion.div>
+
+            {/* Tile: Предмет */}
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                haptics.impact('light');
+                setActiveModal('subject');
+              }}
+              style={styles.tileCard}
+            >
+              <div style={styles.tileLeft}>
+                <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(59, 130, 246, 0.22)', color: '#60A5FA' }}>
+                  <BookOpen size={20} />
+                </div>
+                <div style={styles.tileTexts}>
+                  <span style={styles.tileLabel}>Предмет</span>
+                  <span style={styles.tileValue}>{subject}</span>
+                </div>
+              </div>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </motion.div>
+
+            {/* Tile: Класс (параллель) */}
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                haptics.impact('light');
+                setActiveModal('grade');
+              }}
+              style={styles.tileCard}
+            >
+              <div style={styles.tileLeft}>
+                <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(16, 185, 129, 0.22)', color: '#34D399' }}>
+                  <Users size={20} />
+                </div>
+                <div style={styles.tileTexts}>
+                  <span style={styles.tileLabel}>Параллель</span>
+                  <span style={styles.tileValue}>{grade} класс</span>
+                </div>
+              </div>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </motion.div>
+
+            {/* Tile: Тема */}
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                haptics.impact('light');
+                setActiveModal('topic');
+              }}
+              style={styles.tileCard}
+            >
+              <div style={styles.tileLeft}>
+                <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(245, 158, 11, 0.22)', color: '#FBBF24' }}>
+                  <Target size={20} />
+                </div>
+                <div style={styles.tileTexts}>
+                  <span style={styles.tileLabel}>Тема</span>
+                  <span style={styles.tileValue}>{topic}</span>
+                </div>
+              </div>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </motion.div>
+
+            {/* Tile: Количество вопросов */}
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                haptics.impact('light');
+                setActiveModal('count');
+              }}
+              style={styles.tileCard}
+            >
+              <div style={styles.tileLeft}>
+                <div style={{ ...styles.tileIconCircle, backgroundColor: 'rgba(139, 92, 246, 0.22)', color: '#A78BFA' }}>
+                  <HelpCircle size={20} />
+                </div>
+                <div style={styles.tileTexts}>
+                  <span style={styles.tileLabel}>Вопросов</span>
+                  <span style={styles.tileValue}>{questionCount}</span>
+                </div>
+              </div>
+              <ChevronRight size={20} color="#9CA3AF" />
+            </motion.div>
+
+            {/* Фото страницы */}
+            <motion.div
+              whileTap={{ scale: 0.98 }}
+              onClick={() => {
+                haptics.impact('light');
+                fileInputRef.current?.click();
+              }}
+              style={{
+                ...styles.tileCard,
+                borderStyle: 'dashed',
+                borderColor: isPhotoUploaded ? '#10B981' : 'rgba(255, 255, 255, 0.2)',
+              }}
+            >
+              <div style={styles.tileLeft}>
+                <div style={{ ...styles.tileIconCircle, backgroundColor: isPhotoUploaded ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255, 255, 255, 0.1)' }}>
+                  <Camera size={20} color={isPhotoUploaded ? '#34D399' : '#FFFFFF'} />
+                </div>
+                <div style={styles.tileTexts}>
+                  <span style={styles.tileLabel}>
+                    {isPhotoUploaded ? 'Фото загружено ✓' : 'Фото страницы'}
+                  </span>
+                  <span style={{ ...styles.tileValue, fontSize: 12, color: '#9CA3AF' }}>
+                    {isPhotoUploaded ? 'Задания распознаны' : 'Из учебника или тетради'}
+                  </span>
+                </div>
+              </div>
+              {isPhotoUploaded ? <Check size={20} color="#10B981" /> : <ChevronRight size={20} color="#9CA3AF" />}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={handleFileChange}
+              />
+            </motion.div>
+          </div>
+
+          {/* Launch Button */}
+          <div style={styles.submitSection}>
+            <TactileButton
+              theme="orange"
+              size="lg"
+              fullWidth
+              disabled={isGenerating}
+              onClick={handleStartGeneration}
+            >
+              {isGenerating ? 'Создание...' : 'Начать викторину'}
+            </TactileButton>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          TAB 2: МОИ ВИКТОРИНЫ (ПРОСМОТР И РЕДАКТИРОВАНИЕ)
+         ======================================================== */}
+      {activeTab === 'saved' && (
+        <div style={styles.tabBody}>
+          {savedQuizzes.length === 0 ? (
+            <div style={styles.emptyBox}>
+              <p style={styles.emptyText}>У вас пока нет сохранённых викторин</p>
+              <button
+                onClick={() => setActiveTab('create')}
+                style={styles.emptyBtn}
+              >
+                Создать викторину
+              </button>
+            </div>
+          ) : (
+            <div style={styles.quizzesList}>
+              {savedQuizzes.map((quiz) => (
+                <div key={quiz.id} style={styles.quizCard}>
+                  <div style={styles.quizCardTop}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <h3 style={styles.quizCardTitle}>{quiz.title}</h3>
+                      <div style={styles.quizCardMeta}>
+                        <span>{quiz.subject}</span>
+                        <span>•</span>
+                        <span>{quiz.grade} кл</span>
+                        <span>•</span>
+                        <span>{quiz.questions?.length || 0} вопр.</span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteQuiz(quiz.id)}
+                      style={styles.deleteBtn}
+                      title="Удалить"
+                    >
+                      <Trash2 size={16} color="#EF4444" />
+                    </button>
+                  </div>
+
+                  <div style={styles.quizCardActions}>
+                    <button
+                      onClick={() => {
+                        haptics.impact('light');
+                        setEditingQuiz(quiz);
+                        setIsEditorOpen(true);
+                      }}
+                      style={styles.editBtn}
+                    >
+                      <Edit3 size={15} />
+                      <span>Редактировать</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleLaunchSavedQuiz(quiz)}
+                      style={styles.playBtn}
+                    >
+                      <Play size={15} fill="#FFFFFF" />
+                      <span>Запустить</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Question Editor Modal */}
+      {isEditorOpen && editingQuiz && (
+        <QuizQuestionEditorModal
+          quiz={editingQuiz}
+          isOpen={isEditorOpen}
+          onClose={() => {
+            setIsEditorOpen(false);
+            setEditingQuiz(null);
+          }}
+          onSave={handleSaveEditedQuiz}
+        />
+      )}
+
+      {/* Selection Sheets / Modals */}
       <AnimatePresence>
         {activeModal && (
           <motion.div
@@ -598,20 +591,20 @@ export default function TeacherCreateQuiz({
             >
               <div style={styles.modalHeader}>
                 <span style={styles.modalTitle}>
-                  {activeModal === 'class' && 'Привязка к классу (152-ФЗ)'}
-                  {activeModal === 'subject' && 'Выберите предмет'}
-                  {activeModal === 'grade' && 'Выберите класс'}
-                  {activeModal === 'topic' && 'Выберите тему ФРП'}
+                  {activeModal === 'class' && 'Выбор класса'}
+                  {activeModal === 'subject' && 'Предмет'}
+                  {activeModal === 'grade' && 'Класс'}
+                  {activeModal === 'topic' && 'Тема'}
                   {activeModal === 'count' && 'Количество вопросов'}
-                  {activeModal === 'textbook' && (textbookModalStep === 'books' ? 'Каталог учебников РФ' : 'Выбор параграфа')}
+                  {activeModal === 'textbook' && (textbookModalStep === 'books' ? 'Каталог учебников' : 'Выбор параграфа')}
                 </span>
                 <button onClick={() => setActiveModal(null)} style={styles.modalCloseBtn}>
                   <X size={18} color="#9CA3AF" />
                 </button>
               </div>
 
-              {/* Modal Body Items */}
               <div style={styles.modalList}>
+                {/* Modal: Class */}
                 {activeModal === 'class' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <button
@@ -624,17 +617,9 @@ export default function TeacherCreateQuiz({
                         ...styles.modalOptionBtn,
                         backgroundColor: !selectedClass ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
                         borderColor: !selectedClass ? '#3B82F6' : 'rgba(255, 255, 255, 0.1)',
-                        textAlign: 'left',
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                        <span style={{ color: '#FFFFFF', fontWeight: 800, fontSize: 13.5 }}>
-                          Без привязки к классу
-                        </span>
-                        <span style={{ color: '#9CA3AF', fontSize: 11.5 }}>
-                          Быстрая игра по PIN-коду (без долгосрочной статистики)
-                        </span>
-                      </div>
+                      <span style={{ color: '#FFFFFF', fontWeight: 700 }}>Без привязки к классу</span>
                       {!selectedClass && <Check size={18} color="#3B82F6" />}
                     </button>
 
@@ -648,165 +633,97 @@ export default function TeacherCreateQuiz({
                             setSelectedClass(cls);
                             setSubject(cls.subject);
                             setGrade(cls.grade);
-                            setSpeechText(`Выбран класс ${cls.name}. Результаты викторины сохранятся в долгосрочный рейтинг класса!`);
                             setActiveModal(null);
                           }}
                           style={{
                             ...styles.modalOptionBtn,
                             backgroundColor: isSel ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
                             borderColor: isSel ? '#3B82F6' : 'rgba(255, 255, 255, 0.1)',
-                            textAlign: 'left',
                           }}
                         >
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ color: isSel ? '#60A5FA' : '#FFFFFF', fontWeight: 800, fontSize: 14 }}>
-                                {cls.name}
-                              </span>
-                              <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 6px', borderRadius: 6, backgroundColor: 'rgba(59, 130, 246, 0.25)', color: '#93C5FD' }}>
-                                {cls.subject} • {cls.grade} кл
-                              </span>
-                            </div>
-                            <span style={{ color: '#9CA3AF', fontSize: 11.5 }}>
-                              Инвайт-код: {cls.invite_code} • Учеников: {cls.students_count || 0}
+                          <div>
+                            <span style={{ color: '#FFFFFF', fontWeight: 700, display: 'block' }}>
+                              {cls.name} — {cls.subject}
+                            </span>
+                            <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                              {cls.grade} класс • Код {cls.invite_code}
                             </span>
                           </div>
                           {isSel && <Check size={18} color="#3B82F6" />}
                         </button>
                       );
                     })}
-
-                    <button
-                      onClick={() => {
-                        setActiveModal(null);
-                        onOpenClassManagement?.(true);
-                      }}
-                      style={{
-                        ...styles.modalOptionBtn,
-                        backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                        borderColor: 'rgba(16, 185, 129, 0.4)',
-                        justifyContent: 'center',
-                        marginTop: 4,
-                      }}
-                    >
-                      <span style={{ color: '#34D399', fontWeight: 800, fontSize: 13.5 }}>
-                        + Создать новый класс
-                      </span>
-                    </button>
                   </div>
                 )}
+
+                {/* Modal: Textbooks */}
                 {activeModal === 'textbook' && (
                   <div>
                     {textbookModalStep === 'paragraphs' && inspectingTextbook ? (
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                          <button
-                            onClick={() => {
-                              haptics.selection();
-                              setTextbookModalStep('books');
-                            }}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#9CA3AF',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 6,
-                              cursor: 'pointer',
-                              fontSize: 13,
-                              fontWeight: 700,
-                              padding: '4px 0',
-                            }}
-                          >
-                            <ArrowLeft size={16} /> К списку учебников
-                          </button>
-                        </div>
-                        <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 14, backgroundColor: 'rgba(236, 72, 153, 0.12)' }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: '#F472B6' }}>
-                            {inspectingTextbook.title} ({inspectingTextbook.author})
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 340, overflowY: 'auto' }}>
+                        <button
+                          onClick={() => setTextbookModalStep('books')}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#9CA3AF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: '4px 0 12px',
+                          }}
+                        >
+                          <ArrowLeft size={16} /> Назад к учебникам
+                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
                           {inspectingTextbook.sections?.map((sec: any, sIdx: number) => (
                             <div key={sIdx} style={{ marginBottom: 6 }}>
-                              <span style={{ fontSize: 11, fontWeight: 800, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', display: 'block', marginBottom: 4 }}>
                                 {sec.chapter}
                               </span>
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                {sec.paragraphs?.map((p: ParagraphItem) => {
-                                  const isSelected = selectedParagraph?.num === p.num && selectedTextbook?.id === inspectingTextbook.id;
-                                  return (
-                                    <button
-                                      key={p.num}
-                                      onClick={() => handleSelectParagraph(p)}
-                                      style={{
-                                        ...styles.modalOptionBtn,
-                                        backgroundColor: isSelected ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                                        borderColor: isSelected ? '#EC4899' : 'rgba(255, 255, 255, 0.1)',
-                                        textAlign: 'left',
-                                        alignItems: 'flex-start',
-                                        padding: '10px 12px',
-                                      }}
-                                    >
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                                        <span style={{ color: isSelected ? '#F472B6' : '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
-                                          § {p.num}. {p.title}
-                                        </span>
-                                        {p.topic && (
-                                          <span style={{ color: '#9CA3AF', fontSize: 11 }}>
-                                            Тема: {p.topic}
-                                          </span>
-                                        )}
-                                      </div>
-                                      {isSelected && <Check size={18} color="#EC4899" />}
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                              {sec.paragraphs?.map((p: ParagraphItem) => (
+                                <button
+                                  key={p.num}
+                                  onClick={() => handleSelectParagraph(p)}
+                                  style={{ ...styles.modalOptionBtn, marginBottom: 4 }}
+                                >
+                                  <span style={{ color: '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
+                                    § {p.num}. {p.title}
+                                  </span>
+                                </button>
+                              ))}
                             </div>
                           ))}
                         </div>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 360, overflowY: 'auto' }}>
-                        <span style={{ fontSize: 12, color: '#9CA3AF', marginBottom: 4 }}>
-                          Учебники РФ (ФГОС/ФРП) с привязкой задач к параграфам:
-                        </span>
-                        {textbooks.map((tb) => {
-                          const isSelected = selectedTextbook?.id === tb.id;
-                          return (
-                            <button
-                              key={tb.id}
-                              onClick={() => handleSelectTextbookForInspection(tb)}
-                              style={{
-                                ...styles.modalOptionBtn,
-                                backgroundColor: isSelected ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                                borderColor: isSelected ? '#EC4899' : 'rgba(255, 255, 255, 0.1)',
-                                textAlign: 'left',
-                                padding: '12px 14px',
-                              }}
-                            >
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  <span style={{ color: isSelected ? '#F472B6' : '#FFFFFF', fontWeight: 800, fontSize: 13.5 }}>
-                                    {tb.title}
-                                  </span>
-                                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#E5E7EB' }}>
-                                    {tb.subject} {tb.grade} кл
-                                  </span>
-                                </div>
-                                <span style={{ color: '#9CA3AF', fontSize: 11.5 }}>
-                                  {tb.author} • {tb.publisher}
-                                </span>
-                              </div>
-                              <ChevronRight size={18} color="#9CA3AF" />
-                            </button>
-                          );
-                        })}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                        {textbooks.map((tb) => (
+                          <button
+                            key={tb.id}
+                            onClick={() => handleSelectTextbookForInspection(tb)}
+                            style={styles.modalOptionBtn}
+                          >
+                            <div>
+                              <span style={{ color: '#FFFFFF', fontWeight: 700, display: 'block' }}>
+                                {tb.title}
+                              </span>
+                              <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                {tb.author}
+                              </span>
+                            </div>
+                            <ChevronRight size={18} color="#9CA3AF" />
+                          </button>
+                        ))}
                       </div>
                     )}
                   </div>
                 )}
+
+                {/* Modal: Subject */}
                 {activeModal === 'subject' &&
                   SUBJECTS.map((item) => (
                     <button
@@ -831,6 +748,7 @@ export default function TeacherCreateQuiz({
                     </button>
                   ))}
 
+                {/* Modal: Grade */}
                 {activeModal === 'grade' &&
                   GRADES.map((item) => (
                     <button
@@ -853,31 +771,30 @@ export default function TeacherCreateQuiz({
                     </button>
                   ))}
 
-                {activeModal === 'topic' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {(TOPIC_PRESETS[subject] || ['Общий повтор', 'Контрольная работа']).map((item) => (
-                      <button
-                        key={item}
-                        onClick={() => {
-                          haptics.selection();
-                          setTopic(item);
-                          setActiveModal(null);
-                        }}
-                        style={{
-                          ...styles.modalOptionBtn,
-                          backgroundColor: topic === item ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                          borderColor: topic === item ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)',
-                        }}
-                      >
-                        <span style={{ color: topic === item ? '#FBBF24' : '#FFFFFF', fontWeight: 700 }}>
-                          {item}
-                        </span>
-                        {topic === item && <Check size={18} color="#FBBF24" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Modal: Topic */}
+                {activeModal === 'topic' &&
+                  (TOPIC_PRESETS[subject] || ['Общий повтор', 'Контрольная работа']).map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        haptics.selection();
+                        setTopic(item);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: topic === item ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: topic === item ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: topic === item ? '#FBBF24' : '#FFFFFF', fontWeight: 700 }}>
+                        {item}
+                      </span>
+                      {topic === item && <Check size={18} color="#FBBF24" />}
+                    </button>
+                  ))}
 
+                {/* Modal: Count */}
                 {activeModal === 'count' &&
                   QUESTION_COUNTS.map((item) => (
                     <button
@@ -910,244 +827,76 @@ export default function TeacherCreateQuiz({
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    position: 'relative',
     width: '100%',
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-between',
     backgroundColor: 'transparent',
-    padding: '12px 14px 92px',
+    padding: '12px 14px 80px',
     boxSizing: 'border-box',
     overflowY: 'auto',
-    overflowX: 'hidden',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 10,
-    zIndex: 4,
+    marginBottom: 12,
   },
   backBtn: {
     width: 36,
     height: 36,
     borderRadius: '50%',
-    backgroundColor: 'rgba(17, 24, 39, 0.65)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
-    backdropFilter: 'blur(10px)',
-    WebkitBackdropFilter: 'blur(10px)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
-    touchAction: 'manipulation',
   },
   headerTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: 800,
     color: '#FFFFFF',
     margin: 0,
-    letterSpacing: '-0.3px',
   },
-  heroDualActionsContainer: {
+  tabToggleBox: {
+    display: 'flex',
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderRadius: 14,
+    padding: 3,
+    marginBottom: 14,
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+  },
+  tabBtn: {
+    flex: 1,
+    padding: '10px 12px',
+    borderRadius: 11,
+    border: 'none',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    touchAction: 'manipulation',
+    transition: 'all 0.15s ease',
+  },
+  tabBody: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 10,
-    marginBottom: 14,
-    zIndex: 4,
-  },
-  heroActionCardClass: {
-    display: 'flex',
-    alignItems: 'center',
     gap: 12,
-    padding: '14px 14px',
-    borderRadius: 20,
-    backgroundColor: '#131F38',
-    border: '2px solid rgba(59, 130, 246, 0.4)',
-    borderBottom: '4px solid #1D4ED8',
-    cursor: 'pointer',
-    textAlign: 'left',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
-    transition: 'all 0.15s ease',
-  },
-  heroActionCardQuiz: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '14px 14px',
-    borderRadius: 20,
-    backgroundColor: '#261B12',
-    border: '2px solid rgba(245, 158, 11, 0.45)',
-    borderBottom: '4px solid #D97706',
-    cursor: 'pointer',
-    textAlign: 'left',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.35)',
-    transition: 'all 0.15s ease',
-  },
-  actionIconCircleBlue: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(59, 130, 246, 0.22)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    border: '1px solid rgba(96, 165, 250, 0.3)',
-  },
-  actionIconCircleOrange: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: 'rgba(245, 158, 11, 0.22)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    border: '1px solid rgba(251, 191, 36, 0.3)',
-  },
-  actionCardContent: {
-    flex: 1,
-    minWidth: 0,
-  },
-  actionHeaderRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 4,
-  },
-  actionCardTitle: {
-    fontSize: 16,
-    fontWeight: 800,
-    color: '#FFFFFF',
-    letterSpacing: '-0.2px',
-  },
-  badge152: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: '#93C5FD',
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-    padding: '2px 7px',
-    borderRadius: 6,
-    border: '1px solid rgba(96, 165, 250, 0.3)',
-    whiteSpace: 'nowrap',
-  },
-  badgeFgos: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: '#FCD34D',
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    padding: '2px 7px',
-    borderRadius: 6,
-    border: '1px solid rgba(251, 191, 36, 0.3)',
-    whiteSpace: 'nowrap',
-  },
-  actionCardSub: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    margin: 0,
-    lineHeight: 1.35,
-  },
-  actionArrowCircleBlue: {
-    width: 30,
-    height: 30,
-    borderRadius: '50%',
-    backgroundColor: 'rgba(59, 130, 246, 0.15)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  actionArrowCircleOrange: {
-    width: 30,
-    height: 30,
-    borderRadius: '50%',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  quizSectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  quizSectionTitle: {
-    fontSize: 14,
-    fontWeight: 800,
-    color: '#E5E7EB',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  activeClassPill: {
-    fontSize: 11,
-    fontWeight: 700,
-    color: '#60A5FA',
-    backgroundColor: 'rgba(59, 130, 246, 0.18)',
-    padding: '2px 8px',
-    borderRadius: 8,
-    border: '1px solid rgba(59, 130, 246, 0.3)',
-  },
-  heroCard: {
-    position: 'relative',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#151F36',
-    border: '2px solid #283756',
-    borderBottom: '4px solid #1E2B45',
-    borderRadius: 24,
-    padding: '16px 18px',
-    marginBottom: 14,
-    zIndex: 3,
-  },
-  mascotSpeechBubble: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  speechText: {
-    fontSize: 13.5,
-    fontWeight: 700,
-    color: '#FFFFFF',
-    lineHeight: 1.45,
-    margin: 0,
-  },
-  mascotWrapper: {
-    width: 90,
-    height: 90,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  mascotImage: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'contain',
-    filter: 'drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5))',
   },
   tilesContainer: {
     display: 'flex',
     flexDirection: 'column',
     gap: 10,
-    marginBottom: 16,
-    zIndex: 3,
   },
   tileCard: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    padding: '12px 14px',
+    borderRadius: 16,
     backgroundColor: '#151F36',
-    border: '2px solid #283756',
-    borderBottom: '4px solid #1E2B45',
-    borderRadius: 20,
-    padding: '14px 16px',
+    border: '1.5px solid #283756',
     cursor: 'pointer',
     touchAction: 'manipulation',
   },
@@ -1155,19 +904,24 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
+    minWidth: 0,
   },
   tileIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 12,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   tileTexts: {
     display: 'flex',
     flexDirection: 'column',
     gap: 2,
+    flex: 1,
+    minWidth: 0,
   },
   tileLabel: {
     fontSize: 11,
@@ -1175,94 +929,114 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
   },
   tileValue: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#FFFFFF',
-    fontWeight: 800,
+    fontWeight: 700,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
-  actionSection: {
+  submitSection: {
+    marginTop: 10,
+  },
+  quizzesList: {
     display: 'flex',
     flexDirection: 'column',
+    gap: 10,
+  },
+  quizCard: {
+    backgroundColor: '#151F36',
+    border: '1.5px solid #283756',
+    borderRadius: 16,
+    padding: '14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  quizCardTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
     gap: 8,
-    marginTop: 'auto',
-    zIndex: 3,
   },
-  buttonHint: {
-    fontSize: 11,
+  quizCardTitle: {
+    fontSize: 15,
+    fontWeight: 800,
+    color: '#FFFFFF',
+    margin: '0 0 4px',
+  },
+  quizCardMeta: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    fontSize: 12,
     color: '#9CA3AF',
-    textAlign: 'center',
-    margin: 0,
-    lineHeight: 1.3,
+    fontWeight: 600,
   },
-  loadingModalOverlay: {
-    position: 'fixed',
-    inset: 0,
-    zIndex: 50,
-    backgroundColor: 'rgba(8, 13, 26, 0.85)',
-    backdropFilter: 'blur(12px)',
-    WebkitBackdropFilter: 'blur(12px)',
+  deleteBtn: {
+    background: 'none',
+    border: 'none',
+    padding: 6,
+    cursor: 'pointer',
+    opacity: 0.7,
+  },
+  quizCardActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  editBtn: {
+    flex: 1,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 20,
-  },
-  loadingModalCard: {
-    width: '100%',
-    maxWidth: 360,
-    backgroundColor: 'rgba(17, 24, 39, 0.95)',
-    border: '1px solid rgba(255, 255, 255, 0.18)',
-    borderRadius: 28,
-    padding: '24px 20px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.6)',
-  },
-  sleepingFoxWrapper: {
-    position: 'relative',
-    width: 140,
-    height: 140,
-    marginBottom: 12,
-    borderRadius: 24,
-    overflow: 'hidden',
-    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-  },
-  sleepingFoxImg: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover',
-  },
-  zzzContainer: {
-    position: 'absolute',
-    top: '30%',
-    right: '25%',
-  },
-  loadingTitle: {
-    fontSize: 18,
-    fontWeight: 800,
+    gap: 6,
+    padding: '9px 12px',
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
     color: '#FFFFFF',
-    margin: '0 0 6px',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
   },
-  loadingSubtitle: {
-    fontSize: 12,
+  playBtn: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    padding: '9px 12px',
+    borderRadius: 12,
+    backgroundColor: '#FF7A00',
+    border: 'none',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(255, 122, 0, 0.35)',
+  },
+  emptyBox: {
+    textAlign: 'center',
+    padding: '40px 16px',
+    backgroundColor: '#151F36',
+    borderRadius: 18,
+    border: '1px solid #283756',
+  },
+  emptyText: {
     color: '#9CA3AF',
-    margin: '0 0 16px',
-    lineHeight: 1.4,
+    fontSize: 14,
+    marginBottom: 16,
   },
-  loadingBarTrack: {
-    width: '100%',
-    height: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 999,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  loadingBarFill: {
-    width: '40%',
-    height: '100%',
-    background: 'linear-gradient(90deg, #FF7A00, #F59E0B)',
-    borderRadius: 999,
-    boxShadow: '0 0 10px #FF7A00',
+  emptyBtn: {
+    padding: '10px 20px',
+    borderRadius: 12,
+    backgroundColor: '#FF7A00',
+    color: '#FFFFFF',
+    border: 'none',
+    fontWeight: 700,
+    fontSize: 13,
+    cursor: 'pointer',
   },
   modalBackdrop: {
     position: 'fixed',
@@ -1270,7 +1044,6 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 40,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
     backdropFilter: 'blur(6px)',
-    WebkitBackdropFilter: 'blur(6px)',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'flex-end',
@@ -1281,7 +1054,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderTopRightRadius: 24,
     borderTop: '1px solid rgba(255, 255, 255, 0.18)',
     padding: '16px 18px 28px',
-    boxShadow: '0 -8px 30px rgba(0, 0, 0, 0.6)',
   },
   modalHeader: {
     display: 'flex',
@@ -1313,8 +1085,9 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'space-between',
     padding: '12px 14px',
     borderRadius: 14,
-    border: '1px solid',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
     cursor: 'pointer',
-    touchAction: 'manipulation',
+    textAlign: 'left',
   },
 };
