@@ -9,7 +9,7 @@ from sqlalchemy import select, func, desc, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from backend.app.db.models import (
+from ..db.models import (
     ClassModel,
     ClassStudentModel,
     UserModel,

@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, HTTPException, Header, status
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.session import get_db
-from backend.app.services.auth_service import auth_service
-from backend.app.services import class_service
+from ..db.session import get_db
+from ..services.auth_service import auth_service
+from ..services import class_service
 
 router = APIRouter(prefix="/api/classes", tags=["Classes"])
 
