@@ -64,7 +64,7 @@ export default function TeacherClassManagement({
       const list = await classApi.listClasses();
       setClasses(list);
       if (list.length > 0 && !selectedClass) {
-        setSelectedClass(list[0]);
+        setSelectedClass(list[0] || null);
       }
     } catch (e) {
       console.warn('Failed to load classes:', e);

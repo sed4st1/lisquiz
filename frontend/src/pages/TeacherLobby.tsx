@@ -119,7 +119,7 @@ export default function TeacherLobby({
         setActiveQuizId((prev) => {
           if (prev && dbQuizzes.some((q) => q.id === prev)) return prev;
           const active = dbQuizzes.find((q) => q.is_active);
-          return active?.id || dbQuizzes[0].id;
+          return active?.id || dbQuizzes[0]?.id || '';
         });
       }
     });

@@ -161,11 +161,11 @@ export default function TeacherCreateQuiz({
           if (initialClassId) {
             const found = list.find((c) => c.id === initialClassId);
             if (found) setSelectedClass(found);
-            else setSelectedClass(list[0]);
+            else setSelectedClass(list[0] || null);
           } else if (initialClassName) {
             const found = list.find((c) => c.name === initialClassName);
             if (found) setSelectedClass(found);
-            else setSelectedClass(list[0]);
+            else setSelectedClass(list[0] || null);
           }
         }
       })

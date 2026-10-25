@@ -41,7 +41,9 @@ export const testHarness = {
     let added = 0;
     for (let i = 0; i < Math.min(count, pool.length); i++) {
       try {
-        await roomApi.joinRoom(roomCode, pool[i].name, pool[i].avatar);
+        const bot = pool[i];
+        if (!bot) continue;
+        await roomApi.joinRoom(roomCode, bot.name, bot.avatar);
         added++;
       } catch (e) {
         console.warn('Fallback joinRoom bot error:', e);
