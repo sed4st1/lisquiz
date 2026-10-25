@@ -131,3 +131,29 @@ async def test_curriculum_service_direct_lookup():
     item = curriculum_service.get_topic_by_id(topics[0]["id"])
     assert item is not None
     assert item["subject"] == "Физика"
+
+
+
+@pytest.mark.asyncio
+async def test_literature_grade_2_mir_skazok_lookup():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/quiz/curriculum/topics?subject=Литература&grade=2")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["total"] >= 8
+        topic_titles = [t["topic"] for t in data["topics"]]
+        assert any("Мир сказок" in t for t in topic_titles)
+
+
+@pytest.mark.asyncio
+async def test_user_query_mir_skazok_noisy_string():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Exact string reported by the teacher: "Мир сказок для 2 КЛАСС № п/п 1"
+        res = await client.get("/api/quiz/curriculum/topics?subject=Литература&grade=2&query=Мир сказок для 2 КЛАСС № п/п 1")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["total"] >= 1
+        matched_topics = [t["topic"] for t in data["topics"]]
+        assert any("Мир сказок" in t for t in matched_topics)

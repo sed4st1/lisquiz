@@ -180,22 +180,54 @@ export default function TeacherCreateQuiz({
       .catch(() => {});
   }, [initialClassId, initialClassName]);
 
+  const isSubjectMatch = (subjA?: string, subjB?: string) => {
+    const a = (subjA || '').trim().toLowerCase();
+    const b = (subjB || '').trim().toLowerCase();
+    if (a === b) return true;
+    if ((a === 'литература' || a === 'литературное чтение') && (b === 'литература' || b === 'литературное чтение')) return true;
+    if ((a === 'математика' || a === 'алгебра' || a === 'геометрия') && (b === 'математика' || b === 'алгебра' || b === 'геометрия')) return true;
+    if ((a === 'окружающий мир' || a === 'природоведение' || a === 'естествознание') && (b === 'окружающий мир' || b === 'природоведение' || b === 'естествознание')) return true;
+    return false;
+  };
+
   const filteredCurriculumTopics = React.useMemo(() => {
     let list = curriculumTopics;
     if (subject) {
-      list = list.filter((t) => t.subject.toLowerCase() === subject.toLowerCase());
+      list = list.filter((t) => isSubjectMatch(t.subject, subject));
     }
     if (grade) {
       list = list.filter((t) => t.grade === grade);
     }
     if (topicSearchQuery.trim()) {
-      const q = topicSearchQuery.toLowerCase();
-      list = list.filter((t) =>
-        t.topic.toLowerCase().includes(q) ||
-        t.section.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q) ||
-        t.keywords.some((kw) => kw.toLowerCase().includes(q))
-      );
+      const rawQ = topicSearchQuery.toLowerCase();
+      const cleanTokens = rawQ.replace(/[^\w\sа-яё]/gi, ' ').split(/\s+/).filter(Boolean);
+      const stopWords = new Set([
+        'для', 'по', 'в', 'во', 'на', 'о', 'об', 'обо', 'с', 'со', 'и', 'к', 'ко',
+        'из', 'от', 'до', 'за', 'у', 'под', 'над', 'при', 'про',
+        'класс', 'класса', 'классы', 'классу', 'классом', 'кл',
+        'п', 'пп', 'номер', 'урок', 'урока', 'уроку', 'тема', 'теме', 'тему',
+        'тест', 'квиз', 'задание', 'викторина'
+      ]);
+      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t));
+      const targetTokens = meaningfulTokens.length > 0 ? meaningfulTokens : cleanTokens;
+
+      const direct = list.filter(t => `${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase().includes(rawQ));
+      if (direct.length > 0) {
+        list = direct;
+      } else {
+        const allMatch = list.filter(t => {
+          const fullText = `${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
+          return targetTokens.every(token => fullText.includes(token));
+        });
+        if (allMatch.length > 0) {
+          list = allMatch;
+        } else {
+          list = list.filter(t => {
+            const fullText = `${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
+            return targetTokens.some(token => fullText.includes(token));
+          });
+        }
+      }
     }
     return list;
   }, [curriculumTopics, subject, grade, topicSearchQuery]);
@@ -203,7 +235,7 @@ export default function TeacherCreateQuiz({
   const filteredBankTopics = React.useMemo(() => {
     let list = bankTopics;
     if (subject) {
-      list = list.filter((t) => t.subject.toLowerCase() === subject.toLowerCase());
+      list = list.filter((t) => isSubjectMatch(t.subject, subject));
     }
     if (grade) {
       if (!topicSearchQuery.trim()) {
@@ -212,12 +244,39 @@ export default function TeacherCreateQuiz({
       }
     }
     if (topicSearchQuery.trim()) {
-      const q = topicSearchQuery.toLowerCase();
-      list = list.filter((t) =>
-        t.display_name.toLowerCase().includes(q) ||
-        t.topic.toLowerCase().includes(q) ||
-        t.subject.toLowerCase().includes(q)
+      const rawQ = topicSearchQuery.toLowerCase();
+      const cleanTokens = rawQ.replace(/[^\w\sа-яё]/gi, ' ').split(/\s+/).filter(Boolean);
+      const stopWords = new Set([
+        'для', 'по', 'в', 'во', 'на', 'о', 'об', 'обо', 'с', 'со', 'и', 'к', 'ко',
+        'из', 'от', 'до', 'за', 'у', 'под', 'над', 'при', 'про',
+        'класс', 'класса', 'классы', 'классу', 'классом', 'кл',
+        'п', 'пп', 'номер', 'урок', 'урока', 'уроку', 'тема', 'теме', 'тему',
+        'тест', 'квиз', 'задание', 'викторина'
+      ]);
+      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t));
+      const targetTokens = meaningfulTokens.length > 0 ? meaningfulTokens : cleanTokens;
+
+      const direct = list.filter(t =>
+        t.display_name.toLowerCase().includes(rawQ) ||
+        t.topic.toLowerCase().includes(rawQ) ||
+        t.subject.toLowerCase().includes(rawQ)
       );
+      if (direct.length > 0) {
+        list = direct;
+      } else {
+        const allMatch = list.filter(t => {
+          const fullText = `${t.display_name} ${t.topic} ${t.subject}`.toLowerCase();
+          return targetTokens.every(token => fullText.includes(token));
+        });
+        if (allMatch.length > 0) {
+          list = allMatch;
+        } else {
+          list = list.filter(t => {
+            const fullText = `${t.display_name} ${t.topic} ${t.subject}`.toLowerCase();
+            return targetTokens.some(token => fullText.includes(token));
+          });
+        }
+      }
     }
     return list;
   }, [bankTopics, subject, grade, topicSearchQuery]);
