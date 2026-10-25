@@ -29,7 +29,17 @@ export default function StudentWaitingLobby({
   onGameStart,
   onLeaveRoom,
 }: StudentWaitingLobbyProps) {
-  const [players, setPlayers] = useState<Array<{ id: string; name: string; avatar: string }>>([]);
+  const [players, setPlayers] = useState<Array<{ id: string; name: string; avatar: string }>>(() => {
+    const cached = socketService.getLastSyncState();
+    if (cached && cached.players) {
+      return Object.values(cached.players).map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+      }));
+    }
+    return [{ id: 'me', name: playerName, avatar: playerAvatar }];
+  });
   const [countdown, setCountdown] = useState<number | null>(null);
 
   useEffect(() => {
@@ -38,6 +48,15 @@ export default function StudentWaitingLobby({
     // Listen for room updates
     const handleSync = (data: any) => {
       if (!isMounted) return;
+      if (data?.status === 'finished') {
+        socketService.disconnect();
+        onLeaveRoom();
+        return;
+      }
+      if (data?.status === 'question' || data?.status === 'countdown') {
+        onGameStart();
+        return;
+      }
       if (data && data.players) {
         const list = Object.values(data.players).map((p: any) => ({
           id: p.id,
@@ -82,17 +101,83 @@ export default function StudentWaitingLobby({
       }, 1000);
     };
 
+    const handleKickOrExit = () => {
+      if (!isMounted) return;
+      socketService.disconnect();
+      onLeaveRoom();
+    };
+
+    const handleDisconnect = (data: any) => {
+      if (!isMounted) return;
+      if (data?.code === 4004 || data?.code === 4001 || data?.code === 1006) {
+        socketService.disconnect();
+        onLeaveRoom();
+      }
+    };
+
     socketService.on('SYNC_STATE', handleSync);
     socketService.on('PLAYER_JOINED', handlePlayerJoined);
     socketService.on('PLAYER_LEFT', handlePlayerLeft);
     socketService.on('COUNTDOWN_START', handleCountdownStart);
+    socketService.on('QUESTION_START', onGameStart);
+    socketService.on('GAME_FINISHED', handleKickOrExit);
+    socketService.on('DISCONNECT', handleDisconnect);
+    socketService.on('KICKED', handleKickOrExit);
+    socketService.on('ROOM_CLOSED', handleKickOrExit);
+    socketService.on('TEACHER_LEFT', handleKickOrExit);
+
+    // Initial sync
+    const cached = socketService.getLastSyncState();
+    if (cached && cached.players) {
+      handleSync(cached);
+    }
+    if (socketService.isConnected()) {
+      socketService.send('GET_SYNC');
+    }
+
+    // Auto-detect if room ceases to exist or finished + periodic sync
+    const roomPollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}`);
+        if (!res.ok) {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onLeaveRoom();
+          return;
+        }
+        const info = await res.json();
+        if (info && info.status === 'finished') {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onLeaveRoom();
+          return;
+        }
+        if (info && (info.status === 'question' || info.status === 'countdown')) {
+          onGameStart();
+          return;
+        }
+        if (socketService.isConnected()) {
+          socketService.send('GET_SYNC');
+        }
+      } catch {
+        // network exception, keep retry
+      }
+    }, 2500);
 
     return () => {
       isMounted = false;
+      clearInterval(roomPollInterval);
       socketService.off('SYNC_STATE', handleSync);
       socketService.off('PLAYER_JOINED', handlePlayerJoined);
       socketService.off('PLAYER_LEFT', handlePlayerLeft);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
+      socketService.off('QUESTION_START', onGameStart);
+      socketService.off('GAME_FINISHED', handleKickOrExit);
+      socketService.off('DISCONNECT', handleDisconnect);
+      socketService.off('KICKED', handleKickOrExit);
+      socketService.off('ROOM_CLOSED', handleKickOrExit);
+      socketService.off('TEACHER_LEFT', handleKickOrExit);
     };
   }, [onGameStart]);
 

@@ -57,6 +57,8 @@ class Quiz(BaseModel):
     subject: str = "Математика"
     grade: int = 7
     topic: str = "Школьная программа"
+    group_label: Optional[str] = None
+    teacher_pseudonym_id: Optional[str] = None
     questions: List[Question]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     source: Optional[str] = "bank"  # "bank", "gigachat", "ocr"
@@ -70,6 +72,8 @@ class QuizCreateRequest(BaseModel):
     question_count: int = Field(5, ge=1, le=20, examples=[5])
     source_notes: Optional[str] = None
     num_variants: int = Field(4, ge=1, le=4, examples=[4])
+    textbook_id: Optional[str] = None
+    paragraph_num: Optional[int] = None
 
 
 class Player(BaseModel):
@@ -105,6 +109,7 @@ class GameRoom(BaseModel):
     time_remaining: int = 20
     grove_energy: int = 0  # Энергия «Рощи класса» (0..100)
     teacher_pseudonym_id: str = "teacher_host"
+    class_id: Optional[str] = None
     question_start_epoch_ms: Optional[int] = None
     answered_player_ids: List[str] = []
     players: Dict[str, Player] = {}

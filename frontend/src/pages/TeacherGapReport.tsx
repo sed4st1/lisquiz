@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
@@ -15,7 +15,9 @@ import {
   Zap,
   Lightbulb,
   Download,
+  ArrowLeft,
 } from 'lucide-react';
+import { roomApi } from '../services/roomApi';
 import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
 
 export interface QuestionAnalyticsItem {
@@ -49,6 +51,7 @@ export interface CheatingAuditItem {
 }
 
 export interface TeacherGapReportProps {
+  roomCode?: string;
   quizTitle?: string;
   topic?: string;
   grade?: number;
@@ -57,6 +60,7 @@ export interface TeacherGapReportProps {
   topMisconceptions?: MisconceptionItem[];
   cheatingAuditLog?: CheatingAuditItem[];
   onSendReviewTasks?: (topics: string[]) => void;
+  onBackToLobby?: () => void;
 }
 
 const DEFAULT_MISCONCEPTIONS: MisconceptionItem[] = [
@@ -221,21 +225,125 @@ const DEFAULT_QUESTIONS: QuestionAnalyticsItem[] = [
 ];
 
 export default function TeacherGapReport({
+  roomCode,
   quizTitle = 'Обыкновенные дроби: итоговый контроль',
   topic = 'ФРП ООО «Математика» 5 класс',
   grade = 5,
   totalStudents = 26,
-  questions = DEFAULT_QUESTIONS,
-  topMisconceptions = DEFAULT_MISCONCEPTIONS,
-  cheatingAuditLog = DEFAULT_CHEATING_LOG,
+  questions: propQuestions,
+  topMisconceptions: propMisconceptions,
+  cheatingAuditLog: propCheatingLog,
   onSendReviewTasks,
+  onBackToLobby,
 }: TeacherGapReportProps) {
   const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
   const [isSent, setIsSent] = useState(false);
   const [filterMode, setFilterMode] = useState<'all' | 'weak'>('all');
+  const [reportData, setReportData] = useState<any | null>(null);
+  const [loading, setLoading] = useState<boolean>(Boolean(roomCode));
 
-  const avgScore = Math.round(
-    questions.reduce((sum, q) => sum + q.correctPercentage, 0) / questions.length
+  useEffect(() => {
+    let isMounted = true;
+    if (!roomCode) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    roomApi
+      .getGapReport(roomCode)
+      .then((data) => {
+        if (isMounted) {
+          setReportData(data);
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to load gap report for room:', roomCode, err);
+        if (isMounted) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [roomCode]);
+
+  // Dynamic mapped questions from live session
+  const questions: QuestionAnalyticsItem[] = useMemo(() => {
+    if (reportData?.questions_stats && reportData.questions_stats.length > 0) {
+      return reportData.questions_stats.map((qs: any, idx: number) => ({
+        id: qs.question_id || (idx + 1),
+        questionNumber: idx + 1,
+        topic: qs.topic || `Вопрос ${idx + 1}`,
+        text: qs.text || `Вопрос #${idx + 1}`,
+        correctPercentage: typeof qs.correct_percent === 'number' ? qs.correct_percent : 0,
+        kesCode: `ФРП.${idx + 1}`,
+        totalAnswers: reportData.total_participants || 1,
+        correctAnswers: Math.round(((qs.correct_percent || 0) / 100) * (reportData.total_participants || 1)),
+        commonMistake: qs.dominant_distractor
+          ? `Частый ответ: ${qs.dominant_distractor}`
+          : (qs.cognitive_gap || undefined),
+      }));
+    }
+    return propQuestions || DEFAULT_QUESTIONS;
+  }, [reportData, propQuestions]);
+
+  // Dynamic misconceptions from live session or intelligent weakness extraction
+  const topMisconceptions: MisconceptionItem[] = useMemo(() => {
+    if (reportData?.top_misconceptions && reportData.top_misconceptions.length > 0) {
+      return reportData.top_misconceptions.map((m: any, idx: number) => ({
+        misc_id: m.misc_id || `MC.${idx + 1}`,
+        title: m.title || m.error_name || 'Затруднение в теме',
+        occurrences: m.occurrences || m.student_count || 1,
+        pct_of_class: m.pct_of_class || Math.round(((m.occurrences || 1) / (reportData.total_participants || 1)) * 100),
+        correction_hint: m.correction_hint || m.recommendation || 'Повторить базовые правила на уроке.',
+      }));
+    }
+    if (reportData?.questions_stats) {
+      const weak = reportData.questions_stats.filter((q: any) => (q.correct_percent || 0) < 60);
+      if (weak.length > 0) {
+        return weak.map((q: any, idx: number) => ({
+          misc_id: `GAP.${idx + 1}`,
+          title: `Трудность в теме: «${q.topic}»`,
+          occurrences: q.mistake_count || 1,
+          pct_of_class: Math.max(10, 100 - (q.correct_percent || 0)),
+          correction_hint: q.cognitive_gap || (q.dominant_distractor ? `Разъяснить разницу с ответом «${q.dominant_distractor}»` : 'Разобрать типичные ошибки в классе'),
+        }));
+      }
+      if (reportData.total_participants > 0) {
+        return [];
+      }
+    }
+    return propMisconceptions || DEFAULT_MISCONCEPTIONS;
+  }, [reportData, propMisconceptions]);
+
+  // Dynamic cheating audit log
+  const cheatingAuditLog: CheatingAuditItem[] = useMemo(() => {
+    if (reportData?.cheating_audit_log && reportData.cheating_audit_log.length > 0) {
+      return reportData.cheating_audit_log;
+    }
+    if (reportData?.flagged_cheaters && reportData.flagged_cheaters.length > 0) {
+      return reportData.flagged_cheaters.map((name: string, idx: number) => ({
+        student_id: `flag_${idx}`,
+        student_name: name,
+        blur_count: 2,
+        rapid_guess_count: 0,
+        total_answers: reportData.questions_stats?.length || 5,
+        risk_level: 'MEDIUM',
+        flags: ['Сворачивание приложения во время теста'],
+      }));
+    }
+    if (reportData && reportData.total_participants > 0) {
+      return [];
+    }
+    return propCheatingLog || DEFAULT_CHEATING_LOG;
+  }, [reportData, propCheatingLog]);
+
+  const activeQuizTitle = reportData?.quiz_title || quizTitle;
+  const activeTopic = reportData?.quiz_title ? `${reportData.quiz_title} • Отчет` : topic;
+  const activeTotalStudents = reportData ? reportData.total_participants : totalStudents;
+  const activeAvgScore = reportData ? reportData.class_accuracy_percent : Math.round(
+    questions.reduce((sum, q) => sum + q.correctPercentage, 0) / (questions.length || 1)
   );
 
   const weakQuestions = questions.filter((q) => q.correctPercentage < 50);
@@ -247,10 +355,28 @@ export default function TeacherGapReport({
     return colors.answerRed;
   };
 
-  const displayedQuestions =
-    filterMode === 'weak' ? weakQuestions : questions;
+  const displayedQuestions = filterMode === 'weak' ? weakQuestions : questions;
+
+  const diagnosticText = useMemo(() => {
+    if (reportData) {
+      const acc = reportData.class_accuracy_percent;
+      const rec = reportData.homework_recommendation;
+      if (acc >= 85) {
+        return `Класс отлично усвоил материал (${acc}% правильных ответов)! Ученики уверенно справились с вопросами. ${rec || 'Рекомендуется закрепить успех творческим заданием.'}`;
+      } else if (acc >= 60) {
+        return `Уверенное понимание базовых концепций (${acc}%). ${rec || 'Обратите внимание на разбор заданий с наибольшим числом ошибок.'}`;
+      } else {
+        return `Материал вызвал затруднения у большинства учеников (${acc}% успешности). ${rec || 'Рекомендуется повторить ключевые определения и формулы на следующем уроке.'}`;
+      }
+    }
+    return 'Класс отлично освоил базовые понятия (92-96%), но возникли трудности при приведении к общему знаменателю и вычитании смешанных чисел.';
+  }, [reportData]);
 
   const handleExportCSV = () => {
+    if (roomCode) {
+      window.open(roomApi.getExportCsvUrl(roomCode), '_blank');
+      return;
+    }
     const rows = [
       ['№', 'Тема вопроса', 'Текст вопроса', 'Верных ответов (%)', 'Всего ответов', 'Верно ответили', 'Частая ошибка'],
       ...questions.map((q) => [
@@ -312,9 +438,50 @@ export default function TeacherGapReport({
         {/* Navigation & Header */}
         <header style={styles.header}>
           <div>
-            <h1 style={styles.headerTitle}>Отчёт по викторине</h1>
+            {onBackToLobby && (
+              <button
+                type="button"
+                onClick={onBackToLobby}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  backgroundColor: '#1E293B',
+                  color: '#93C5FD',
+                  border: '1px solid #334155',
+                  borderRadius: 10,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  marginBottom: 10,
+                }}
+              >
+                <ArrowLeft size={14} color="#60A5FA" />
+                <span>К викторинам</span>
+              </button>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: '3px 9px',
+                  borderRadius: 999,
+                  backgroundColor: roomCode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(148, 163, 184, 0.16)',
+                  color: roomCode ? '#10B981' : '#94A3B8',
+                  border: `1px solid ${roomCode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.2)'}`,
+                }}
+              >
+                {roomCode ? `🌱 Живая комната #${roomCode}` : 'Демо-отчет'}
+              </span>
+              {loading && <span style={{ fontSize: 11, color: '#60A5FA' }}>Загрузка с сервера...</span>}
+            </div>
+
+            <h1 style={styles.headerTitle}>{activeQuizTitle}</h1>
             <p style={styles.subtitle}>
-              {quizTitle}, {topic} ({grade} класс)
+              {activeTopic} ({grade} класс)
             </p>
           </div>
 
@@ -326,12 +493,13 @@ export default function TeacherGapReport({
               gap: 6,
               backgroundColor: '#1E293B',
               color: '#34D399',
-              border: 'none',
+              border: '1px solid #334155',
               borderRadius: 12,
               padding: '8px 12px',
               fontSize: 12,
               fontWeight: 800,
               cursor: 'pointer',
+              whiteSpace: 'nowrap',
             }}
             title="Экспорт в Excel / CSV для электронного журнала"
           >
@@ -350,8 +518,7 @@ export default function TeacherGapReport({
           <div style={styles.insightText}>
             <span style={styles.insightTitle}>Диагностика Спринта:</span>
             <span style={styles.insightDesc}>
-              Класс отлично освоил базовые понятия (92-96%), но возникли трудности при приведении к
-              общему знаменателю и вычитании смешанных чисел.
+              {diagnosticText}
             </span>
           </div>
         </div>
@@ -365,18 +532,18 @@ export default function TeacherGapReport({
             </div>
             <div style={styles.summaryLabel}>Участников</div>
             <div style={{ ...styles.summaryValue, color: colors.textPrimary }}>
-              {totalStudents}
+              {activeTotalStudents}
             </div>
           </div>
 
           {/* Card 2: Average Score */}
           <div style={styles.summaryCard}>
             <div style={styles.summaryIconWrapper}>
-              <Award size={18} color={getScoreColor(avgScore)} />
+              <Award size={18} color={getScoreColor(activeAvgScore)} />
             </div>
             <div style={styles.summaryLabel}>Средний балл</div>
-            <div style={{ ...styles.summaryValue, color: getScoreColor(avgScore) }}>
-              {avgScore}%
+            <div style={{ ...styles.summaryValue, color: getScoreColor(activeAvgScore) }}>
+              {activeAvgScore}%
             </div>
           </div>
 
@@ -563,7 +730,13 @@ export default function TeacherGapReport({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-              {topMisconceptions.map((m, idx) => (
+              {topMisconceptions.length === 0 ? (
+                <div style={{ padding: '14px 16px', borderRadius: 14, backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#34D399', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckCircle2 size={18} color="#10B981" />
+                  <span>Когнитивных затруднений не выявлено. Все темы усвоены на высоком уровне!</span>
+                </div>
+              ) : (
+                topMisconceptions.map((m, idx) => (
                 <div
                   key={m.misc_id || idx}
                   style={{
@@ -601,7 +774,8 @@ export default function TeacherGapReport({
                     </div>
                   )}
                 </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -622,7 +796,13 @@ export default function TeacherGapReport({
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-              {cheatingAuditLog.map((student) => {
+              {cheatingAuditLog.length === 0 ? (
+                <div style={{ padding: '14px 16px', borderRadius: 14, backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#34D399', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CheckCircle2 size={18} color="#10B981" />
+                  <span>Аудит чист: все ученики решали викторину честно, без сворачивания приложения.</span>
+                </div>
+              ) : (
+                cheatingAuditLog.map((student) => {
                 const isHigh = student.risk_level === 'HIGH';
                 const isMedium = student.risk_level === 'MEDIUM';
                 const badgeBg = isHigh
@@ -704,7 +884,8 @@ export default function TeacherGapReport({
                     )}
                   </div>
                 );
-              })}
+              })
+            )}
             </div>
           </div>
 

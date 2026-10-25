@@ -11,7 +11,6 @@ import {
   Flame,
   Check,
   Sprout,
-  Clock,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { socketService } from '../services/socketService';
@@ -48,7 +47,7 @@ const DEFAULT_TEACHER_QUESTION = {
 };
 
 export default function TeacherLiveGame({
-  roomCode: _roomCode,
+  roomCode,
   initialQuestionData,
   subject = 'Математика',
   classNameTitle = '7А',
@@ -90,8 +89,7 @@ export default function TeacherLiveGame({
     return () => clearInterval(timer);
   }, [phase, curQ?.id, questionData?.time_limit_sec, isBoss]);
 
-  // Inactive until all answered (or time is up)
-  const allAnswered = (totalStudents > 0 && answeredCount >= totalStudents) || timeLeft === 0;
+
 
   // Listen to WebSocket events
   useEffect(() => {
@@ -160,6 +158,7 @@ export default function TeacherLiveGame({
     const handleGameFinished = () => {
       if (!isMounted) return;
       haptics.notification('success');
+      fetch(`/api/rooms/${roomCode}/close`, { method: 'POST' }).catch(() => {});
       onFinishQuiz();
     };
 
@@ -182,6 +181,7 @@ export default function TeacherLiveGame({
   }, [qIndex, onFinishQuiz]);
 
   // Actions
+
   const handleShowResults = () => {
     haptics.impact('medium');
     if (socketService.isConnected()) {
@@ -204,6 +204,10 @@ export default function TeacherLiveGame({
     haptics.impact('medium');
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'NEXT_QUESTION' });
+      if (isLastQuestion) {
+        socketService.send('TEACHER_ACTION', { action: 'CLOSE_ROOM' });
+        fetch(`/api/rooms/${roomCode}/close`, { method: 'POST' }).catch(() => {});
+      }
     }
   };
 
@@ -494,44 +498,34 @@ export default function TeacherLiveGame({
             </div>
 
             {/* Teacher Control Actions Immediately Below 2x2 Grid */}
-            <div style={styles.actionRowColumn}>
-              <TactileButton
-                theme="green"
-                size="lg"
-                fullWidth
-                onClick={handleShowResults}
-                iconBefore={<BarChart2 size={18} />}
-              >
-                Показать результаты раунда
-              </TactileButton>
+            {(() => {
+              const canProceed = (totalStudents > 0 && answeredCount >= totalStudents) || timeLeft <= 0;
+              return (
+                <div style={styles.actionRowColumn}>
+                  <TactileButton
+                    theme="green"
+                    size="lg"
+                    fullWidth
+                    disabled={!canProceed}
+                    onClick={handleShowResults}
+                    iconBefore={<BarChart2 size={18} />}
+                  >
+                    Показать результаты раунда
+                  </TactileButton>
 
-              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <TactileButton
-                  theme={allAnswered ? 'orange' : 'secondary'}
-                  size="lg"
-                  fullWidth
-                  disabled={!allAnswered}
-                  onClick={handleNextQuestionOrFinish}
-                  iconAfter={<ArrowRight size={18} />}
-                >
-                  {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
-                </TactileButton>
-
-                {!allAnswered ? (
-                  <div style={styles.waitingNotice}>
-                    <Clock size={13} color="#F59E0B" />
-                    <span>
-                      Кнопка активируется, когда все ответят ({answeredCount} из {totalStudents > 0 ? totalStudents : 1} ответили)
-                    </span>
-                  </div>
-                ) : (
-                  <div style={styles.allAnsweredNotice}>
-                    <Check size={13} color="#34D399" strokeWidth={3} />
-                    <span>Все ученики ответили! Можно переходить дальше.</span>
-                  </div>
-                )}
-              </div>
-            </div>
+                  <TactileButton
+                    theme="orange"
+                    size="lg"
+                    fullWidth
+                    disabled={!canProceed}
+                    onClick={handleNextQuestionOrFinish}
+                    iconAfter={<ArrowRight size={18} />}
+                  >
+                    {isLastQuestion ? 'Завершить викторину' : 'Следующий вопрос'}
+                  </TactileButton>
+                </div>
+              );
+            })()}
           </motion.div>
         )}
 
@@ -944,6 +938,22 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.35)',
     border: '1.5px solid #FFFFFF',
     zIndex: 2,
+  },
+  simulateBotsBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    border: '1px dashed rgba(59, 130, 246, 0.45)',
+    borderRadius: 12,
+    padding: '9px 12px',
+    color: '#93C5FD',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+    width: '100%',
+    transition: 'all 0.15s ease',
   },
   actionRowColumn: {
     marginTop: 14,

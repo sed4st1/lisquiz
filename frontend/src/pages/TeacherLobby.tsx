@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { quizApi } from '../services/quizApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Copy,
   Check,
   Rocket,
   Users,
-  Eye,
   Plus,
-  BookOpen,
   CheckCircle2,
   Trash2,
+  Edit3,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
@@ -34,6 +34,7 @@ export interface TeacherLobbyProps {
   onStartQuiz?: () => void;
   onRoomReady?: (pin: string, token: string) => void;
   onQuizTitleChange?: (newTitle: string) => void;
+  onNavigateToCreateQuiz?: () => void;
 }
 
 const AVATAR_MAP: Record<string, string> = {
@@ -68,22 +69,37 @@ export default function TeacherLobby({
   onStartQuiz,
   onRoomReady,
   onQuizTitleChange,
+  onNavigateToCreateQuiz,
 }: TeacherLobbyProps) {
-  const [activePin, setActivePin] = useState<string>(propPin || '');
+  const [activePin, setActivePin] = useState<string>(propPin && propPin !== '482915' ? propPin : '');
   const [currentQuizTitle, setCurrentQuizTitle] = useState<string>(quizTitle);
   const [students, setStudents] = useState<ConnectedStudent[]>([]);
+
+  // Синхронизация PIN при внешнем сбросе/смене комнаты
+  useEffect(() => {
+    if (!propPin) {
+      setActivePin('');
+      setStudents([]);
+      setupDoneRef.current = null;
+    } else {
+      setActivePin(propPin);
+    }
+  }, [propPin]);
   const [copied, setCopied] = useState<boolean>(false);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
   const [quizToDelete, setQuizToDelete] = useState<SavedQuiz | null>(null);
 
-  // Quizzes list with real textbook quizzes from Ivan's bank
+  // Quizzes list: ONLY user quizzes loaded from DB
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>(() => quizStorage.getSavedQuizzes());
   const [activeQuizId, setActiveQuizId] = useState<string>(() => {
     const list = quizStorage.getSavedQuizzes();
-    const act = list.find((q) => q.is_active);
-    return act ? act.id : list[0]?.id || '';
+    const active = list.find((q) => q.is_active);
+    return active?.id || list[0]?.id || '';
   });
+  const setupDoneRef = useRef<string | null>(null);
+
+  const activeQuiz = savedQuizzes.find((q) => q.id === activeQuizId) || (savedQuizzes.length > 0 ? savedQuizzes[0] : null);
   const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -95,12 +111,16 @@ export default function TeacherLobby({
     }, 3200);
   };
 
-  // 1. Fetch real textbook presets from Ivan's backend
+  // 1. Fetch real quizzes from backend DB
   useEffect(() => {
-    roomApi.getPresetTextbookQuizzes().then((serverPresets) => {
-      if (serverPresets && serverPresets.length > 0) {
-        const merged = quizStorage.mergePresetQuizzes(serverPresets);
-        setSavedQuizzes(merged);
+    quizStorage.syncFromDb().then((dbQuizzes) => {
+      if (dbQuizzes && dbQuizzes.length > 0) {
+        setSavedQuizzes(dbQuizzes);
+        setActiveQuizId((prev) => {
+          if (prev && dbQuizzes.some((q) => q.id === prev)) return prev;
+          const active = dbQuizzes.find((q) => q.is_active);
+          return active?.id || dbQuizzes[0].id;
+        });
       }
     });
   }, []);
@@ -112,73 +132,79 @@ export default function TeacherLobby({
     let handleJoined: ((data: any) => void) | null = null;
     let handleLeft: ((data: any) => void) | null = null;
     let handleCountdown: ((data: any) => void) | null = null;
+    let syncInterval: any = null;
 
     const setupRoom = async () => {
-      let code = propPin;
-      let token = propToken;
+      let code = propPin && propPin !== '482915' ? propPin : '';
+      let token = propToken && propToken !== 'mock_teacher_token' ? propToken : '';
 
-      if (!code || !token) {
+      // Verify that the existing room is truly alive on backend
+      let validRoom = false;
+      let existingRoomQuizTitle = '';
+      if (code && token) {
         try {
+          const info = await roomApi.getRoomInfo(code);
+          if (info && info.status === 'lobby') {
+            validRoom = true;
+            existingRoomQuizTitle = info.quiz_title || '';
+          }
+        } catch {
+          validRoom = false;
+        }
+      }
+
+      if (!validRoom) {
+        try {
+          if (isMounted) {
+            setActivePin('');
+            setStudents([]);
+          }
           const res = await roomApi.createRoom();
           code = res.room_code;
           token = res.teacher_token;
           if (isMounted) {
             setActivePin(code);
+            setStudents([]);
             onRoomReady?.(code, token);
           }
         } catch (e) {
           console.error('Failed to create room:', e);
-          code = '482915';
-          token = 'mock_teacher_token';
-          if (isMounted) {
-            setActivePin(code);
-          }
+          return;
         }
       }
 
       if (!code || !token) return;
+      if (setupDoneRef.current === code && socketService.isConnected()) {
+        return;
+      }
+      setupDoneRef.current = code;
 
-      // Sync active room quiz from backend if available
+      // Sync real quizzes from DB and align active room quiz
       try {
-        const roomQuiz = await roomApi.getRoomQuiz(code);
-        if (isMounted && roomQuiz && roomQuiz.questions && roomQuiz.questions.length > 0) {
-          const existingList = quizStorage.getSavedQuizzes();
-          const existing = existingList.find((q) => q.id === `room_quiz_${code}`);
-          const quizObj: SavedQuiz = {
-            id: `room_quiz_${code}`,
-            title: roomQuiz.title || quizTitle || 'Викторина по теме',
-            subject: roomQuiz.subject || subject || 'Математика',
-            grade: roomQuiz.grade || grade || 7,
-            topic: roomQuiz.topic || 'Школьная программа',
-            group_label: existing?.group_label || 'Текущий',
-            is_active: true,
-            updated_at: new Date().toISOString(),
-            questions: roomQuiz.questions.map((q: any, idx: number) => ({
-              id: q.id ?? (idx + 1),
-              text: q.text || '',
-              explanation: q.explanation || '',
-              time_limit_sec: q.time_limit_sec ?? 20,
-              tier: q.tier ?? 1,
-              is_boss: q.is_boss ?? false,
-              topic: q.topic ?? '',
-              options: (q.options || []).map((opt: any, oIdx: number) => ({
-                id: opt.id ?? oIdx,
-                text: opt.text ?? '',
-                is_correct: !!opt.is_correct,
-                symbol: opt.symbol,
-                color: opt.color,
-              })),
-            })),
-          };
-          quizStorage.upsertQuiz(quizObj);
-          quizStorage.setActiveQuiz(quizObj.id);
-          setSavedQuizzes(quizStorage.getSavedQuizzes());
-          setActiveQuizId(quizObj.id);
-          setCurrentQuizTitle(quizObj.title);
-          onQuizTitleChange?.(quizObj.title);
+        const dbQuizzes = await quizStorage.syncFromDb();
+        if (isMounted && dbQuizzes.length > 0) {
+          setSavedQuizzes(dbQuizzes);
+          // Find matching quiz by existing room quiz or active status
+          const matchQuiz =
+            dbQuizzes.find((q) => q.title === existingRoomQuizTitle) ||
+            dbQuizzes.find((q) => q.is_active) ||
+            dbQuizzes[0];
+          if (matchQuiz) {
+            setActiveQuizId(matchQuiz.id);
+            setCurrentQuizTitle(matchQuiz.title);
+            if (!validRoom) {
+              await roomApi.updateRoomQuiz(code, {
+                title: matchQuiz.title,
+                subject: matchQuiz.subject,
+                grade: matchQuiz.grade,
+                topic: matchQuiz.topic,
+                questions: matchQuiz.questions,
+              }).catch(() => {});
+            }
+          }
         }
       } catch (e) {
-        console.warn('Could not fetch room quiz from backend:', e);
+        console.warn('Could not sync quizzes from db:', e);
       }
 
       try {
@@ -195,6 +221,8 @@ export default function TeacherLobby({
                 avatar: p.avatar,
               }));
             setStudents(list);
+          } else {
+            setStudents([]);
           }
         };
 
@@ -244,6 +272,15 @@ export default function TeacherLobby({
         socketService.on('PLAYER_JOINED', handleJoined);
         socketService.on('PLAYER_LEFT', handleLeft);
         socketService.on('COUNTDOWN_START', handleCountdown);
+
+        socketService.send('GET_SYNC');
+
+        syncInterval = setInterval(() => {
+          if (!isMounted) return;
+          if (socketService.isConnected()) {
+            socketService.send('GET_SYNC');
+          }
+        }, 2000);
       } catch (err) {
         console.error('WebSocket connection error in TeacherLobby:', err);
       }
@@ -253,6 +290,8 @@ export default function TeacherLobby({
 
     return () => {
       isMounted = false;
+      setupDoneRef.current = null;
+      if (syncInterval) clearInterval(syncInterval);
       if (handleSync) socketService.off('SYNC_STATE', handleSync);
       if (handleJoined) socketService.off('PLAYER_JOINED', handleJoined);
       if (handleLeft) socketService.off('PLAYER_LEFT', handleLeft);
@@ -329,6 +368,11 @@ export default function TeacherLobby({
     haptics.notification('success');
     const list = quizStorage.upsertQuiz(updatedQuiz);
     setSavedQuizzes(list);
+    try {
+      await quizApi.saveQuiz(updatedQuiz);
+    } catch (e) {
+      console.warn('Failed to save quiz to DB in lobby:', e);
+    }
     setIsEditorOpen(false);
     setEditingQuiz(null);
 
@@ -437,11 +481,11 @@ export default function TeacherLobby({
       {/* Top Bar: Active Quiz Badge */}
       <div style={styles.topInfoBar}>
         <div style={styles.activeQuizPill}>
-          <span style={styles.sproutDot}>🌱</span>
-          <span style={styles.activeQuizTitle} title={currentQuizTitle}>
-            {currentQuizTitle || 'Викторина урока'}
+          <span style={styles.sproutDot}>🦊</span>
+          <span style={styles.activeQuizTitle} title={activeQuiz?.title || currentQuizTitle || 'Лобби урока'}>
+            {activeQuiz ? activeQuiz.title : currentQuizTitle || 'Лобби урока'}
           </span>
-          <span style={styles.activeQuizGrade}>{grade}А класс</span>
+          <span style={styles.activeQuizGrade}>{grade} класс</span>
         </div>
       </div>
 
@@ -480,7 +524,7 @@ export default function TeacherLobby({
         {students.length === 0 ? (
           <div style={styles.emptyStudents}>
             <Users size={18} color="#60A5FA" />
-            <span>Ждём подключения учеников (ввод PIN с экрана)</span>
+            <span>Ученики подключаются...</span>
           </div>
         ) : (
           <div style={styles.studentsGrid}>
@@ -512,116 +556,142 @@ export default function TeacherLobby({
         )}
       </div>
 
-      {/* Quizzes Templates (2-Column Mobile Square Tiles) */}
-      <div style={styles.templatesSectionCard}>
+      {/* Шаблоны викторин (Только из БД, списком прямоугольников #151f36 без обводки) */}
+      <div style={styles.templatesSection}>
         <div style={styles.templatesHeader}>
-          <div style={styles.templatesTitleRow}>
-            <BookOpen size={17} color="#60A5FA" />
-            <h2 style={styles.templatesTitle}>Шаблоны викторин</h2>
+          <div style={styles.templatesHeaderLeft}>
+            <span style={styles.templatesSectionTitle}>Шаблоны викторин</span>
           </div>
-
-          {/* Pleasant Tactile Button for "Свой тест" matching project design */}
-          <TactileButton
-            theme="blue"
-            size="sm"
-            onClick={handleCreateNewQuizTemplate}
-            iconBefore={<Plus size={15} />}
+          <button
+            type="button"
+            onClick={() => {
+              haptics.impact('light');
+              onNavigateToCreateQuiz ? onNavigateToCreateQuiz() : handleCreateNewQuizTemplate();
+            }}
+            style={styles.createTestBtn}
           >
-            Свой тест
-          </TactileButton>
+            <Plus size={14} color="#60A5FA" />
+            <span>Создать тест</span>
+          </button>
         </div>
 
-        {/* 2-Column Square Tiles Grid (Optimized for Mobile Phones) */}
-        <div style={styles.mobileSquareGrid}>
-          {savedQuizzes.map((q) => {
-            const isActive = q.id === activeQuizId;
-            const qCount = q.questions.length;
-            const icon = getSubjectIcon(q.subject);
-
-            return (
-              <motion.div
-                key={q.id}
-                layout
-                initial={{ opacity: 0, scale: 0.92 }}
-                animate={{ opacity: 1, scale: 1 }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleSelectQuiz(q)}
-                style={{
-                  ...styles.mobileSquareTile,
-                  ...(isActive ? styles.mobileSquareTileActive : {}),
+        <div style={styles.templatesList}>
+          {savedQuizzes.length === 0 ? (
+            <div style={styles.emptyTemplatesBox}>
+              <span style={styles.emptyTemplatesText}>В базе данных пока нет созданных викторин</span>
+              <button
+                type="button"
+                onClick={() => {
+                  haptics.impact('light');
+                  onNavigateToCreateQuiz ? onNavigateToCreateQuiz() : handleCreateNewQuizTemplate();
                 }}
+                style={styles.emptyCreateBtn}
               >
-                {/* Top: Subject Badge & Status / Delete */}
-                <div style={styles.tileTop}>
-                  <span style={styles.subjectPill}>
-                    {icon} {q.subject || 'Тест'}
-                  </span>
+                + Создать викторину
+              </button>
+            </div>
+          ) : (
+            savedQuizzes.map((q) => {
+              const isSel = q.id === activeQuizId;
+              const icon = getSubjectIcon(q.subject);
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {isActive ? (
-                      <div style={styles.activeCheckBadge} title="Активна для запуска">
-                        <CheckCircle2 size={14} color="#10B981" />
-                      </div>
-                    ) : null}
+              return (
+                <motion.div
+                  key={q.id}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleSelectQuiz(q)}
+                  style={{
+                    ...styles.templateRect,
+                    backgroundColor: isSel ? '#1d2a4a' : '#151f36',
+                  }}
+                >
+                  {/* Левая часть: Иконка + Название без воды + Мета */}
+                  <div style={styles.rectLeft}>
+                    <div
+                      style={{
+                        ...styles.rectIconBox,
+                        backgroundColor: isSel ? 'rgba(255, 122, 0, 0.18)' : 'rgba(255, 255, 255, 0.05)',
+                      }}
+                    >
+                      <span style={styles.rectEmoji}>{icon}</span>
+                    </div>
 
-                    {savedQuizzes.length > 1 && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRequestDelete(q);
+                    <div style={styles.rectTexts}>
+                      <div
+                        style={{
+                          ...styles.rectTitle,
+                          color: isSel ? '#FFFFFF' : '#E2E8F0',
                         }}
-                        style={styles.deleteMiniBtn}
-                        title="Удалить викторину"
                       >
-                        <Trash2 size={13} color="#94A3B8" />
-                      </button>
+                        {q.title}
+                      </div>
+                      <div style={styles.rectMeta}>
+                        {q.subject} • {q.grade} класс • {q.questions?.length || 0} вопр.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Правая часть: Управление для тестов + Радио-круг выбора */}
+                  <div style={styles.rectRight}>
+                    {!isSel && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 6 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditQuiz(q);
+                          }}
+                          style={styles.rectActionBtn}
+                          title="Редактировать"
+                        >
+                          <Edit3 size={14} color="#94A3B8" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRequestDelete(q);
+                          }}
+                          style={styles.rectActionBtn}
+                          title="Удалить"
+                        >
+                          <Trash2 size={14} color="#EF4444" />
+                        </button>
+                      </div>
                     )}
-                  </div>
-                </div>
 
-                {/* Center: Title & Subtitle */}
-                <div style={styles.tileCenter}>
-                  <div style={styles.tileTitleText} title={q.title}>
-                    {q.title}
+                    <div
+                      style={{
+                        ...styles.rectRadioCircle,
+                        backgroundColor: isSel ? '#FF7A00' : 'rgba(255, 255, 255, 0.08)',
+                      }}
+                    >
+                      {isSel && <Check size={13} color="#FFFFFF" strokeWidth={3} />}
+                    </div>
                   </div>
-                  <div style={styles.tileSubtitle}>
-                    {q.group_label || `${q.grade} класс`}
-                  </div>
-                </div>
-
-                {/* Bottom: Large, Thumb-Friendly View & Edit Button (No Copy button) */}
-                <div style={styles.tileBottom}>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditQuiz(q);
-                    }}
-                    style={styles.bigTouchViewBtn}
-                    title="Открыть редактор вопросов"
-                  >
-                    <Eye size={15} color="#60A5FA" />
-                    <span>Вопросы ({qCount})</span>
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
+                </motion.div>
+              );
+            })
+          )}
         </div>
       </div>
 
-      {/* Static Sticky Bottom Action Bar (Transparent background, floating button) */}
+      {/* Static Sticky Bottom Action Bar */}
       <div style={styles.stickyBottomBar}>
         <div style={{ width: '100%', pointerEvents: 'auto' }}>
           <TactileButton
-            theme="green"
+            theme={activeQuiz ? "green" : "secondary"}
             size="lg"
             fullWidth
+            disabled={!activeQuiz}
             onClick={handleStartGame}
             iconBefore={<Rocket size={20} />}
           >
-            {countdown !== null ? `Старт через ${countdown}...` : 'Начать викторину'}
+            {countdown !== null
+              ? `Старт через ${countdown}...`
+              : activeQuiz
+              ? 'Начать викторину'
+              : 'Сначала создайте викторину'}
           </TactileButton>
         </div>
       </div>
@@ -886,6 +956,28 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     flexShrink: 0,
   },
+  testBotsBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    border: '1px solid rgba(59, 130, 246, 0.25)',
+    borderRadius: 12,
+    padding: '8px 12px',
+    marginBottom: 4,
+    gap: 8,
+  },
+  testBotBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    borderRadius: 8,
+    padding: '4px 9px',
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: 700,
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
   studentsCard: {
     backgroundColor: '#0F172A',
     borderRadius: 14,
@@ -953,131 +1045,154 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  templatesSectionCard: {
-    backgroundColor: '#0B132B',
-    borderRadius: 18,
-    padding: '14px',
-    border: '1px solid #1E293B',
-    marginBottom: 12,
+  templatesSection: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    padding: 0,
+    marginBottom: 16,
   },
   templatesHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 10,
+    padding: '0 2px',
   },
-  templatesTitleRow: {
+  templatesHeaderLeft: {
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
-  templatesTitle: {
-    fontSize: 14,
+  templatesSectionTitle: {
+    fontSize: 12,
     fontWeight: 800,
-    color: '#FFFFFF',
-    margin: 0,
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
   },
-  mobileSquareGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(2, 1fr)', // Strict 2-column mobile layout!
-    gap: 10,
-  },
-  mobileSquareTile: {
-    backgroundColor: '#0F172A',
-    borderRadius: 16,
-    padding: '12px 10px',
-    border: '1.5px solid #1E293B',
+  emptyTemplatesBox: {
+    backgroundColor: '#151f36',
+    borderRadius: 14,
+    padding: '24px 16px',
     display: 'flex',
     flexDirection: 'column',
-    justifyContent: 'space-between',
-    minHeight: 148,
-    cursor: 'pointer',
-    position: 'relative',
-    transition: 'all 0.18s ease',
-    boxSizing: 'border-box',
-  },
-  mobileSquareTileActive: {
-    borderColor: '#10B981',
-    backgroundColor: '#09211A',
-    boxShadow: '0 0 0 1.5px #10B981, 0 6px 20px rgba(16, 185, 129, 0.22)',
-  },
-  tileTop: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  subjectPill: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: '#CBD5E1',
-    backgroundColor: '#1E293B',
-    padding: '2px 6px',
-    borderRadius: 6,
-    maxWidth: 90,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  activeCheckBadge: {
-    display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: 20,
-    height: 20,
-    borderRadius: 999,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    gap: 12,
+    textAlign: 'center',
   },
-  deleteMiniBtn: {
-    background: 'transparent',
-    border: 'none',
-    padding: 3,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
-  },
-  tileCenter: {
-    margin: '8px 0',
-  },
-  tileTitleText: {
-    fontSize: 12.5,
-    fontWeight: 800,
-    color: '#FFFFFF',
-    lineHeight: 1.3,
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-  },
-  tileSubtitle: {
-    fontSize: 10.5,
+  emptyTemplatesText: {
+    fontSize: 13,
     color: '#94A3B8',
     fontWeight: 600,
-    marginTop: 4,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
   },
-  tileBottom: {
-    width: '100%',
-    marginTop: 4,
+  emptyCreateBtn: {
+    backgroundColor: '#FF7A00',
+    color: '#FFFFFF',
+    border: 'none',
+    borderRadius: 10,
+    padding: '8px 16px',
+    fontSize: 13,
+    fontWeight: 700,
+    cursor: 'pointer',
   },
-  bigTouchViewBtn: {
-    width: '100%',
-    height: 36, // Finger-friendly touch height >= 36px
-    backgroundColor: '#1E293B',
-    border: '1px solid #334155',
+  createTestBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    border: 'none',
+    borderRadius: 8,
+    color: '#60A5FA',
+    fontSize: 12,
+    fontWeight: 700,
+    cursor: 'pointer',
+    padding: '5px 10px',
+  },
+  templatesList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  templateRect: {
+    backgroundColor: '#151f36',
+    border: 'none',
+    borderRadius: 14,
+    padding: '12px 14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s ease',
+  },
+  rectLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    minWidth: 0,
+  },
+  rectIconBox: {
+    width: 38,
+    height: 38,
     borderRadius: 10,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    color: '#E2E8F0',
+    flexShrink: 0,
+    border: 'none',
+  },
+  rectEmoji: {
+    fontSize: 18,
+    lineHeight: 1,
+  },
+  rectTexts: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+    minWidth: 0,
+    flex: 1,
+  },
+  rectTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    lineHeight: 1.25,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rectMeta: {
     fontSize: 11.5,
-    fontWeight: 700,
+    fontWeight: 600,
+    color: '#94A3B8',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  rectRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+  rectActionBtn: {
+    background: 'none',
+    border: 'none',
+    padding: 4,
     cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rectRadioCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    border: 'none',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
     transition: 'all 0.15s ease',
   },
   // Fixed / Static Bottom Button (Transparent container, floating above bottom dock)

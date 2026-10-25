@@ -3,11 +3,15 @@ from .models import (
     QuizModel,
     QuestionModel,
     AnswerOptionModel,
+    ClassModel,
+    ClassStudentModel,
     GameRoomModel,
     RoomParticipantModel,
     PlayerAnswerModel,
     GapReportModel,
     SpacedRepetitionModel,
+    UserModel,
+    AuthTicketModel,
 )
 
 __all__ = [
@@ -18,9 +22,13 @@ __all__ = [
     "QuizModel",
     "QuestionModel",
     "AnswerOptionModel",
+    "ClassModel",
+    "ClassStudentModel",
     "GameRoomModel",
     "RoomParticipantModel",
     "PlayerAnswerModel",
     "GapReportModel",
     "SpacedRepetitionModel",
+    "UserModel",
+    "AuthTicketModel",
 ]

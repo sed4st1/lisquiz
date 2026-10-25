@@ -1,5 +1,6 @@
 import io
 import csv
+import re
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Response
 from pydantic import BaseModel, Field
@@ -72,6 +73,7 @@ class RoomCreateRequest(BaseModel):
     question_count: Optional[int] = None
     textbook_id: Optional[str] = None
     paragraph_num: Optional[int] = None
+    class_id: Optional[str] = None
 
 
 class JoinRoomRequest(BaseModel):
@@ -86,48 +88,55 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
     teacher_name = req.teacher_name if req else "Учитель"
     teacher_p_id = req.teacher_pseudonym_id if req else "teacher_host"
 
+    target_quiz = None
     if req and req.quiz:
         target_quiz = req.quiz
     elif req and req.textbook_id and req.paragraph_num:
-        # Прямая выборка заданий из БД учебников РФ
+        # Прямая выборка заданий из БД учебников РФ с проверкой соответствия предмету
         from ..services.textbook_service import textbook_service
-        cnt = max(1, min(20, int(req.question_count or 5)))
-        tb_res = textbook_service.get_questions_by_paragraph(
-            textbook_id=req.textbook_id,
-            paragraph_num=req.paragraph_num,
-            limit=cnt
-        )
-        tb_questions = []
-        for qd in tb_res.get("questions", []):
-            opts = [
-                AnswerOption(id=o["id"], text=o["text"], is_correct=o.get("is_correct", False))
-                for o in qd.get("options", [])
-            ]
-            tb_questions.append(Question(
-                id=qd["id"],
-                text=qd["text"],
-                options=opts,
-                explanation=qd.get("explanation", ""),
-                tier=qd.get("tier", 1),
-                is_boss=qd.get("is_boss", False),
-                time_limit_sec=qd.get("time_limit_sec", 20),
-                topic=tb_res.get("topic", req.topic or "Параграф учебника"),
-            ))
-        if cnt >= 3 and len(tb_questions) >= cnt:
-            tb_questions[-1].tier = 3
-            tb_questions[-1].is_boss = True
+        tb_meta = textbook_service.get_textbook(req.textbook_id)
+        if tb_meta and (not req.subject or tb_meta.get("subject", "").strip().lower() == req.subject.strip().lower()):
+            cnt = max(1, min(20, int(req.question_count or 5)))
+            tb_res = textbook_service.get_questions_by_paragraph(
+                textbook_id=req.textbook_id,
+                paragraph_num=req.paragraph_num,
+                limit=cnt
+            )
+            tb_questions = []
+            for qd in tb_res.get("questions", []):
+                opts = [
+                    AnswerOption(id=o["id"], text=o["text"], is_correct=o.get("is_correct", False))
+                    for o in qd.get("options", [])
+                ]
+                tb_questions.append(Question(
+                    id=qd["id"],
+                    text=qd["text"],
+                    options=opts,
+                    explanation=qd.get("explanation", ""),
+                    tier=qd.get("tier", 1),
+                    is_boss=qd.get("is_boss", False),
+                    time_limit_sec=qd.get("time_limit_sec", 20),
+                    topic=tb_res.get("topic", req.topic or "Параграф учебника"),
+                ))
+            if cnt >= 3 and len(tb_questions) >= cnt:
+                tb_questions[-1].tier = 3
+                tb_questions[-1].is_boss = True
+                tb_questions[-1].time_limit_sec = 40
 
-        book_title = tb_res.get("textbook_title") or req.subject or "Учебник"
-        para_title = tb_res.get("paragraph_title") or f"§ {req.paragraph_num}"
-        target_quiz = Quiz(
-            id=f"quiz_tb_{req.textbook_id}_{req.paragraph_num}",
-            title=f"{book_title} — § {req.paragraph_num}. {para_title}".strip(" — § ."),
-            subject=req.subject or "Школьный предмет",
-            grade=int(req.grade or 7),
-            topic=para_title,
-            questions=tb_questions,
-        )
-    elif req and (req.subject or req.grade or req.question_count or req.topic):
+            raw_book_title = tb_res.get("textbook_title") or req.subject or "Учебник"
+            clean_book_title = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', raw_book_title).strip()
+            raw_para_title = tb_res.get("paragraph_title") or f"§ {req.paragraph_num}"
+            clean_para_title = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', raw_para_title).strip()
+            target_quiz = Quiz(
+                id=f"quiz_tb_{req.textbook_id}_{req.paragraph_num}",
+                title=f"{clean_book_title} — § {req.paragraph_num}. {clean_para_title}".strip(" — § ."),
+                subject=tb_meta.get("subject") or req.subject or "Школьный предмет",
+                grade=int(tb_meta.get("grade") or req.grade or 7),
+                topic=clean_para_title,
+                questions=tb_questions,
+            )
+
+    if target_quiz is None and req and (req.subject or req.grade or req.question_count or req.topic):
         subj = req.subject or "Математика"
         grd = int(req.grade or 7)
         top = req.topic or "Тематический тест"
@@ -150,6 +159,7 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
             if target_quiz and target_quiz.questions and len(target_quiz.questions) >= 3:
                 target_quiz.questions[-1].tier = 3
                 target_quiz.questions[-1].is_boss = True
+                target_quiz.questions[-1].time_limit_sec = 40
         except Exception:
             # Fallback на банк заданий
             bank_q = bank_service.get_questions_by_topic(subject=subj, grade=grd, topic=top, count=cnt)
@@ -178,24 +188,30 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
                 topic=top,
                 questions=bank_q[:cnt],
             )
-    else:
+    if target_quiz is None:
         target_quiz = DEMO_DEFAULT_QUIZ
+
+    if target_quiz and target_quiz.title:
+        target_quiz.title = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', target_quiz.title).strip()
 
     room, teacher_token = await room_state_engine.create_room(
         quiz=target_quiz,
         teacher_name=teacher_name,
         teacher_pseudonym_id=teacher_p_id,
+        class_id=req.class_id if req else None,
     )
 
     return {
         "room_code": room.room_code,
         "status": room.status.value,
+        "class_id": room.class_id,
         "quiz_title": room.quiz.title,
         "subject": room.quiz.subject,
         "grade": room.quiz.grade,
         "total_questions": len(room.quiz.questions),
         "teacher_token": teacher_token,
         "ws_url": f"/ws/rooms/{room.room_code}?token={teacher_token}",
+        "quiz": room.quiz.model_dump(),
     }
 
 
@@ -212,12 +228,22 @@ async def get_room_info(room_code: str):
     return {
         "room_code": room.room_code,
         "status": room.status.value,
+        "class_id": room.class_id,
         "quiz_title": room.quiz.title,
         "subject": room.quiz.subject,
         "grade": room.quiz.grade,
         "total_questions": len(room.quiz.questions),
         "players_count": len([p for p in room.players.values() if p.connected]),
     }
+
+
+@router.post("/{room_code}/close")
+@router.delete("/{room_code}")
+async def close_room(room_code: str):
+    """Закрытие комнаты учителем и отключение всех учеников."""
+    await ws_manager.close_room_connections(room_code, reason="Учитель закрыл комнату")
+    await room_state_engine.close_room(room_code)
+    return {"status": "closed", "room_code": room_code}
 
 
 @router.get("/{room_code}/quiz", response_model=Quiz)
@@ -254,11 +280,12 @@ async def update_room_quiz(room_code: str, quiz: Quiz):
 async def join_room(room_code: str, req: JoinRoomRequest):
     """Подключение ученика к комнате в лобби."""
     room = await room_state_engine.get_room(room_code)
-    if not room:
+    if not room or room.status != RoomStatus.LOBBY:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Комната {room_code} не найдена",
+            detail=f"Комната {room_code} не найдена или уже завершена",
         )
+
 
     try:
         player, token = await room_state_engine.join_room(
@@ -416,3 +443,139 @@ async def control_room(room_code: str, req: RoomControlRequest):
 
     else:
         raise HTTPException(status_code=400, detail=f"Неизвестное действие: {req.action}")
+
+
+
+# ==========================================
+# Developer Testing Endpoints (Для тестирования)
+# ==========================================
+
+MOCK_STUDENTS_POOL = [
+    ("Иван К", "fox_smart"),
+    ("Аня Смирнова", "owl"),
+    ("Максим Петров", "bear"),
+    ("София Морозова", "bunny"),
+    ("Даниил Романов", "raccoon"),
+    ("Алиса Тарасова", "hedgehog"),
+    ("Кирилл Белов", "squirrel"),
+    ("Полина Волкова", "fox_smart"),
+]
+
+
+class AddMockPlayersRequest(BaseModel):
+    count: int = Field(default=3, ge=1, le=10)
+
+
+@router.post("/{room_code}/test/add_mock_players")
+async def add_mock_players_endpoint(room_code: str, req: Optional[AddMockPlayersRequest] = None):
+    """
+    Добавляет n тестовых ботов-учеников в лобби комнаты для быстрого тестирования.
+    """
+    room = await room_state_engine.get_room(room_code)
+    if not room:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+
+    count = req.count if req else 3
+    existing_names = {p.name for p in room.players.values()}
+    added_players = []
+
+    for name, avatar in MOCK_STUDENTS_POOL:
+        if len(added_players) >= count:
+            break
+        if name in existing_names:
+            continue
+
+        player, token = await room_state_engine.join_room(
+            room_code=room_code,
+            name=name,
+            avatar=avatar,
+            pseudonym_id=f"pid_{hash(name) % 1000000}",
+        )
+        added_players.append({
+            "player_id": player.id,
+            "name": player.name,
+            "avatar": player.avatar,
+        })
+        # Бродкаст в лобби учителя
+        await ws_manager.broadcast_room(
+            room_code,
+            "PLAYER_JOINED",
+            {
+                "player_id": player.id,
+                "name": player.name,
+                "avatar": player.avatar,
+                "total_players": len(room.players),
+            },
+        )
+
+    return {
+        "status": "ok",
+        "added_count": len(added_players),
+        "total_players": len(room.players),
+        "players": added_players,
+    }
+
+
+class SimulateAnswersRequest(BaseModel):
+    accuracy: float = Field(default=0.75, ge=0.0, le=1.0, description="Доля правильных ответов ботов")
+
+
+@router.post("/{room_code}/test/simulate_answers")
+async def simulate_answers_endpoint(room_code: str, req: Optional[SimulateAnswersRequest] = None):
+    """
+    Эмулирует отправку ответов всеми подключенными учениками на текущий вопрос.
+    """
+    from ..models.schemas import AnswerSubmission
+    room = await room_state_engine.get_room(room_code)
+    if not room:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+
+    if room.status != RoomStatus.QUESTION:
+        raise HTTPException(status_code=400, detail="Комната не находится в статусе активного вопроса")
+
+    q_idx = room.current_question_index
+    if q_idx >= len(room.quiz.questions):
+        raise HTTPException(status_code=400, detail="Вопрос вне диапазона")
+
+    cur_q = room.quiz.questions[q_idx]
+    correct_opt = next((o for o in cur_q.options if o.is_correct), cur_q.options[0])
+    wrong_opts = [o for o in cur_q.options if not o.is_correct] or [correct_opt]
+    acc_ratio = req.accuracy if req else 0.75
+
+    answered = []
+    for p_id, player in room.players.items():
+        if p_id in room.answered_player_ids:
+            continue
+
+        is_bot_correct = random.random() < acc_ratio
+        chosen_opt = correct_opt if is_bot_correct else random.choice(wrong_opts)
+        time_taken = round(random.uniform(2.5, 9.0), 2)
+
+        sub = AnswerSubmission(
+            room_code=room_code,
+            player_id=p_id,
+            question_id=cur_q.id,
+            option_id=chosen_opt.id,
+            time_taken_sec=time_taken,
+            tab_blurred=False,
+        )
+        res = await room_state_engine.record_answer(sub)
+        answered.append({"player_id": p_id, "name": player.name, "is_correct": is_bot_correct})
+
+        await ws_manager.broadcast_room(
+            room_code,
+            "ANSWER_COLLECTED",
+            {
+                "player_id": p_id,
+                "answered_count": len(room.answered_player_ids),
+                "total_players": len([p for p in room.players.values() if p.connected]),
+                "all_answered": res.get("all_answered", False),
+            },
+        )
+
+    return {
+        "status": "ok",
+        "simulated_count": len(answered),
+        "total_answered": len(room.answered_player_ids),
+        "total_players": len(room.players),
+    }

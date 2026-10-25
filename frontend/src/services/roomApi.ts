@@ -1,3 +1,5 @@
+import { authService } from './authService';
+
 export interface CreateRoomOptions {
   quiz?: any;
   teacher_name?: string;
@@ -7,23 +9,27 @@ export interface CreateRoomOptions {
   question_count?: number;
   textbook_id?: string;
   paragraph_num?: number;
+  class_id?: string;
 }
 
 export interface CreateRoomResponse {
   room_code: string;
   status: string;
   quiz_title: string;
+  class_id?: string;
   subject?: string;
   grade?: number;
   total_questions?: number;
   teacher_token: string;
   ws_url: string;
+  quiz?: any;
 }
 
 export interface RoomInfoResponse {
   room_code: string;
   status: string;
   quiz_title: string;
+  class_id?: string;
   subject?: string;
   grade?: number;
   total_questions: number;
@@ -36,6 +42,7 @@ export interface JoinRoomResponse {
   avatar: string;
   session_token: string;
   ws_url: string;
+  quiz?: any;
 }
 
 export const roomApi = {
@@ -50,6 +57,7 @@ export const roomApi = {
           question_count: options.question_count,
           textbook_id: options.textbook_id,
           paragraph_num: options.paragraph_num,
+          class_id: options.class_id,
         }
       : {
           quiz: options || undefined,
@@ -58,7 +66,7 @@ export const roomApi = {
 
     const res = await fetch('/api/rooms', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authService.getAuthHeaders() },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
@@ -80,7 +88,7 @@ export const roomApi = {
   async joinRoom(roomCode: string, name: string, avatar: string): Promise<JoinRoomResponse> {
     const res = await fetch(`/api/rooms/${roomCode}/join`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authService.getAuthHeaders() },
       body: JSON.stringify({ name, avatar }),
     });
     if (!res.ok) {
@@ -102,7 +110,7 @@ export const roomApi = {
   async updateRoomQuiz(roomCode: string, quiz: any): Promise<any> {
     const res = await fetch(`/api/rooms/${roomCode}/quiz`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authService.getAuthHeaders() },
       body: JSON.stringify(quiz),
     });
     if (!res.ok) {
@@ -110,6 +118,19 @@ export const roomApi = {
       throw new Error(err.detail || 'Не удалось обновить викторину комнаты');
     }
     return res.json();
+  },
+
+  async getGapReport(roomCode: string): Promise<any> {
+    const res = await fetch(`/api/rooms/${roomCode}/report`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Не удалось загрузить аналитический отчет');
+    }
+    return res.json();
+  },
+
+  getExportCsvUrl(roomCode: string): string {
+    return `/api/rooms/${roomCode}/export/csv`;
   },
 
   async getPresetTextbookQuizzes(): Promise<any[]> {

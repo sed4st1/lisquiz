@@ -223,17 +223,40 @@ class TextbookService:
             try:
                 from .sympy_math_engine import sympy_math_engine
                 needed = limit - len(questions)
-                if subject in ("Математика", "Алгебра"):
-                    stem_items = sympy_math_engine.generate_pilot_corpus(skills=["M6.FRAC.MUL", "M6.PROP.SOLVE"], per_skill=needed)
-                else:
-                    stem_items = sympy_math_engine.generate_pilot_corpus(skills=["P7.DENS.CALC", "P7.ARCH.COND"], per_skill=needed)
-                
-                for s_item in stem_items:
+                generators = {
+                    "M6.FRAC.MUL": sympy_math_engine.generate_frac_mul,
+                    "M6.PROP.SOLVE": sympy_math_engine.generate_prop_solve,
+                    "M6.EQ.EXPRESS": sympy_math_engine.generate_eq_express,
+                    "P7.UNITS.DENS": sympy_math_engine.generate_units_dens,
+                    "P7.DENS.DEF": sympy_math_engine.generate_dens_def,
+                    "P7.DENS.CALC": sympy_math_engine.generate_dens_calc,
+                    "P7.ARCH.FORCE": sympy_math_engine.generate_arch_force,
+                    "P7.ARCH.COND": sympy_math_engine.generate_arch_cond,
+                }
+                skills_to_use = (
+                    ["M6.FRAC.MUL", "M6.PROP.SOLVE", "M6.EQ.EXPRESS"]
+                    if subject in ("Математика", "Алгебра")
+                    else ["P7.DENS.CALC", "P7.ARCH.COND", "P7.UNITS.DENS"]
+                )
+                for i in range(needed):
                     if len(questions) >= limit:
                         break
+                    sk = skills_to_use[i % len(skills_to_use)]
+                    gen_fn = generators.get(sk)
+                    if not gen_fn:
+                        continue
+                    s_item = None
+                    for _ in range(5):
+                        try:
+                            s_item = gen_fn(tier=2)
+                            break
+                        except Exception:
+                            pass
+                    if not s_item:
+                        continue
                     s_opts = [
-                        {"id": opt["opt_idx"], "text": opt["text"], "is_correct": opt.get("opt_idx") == s_item.get("correct_idx")}
-                        for opt in s_item.get("options", [])
+                        {"id": opt_idx + 1, "text": opt["text"], "is_correct": bool(opt.get("is_correct"))}
+                        for opt_idx, opt in enumerate(s_item.get("options", []))
                     ]
                     questions.append({
                         "id": abs(hash(s_item["item_id"])) % 1000000,

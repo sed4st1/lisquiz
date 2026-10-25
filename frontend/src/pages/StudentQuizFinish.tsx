@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
+import { socketService } from '../services/socketService';
+import StudentRedemptionModal from '../components/StudentRedemptionModal';
 
 export interface StudentQuizFinishProps {
   playerId?: string;
@@ -55,6 +57,32 @@ export default function StudentQuizFinish({
   totalQuestions = 3,
   onGoToLeaderboard,
 }: StudentQuizFinishProps) {
+  const [autoExitSeconds, setAutoExitSeconds] = React.useState(12);
+  const [currentScore, setCurrentScore] = React.useState(myScore);
+  const [isRedemptionOpen, setIsRedemptionOpen] = React.useState(false);
+  const [redemptionDone, setRedemptionDone] = React.useState(false);
+  const [restoredPoints, setRestoredPoints] = React.useState(0);
+
+  useEffect(() => {
+    // Немедленно разрываем связь с завершенной комнатой, чтобы ученик не висел в сети
+    socketService.disconnect();
+
+    if (isRedemptionOpen) return; // Пауза таймера при открытой работе над ошибками
+
+    const exitTimer = setInterval(() => {
+      setAutoExitSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(exitTimer);
+          onGoToLeaderboard(currentScore, myRankProp);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(exitTimer);
+  }, [currentScore, myRankProp, onGoToLeaderboard, isRedemptionOpen]);
+
   useEffect(() => {
     haptics.notification('success');
     // Multi-stage confetti celebration
@@ -120,7 +148,8 @@ export default function StudentQuizFinish({
     return higherScoreCount + 1;
   })();
 
-  const accuracy = Math.round((correctCount / Math.max(1, totalQuestions)) * 100);
+  const wrongCountResolved = Math.max(wrongCount || 0, totalQuestions - correctCount);
+  const accuracy = totalQuestions > 0 ? Math.round(((correctCount || 0) / totalQuestions) * 100) : 0;
 
   return (
     <div style={styles.container}>
@@ -245,7 +274,7 @@ export default function StudentQuizFinish({
           </div>
           <div style={styles.scorePill}>
             <Trophy size={14} color="#FBBF24" />
-            <span>{myScore} б</span>
+            <span>{currentScore} б</span>
           </div>
         </div>
 
@@ -263,11 +292,11 @@ export default function StudentQuizFinish({
 
           <div style={styles.statBox}>
             <div style={styles.statIconRow}>
-              <XCircle size={15} color={wrongCount > 0 ? '#EF4444' : '#94A3B8'} />
+              <XCircle size={15} color={wrongCountResolved > 0 ? '#EF4444' : '#94A3B8'} />
               <span style={styles.statLabel}>Ошибок</span>
             </div>
-            <span style={{ ...styles.statVal, color: wrongCount > 0 ? '#EF4444' : '#E2E8F0' }}>
-              {wrongCount}
+            <span style={{ ...styles.statVal, color: wrongCountResolved > 0 ? '#EF4444' : '#E2E8F0' }}>
+              {wrongCountResolved}
             </span>
           </div>
 
@@ -283,6 +312,75 @@ export default function StudentQuizFinish({
         </div>
       </motion.div>
 
+      {/* Redemption: Работа над ошибками (+60% баллов) */}
+      {!redemptionDone ? (
+        <motion.div
+          initial={{ scale: 0.96, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.25 }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '14px 16px',
+            borderRadius: 14,
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            gap: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={18} color="#34D399" />
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF' }}>
+                Работа над ошибками
+              </span>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#34D399', backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: 999 }}>
+              +60% возврат баллов
+            </span>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: '#CBD5E1', lineHeight: '1.4' }}>
+            Решите 1 задачу с подсказкой, закрепите правило и верните до 60% потерянных очков в рейтинг класса!
+          </p>
+          <TactileButton
+            theme="green"
+            size="md"
+            fullWidth
+            onClick={() => {
+              haptics.impact('medium');
+              setIsRedemptionOpen(true);
+            }}
+            iconBefore={<Sparkles size={16} />}
+          >
+            Исправить ошибку (+60% баллов)
+          </TactileButton>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '12px 14px',
+            borderRadius: 14,
+            backgroundColor: 'rgba(16, 185, 129, 0.22)',
+            border: '1px solid #10B981',
+          }}
+        >
+          <CheckCircle2 size={20} color="#34D399" />
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF' }}>
+              Ошибка исправлена!
+            </span>
+            <span style={{ fontSize: 11, color: '#34D399', fontWeight: 600 }}>
+              +{restoredPoints} очков успешно добавлены к вашему результату
+            </span>
+          </div>
+        </motion.div>
+      )}
+
       {/* Exit Button: Directly to class leaderboard */}
       <motion.div
         initial={{ y: 12, opacity: 0 }}
@@ -296,13 +394,31 @@ export default function StudentQuizFinish({
           fullWidth
           onClick={() => {
             haptics.impact('medium');
-            onGoToLeaderboard(myScore, myRank);
+            onGoToLeaderboard(currentScore, myRank);
           }}
           iconAfter={<ArrowRight size={18} />}
         >
-          Перейти в рейтинг класса
+          {autoExitSeconds > 0 ? `Перейти в рейтинг класса (${autoExitSeconds}с)` : 'Перейти в рейтинг класса'}
         </TactileButton>
+        <span style={styles.actionHint}>
+          {autoExitSeconds > 0 ? `Автоматический переход в класс через ${autoExitSeconds}с` : 'Завершение...'}
+        </span>
       </motion.div>
+
+      {/* Student Redemption Modal */}
+      <StudentRedemptionModal
+        isOpen={isRedemptionOpen}
+        onClose={() => setIsRedemptionOpen(false)}
+        studentId={playerId || 'std_student'}
+        basePoints={750}
+        onPointsRestored={(pts) => {
+          setRestoredPoints(pts);
+          setCurrentScore((prev) => prev + pts);
+          setRedemptionDone(true);
+          setIsRedemptionOpen(false);
+          haptics.notification('success');
+        }}
+      />
     </div>
   );
 }

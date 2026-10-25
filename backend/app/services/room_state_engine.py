@@ -252,6 +252,7 @@ class RoomStateEngine:
         quiz: Quiz,
         teacher_name: str = "Учитель",
         teacher_pseudonym_id: str = "teacher_host",
+        class_id: Optional[str] = None,
     ) -> Tuple[GameRoom, str]:
         """
         Создание новой игровой комнаты учителем.
@@ -274,9 +275,25 @@ class RoomStateEngine:
             time_remaining=20,
             grove_energy=0,
             teacher_pseudonym_id=teacher_pseudonym_id,
+            class_id=class_id,
             players={},
             answered_player_ids=[],
         )
+        try:
+            from ..db.session import async_session_maker
+            from ..db.models import GameRoomModel
+            async with async_session_maker() as db:
+                db_room = GameRoomModel(
+                    room_code=room_code,
+                    quiz_id=quiz.id if quiz else None,
+                    class_id=class_id,
+                    status="lobby",
+                    teacher_pseudonym_id=teacher_pseudonym_id,
+                )
+                db.add(db_room)
+                await db.commit()
+        except Exception as e:
+            logger.warning(f"DB sync room notice: {e}")
         self.rooms[room_code] = room
         self.answers[room_code] = []
         await self._sync_room_to_redis(room)
@@ -313,7 +330,7 @@ class RoomStateEngine:
             # Очистка предыдущих неактивных/дублирующихся сессий с тем же именем в лобби
             ghost_ids = [
                 pid for pid, p in room.players.items()
-                if p.name.strip().lower() == name.strip().lower() and not p.connected
+                if p.name.strip().lower() == name.strip().lower()
             ]
             for gid in ghost_ids:
                 room.players.pop(gid, None)
@@ -651,6 +668,26 @@ class RoomStateEngine:
                     "status": room.status.value,
                 }
 
+    async def close_room(self, room_code: str):
+        """Полное закрытие комнаты, отключение игроков и очистка сессий."""
+        async with self.get_room_lock(room_code):
+            room = self.rooms.get(room_code)
+            if room:
+                room.status = RoomStatus.FINISHED
+                for p in room.players.values():
+                    p.connected = False
+            # Удаляем сессии этой комнаты
+            tokens_to_del = [tok for tok, sess in self.sessions.items() if sess.room_code == room_code]
+            for tok in tokens_to_del:
+                self.sessions.pop(tok, None)
+            if self.redis_available and self.redis_client:
+                try:
+                    await self.redis_client.delete(f"room:{room_code}:state")
+                    await self.redis_client.delete(f"room:{room_code}:leaderboard")
+                except Exception:
+                    pass
+            logger.info("Room %s successfully closed and sessions cleaned up.", room_code)
+
     # ==========================================
     # Восстановление состояния (SYNC_STATE)
     # ==========================================
@@ -731,6 +768,10 @@ class RoomStateEngine:
         total_correct_all = 0
         total_answers_all = max(1, len(room_subs))
 
+        total_players_cnt = len(room.players)
+        total_questions_cnt = len(room.quiz.questions)
+        total_expected_answers = max(len(room_subs), total_players_cnt * total_questions_cnt)
+
         for q in room.quiz.questions:
             q_subs = [s for s in room_subs if s.question_id == q.id]
             correct_opt = next((o for o in q.options if o.is_correct), None)
@@ -743,9 +784,9 @@ class RoomStateEngine:
                     correct_count += 1
                     total_correct_all += 1
 
-            total_q_ans = len(q_subs)
-            pct = int((correct_count / total_q_ans * 100)) if total_q_ans > 0 else 100
-            mistakes = total_q_ans - correct_count
+            total_participants = max(total_players_cnt, len(q_subs))
+            pct = int((correct_count / total_participants * 100)) if total_participants > 0 else 0
+            mistakes = max(0, total_participants - correct_count)
 
             # Определение преобладающего дистрактора
             dominant_distractor = None
@@ -773,7 +814,7 @@ class RoomStateEngine:
                 )
             )
 
-        class_acc = int((total_correct_all / total_answers_all) * 100) if len(room_subs) > 0 else 100
+        class_acc = int((total_correct_all / total_expected_answers) * 100) if total_expected_answers > 0 else 100
         flagged = [p.name for p in room.players.values() if p.blurred_count > 1]
 
         # Формирование телеметрии ответов для ML 2.0 движка ремедиации и античита

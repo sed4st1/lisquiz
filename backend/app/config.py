@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = True
-    SECRET_KEY: str = "lisquiz-secret-key-2026"
+    SECRET_KEY: str = "lisquiz-secret-key-2026-super-secure-zero-pii"
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://dev.max.ru"
 
     # MAX Platform

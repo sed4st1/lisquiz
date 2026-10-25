@@ -8,8 +8,26 @@ class SocketService {
   private currentRoomCode: string | null = null;
   private currentToken: string | null = null;
   private isExplicitDisconnect: boolean = false;
+  private lastSyncState: any = null;
+
+  public getLastSyncState(): any {
+    return this.lastSyncState;
+  }
+
+  public getRoomCode(): string | null {
+    return this.currentRoomCode;
+  }
 
   public connect(roomCode: string, token: string): Promise<void> {
+    if (
+      this.ws &&
+      this.ws.readyState === WebSocket.OPEN &&
+      this.currentRoomCode === roomCode &&
+      this.currentToken === token
+    ) {
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       this.disconnect();
       this.isExplicitDisconnect = false;
@@ -33,6 +51,9 @@ class SocketService {
           try {
             const parsed = JSON.parse(event.data);
             const { event: eventName, data } = parsed;
+            if (eventName === 'SYNC_STATE') {
+              this.lastSyncState = data;
+            }
             if (eventName) {
               this.dispatch(eventName, data);
             }
@@ -67,6 +88,7 @@ class SocketService {
 
   public disconnect(): void {
     this.isExplicitDisconnect = true;
+    this.lastSyncState = null;
     this.stopHeartbeat();
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
@@ -74,6 +96,8 @@ class SocketService {
     }
     if (this.ws) {
       try {
+        this.ws.onclose = null;
+        this.ws.onerror = null;
         this.ws.close();
       } catch {}
       this.ws = null;

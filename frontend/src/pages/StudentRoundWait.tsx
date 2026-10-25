@@ -52,9 +52,10 @@ export default function StudentRoundWait({
   const [finishData, setFinishData] = useState<any>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  const isCorrect = personalResult?.is_correct ?? true;
-  const points = personalResult?.points_awarded ?? 550;
-  const streak = personalResult?.streak ?? 1;
+  const hasAnswered = personalResult !== null && personalResult !== undefined;
+  const isCorrect = hasAnswered ? Boolean(personalResult?.is_correct) : false;
+  const points = personalResult?.points_awarded ?? 0;
+  const streak = personalResult?.streak ?? 0;
   const totalScore = personalResult?.total_score ?? points;
 
   // Celebratory confetti on mount if correct
@@ -116,15 +117,14 @@ export default function StudentRoundWait({
       if (!isMounted) return;
       haptics.notification('success');
       setFinishData(data);
-      try {
-        confetti({
-          particleCount: 160,
-          spread: 90,
-          origin: { y: 0.45 },
-          colors: ['#F59E0B', '#10B981', '#FF7A00', '#60A5FA', '#EC4899'],
-        });
-      } catch {}
-      setMode('finished');
+      socketService.disconnect();
+      onGameFinished?.(data);
+    };
+
+    const handleRoomClosedOrKicked = () => {
+      if (!isMounted) return;
+      socketService.disconnect();
+      onGameFinished?.();
     };
 
     socketService.on('QUESTION_RESULTS', handleQuestionResults);
@@ -132,16 +132,46 @@ export default function StudentRoundWait({
     socketService.on('COUNTDOWN_START', handleCountdownStart);
     socketService.on('QUESTION_START', handleQuestionStart);
     socketService.on('GAME_FINISHED', handleGameFinished);
+    socketService.on('ROOM_CLOSED', handleRoomClosedOrKicked);
+    socketService.on('KICKED', handleRoomClosedOrKicked);
+    socketService.on('TEACHER_LEFT', handleRoomClosedOrKicked);
+    socketService.on('DISCONNECT', handleRoomClosedOrKicked);
+
+    // Автоматическое обнаружение завершения/закрытия комнаты через опрос бэкенда
+    const roomPollInterval = setInterval(async () => {
+      if (!isMounted) return;
+      try {
+        const res = await fetch(`/api/rooms/${roomCode}`);
+        if (!res.ok) {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onGameFinished?.();
+          return;
+        }
+        const info = await res.json();
+        if (info && info.status === 'finished') {
+          clearInterval(roomPollInterval);
+          socketService.disconnect();
+          onGameFinished?.(info);
+          return;
+        }
+      } catch {}
+    }, 1500);
 
     return () => {
       isMounted = false;
+      clearInterval(roomPollInterval);
       socketService.off('QUESTION_RESULTS', handleQuestionResults);
       socketService.off('LEADERBOARD_UPDATE', handleLeaderboardUpdate);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
       socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('GAME_FINISHED', handleGameFinished);
+      socketService.off('ROOM_CLOSED', handleRoomClosedOrKicked);
+      socketService.off('KICKED', handleRoomClosedOrKicked);
+      socketService.off('TEACHER_LEFT', handleRoomClosedOrKicked);
+      socketService.off('DISCONNECT', handleRoomClosedOrKicked);
     };
-  }, [onNextQuestion]);
+  }, [onNextQuestion, onGameFinished, roomCode]);
 
   return (
     <div style={styles.container}>
@@ -173,10 +203,12 @@ export default function StudentRoundWait({
             <div
               style={{
                 ...styles.statusIconCircle,
-                backgroundColor: isCorrect ? '#065F46' : '#7F1D1D',
+                backgroundColor: !hasAnswered ? '#7F1D1D' : isCorrect ? '#065F46' : '#7F1D1D',
               }}
             >
-              {isCorrect ? (
+              {!hasAnswered ? (
+                <Clock size={30} color="#F87171" />
+              ) : isCorrect ? (
                 <CheckCircle2 size={32} color="#34D399" />
               ) : (
                 <Heart size={30} color="#F87171" />
@@ -184,10 +216,12 @@ export default function StudentRoundWait({
             </div>
 
             <h2 style={styles.statusTitle}>
-              {isCorrect ? 'Ответ зафиксирован!' : 'Ответ принят!'}
+              {!hasAnswered ? 'Время вышло' : isCorrect ? 'Ответ зафиксирован!' : 'Ответ принят!'}
             </h2>
             <p style={styles.statusSubtitle}>
-              {isCorrect
+              {!hasAnswered
+                ? 'Ответ не выбран в срок — засчитано как ошибка.'
+                : isCorrect
                 ? `Отличная работа! +${points} очков в копилку`
                 : 'Не расстраивайся, сейчас разберём правильный ответ!'}
             </p>

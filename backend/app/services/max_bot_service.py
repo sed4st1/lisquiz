@@ -180,6 +180,22 @@ class MaxBotService:
             await self.send_message(chat_id, reply_text, buttons)
             return {"command": "/grove", "status": "sent"}
 
+        elif root_cmd in ("/class", "/join_class", "/класс", "класс"):
+            if len(parts) > 1:
+                code = parts[1].strip().upper()
+                reply_text = (
+                    f"🦊 **Приглашение в класс по коду `{code}`!**\n\n"
+                    "Присоединяйся к классу в Лисквизе, чтобы твои победы шли в общий рейтинг класса и растили нашу Классную Рощу! 🌳"
+                )
+                buttons = [
+                    [{"text": f"🎒 Вступить в класс ({code})", "type": "open_app", "url": f"https://lisquiz.ru/?join_class={code}"}]
+                ]
+            else:
+                reply_text = "🦊 Напиши команду с кодом класса, например: `/class 7A-X9K2`"
+                buttons = []
+            await self.send_message(chat_id, reply_text, buttons)
+            return {"command": "/class", "status": "sent"}
+
         else:
             reply_text = (
                 f"🦊 Лисёнок Спринт не знает команду `{cmd}`.\n"

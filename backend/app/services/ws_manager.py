@@ -118,5 +118,23 @@ class ConnectionManager:
         """Возвращает число активных WebSocket соединений в комнате."""
         return len(self.rooms.get(room_code, {}))
 
+    async def close_room_connections(self, room_code: str, reason: str = "Викторина завершена"):
+        """Рассылает всем ученикам ROOM_CLOSED и принудительно закрывает WebSocket соединения."""
+        if room_code not in self.rooms:
+            return
+
+        payload = {"event": "ROOM_CLOSED", "data": {"reason": reason}}
+        for ws, session in list(self.rooms[room_code].items()):
+            if session.role == UserRole.STUDENT:
+                try:
+                    await ws.send_json(payload)
+                    await ws.close(code=4000, reason=reason)
+                except Exception:
+                    pass
+                self.rooms[room_code].pop(ws, None)
+
+        if room_code in self.rooms and not self.rooms[room_code]:
+            self.rooms.pop(room_code, None)
+
 
 ws_manager = ConnectionManager()

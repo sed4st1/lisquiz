@@ -128,6 +128,7 @@ async def websocket_room_endpoint(
             },
             exclude=websocket,
         )
+
     else:
         # Ученикам в комнате
         await ws_manager.broadcast_students(
@@ -149,6 +150,12 @@ async def websocket_room_endpoint(
             # Heartbeat (Ping -> Pong)
             if event == "PING":
                 await ws_manager.send_personal(websocket, "PONG", {"timestamp": int(time.time() * 1000)})
+                continue
+
+            if event == "GET_SYNC":
+                sync_state = await room_state_engine.get_sync_state(room_code, player_id=session.player_id)
+                if sync_state:
+                    await ws_manager.send_personal(websocket, "SYNC_STATE", sync_state.model_dump())
                 continue
 
             # ==========================================
@@ -238,6 +245,15 @@ async def websocket_room_endpoint(
                                         "top_players": top_players,
                                     },
                                 )
+                                # Принудительно отключаем учеников через 2 секунды (после доставки GAME_FINISHED)
+                                async def _delayed_kick(rc: str):
+                                    await asyncio.sleep(2.0)
+                                    await ws_manager.close_room_connections(rc, reason="Викторина завершена")
+                                    await room_state_engine.close_room(rc)
+                                asyncio.create_task(_delayed_kick(room_code))
+                        elif action == "CLOSE_ROOM":
+                            await ws_manager.close_room_connections(room_code, reason="Учитель закрыл комнату")
+                            await room_state_engine.close_room(room_code)
                     except Exception as err:
                         logger.error(f"Ошибка при обработке TEACHER_ACTION '{action}': {err}", exc_info=True)
 
@@ -304,11 +320,14 @@ async def websocket_room_endpoint(
                             "total_players": active_players,
                         },
                     )
+
                     break
 
     except WebSocketDisconnect:
         disc_session = ws_manager.disconnect(websocket, room_code)
         if disc_session and disc_session.role == UserRole.STUDENT:
+            if room.status == RoomStatus.LOBBY:
+                room.players.pop(disc_session.player_id, None)
             await room_state_engine.set_player_connection(token, False)
             active_players = len([p for p in room.players.values() if p.connected])
             await ws_manager.broadcast_room(
@@ -321,6 +340,9 @@ async def websocket_room_endpoint(
                     "total_players": active_players,
                 },
             )
+
+        elif disc_session and disc_session.role == UserRole.TEACHER:
+            logger.info(f"Учитель комнаты {room_code} временно отключил WS. Сессия комнаты сохранена.")
     except Exception as e:
         logger.error(f"Неожиданная ошибка в WS обработчике комнаты {room_code}: {e}")
         disc_session = ws_manager.disconnect(websocket, room_code)

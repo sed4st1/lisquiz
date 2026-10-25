@@ -63,12 +63,15 @@ async def health_check(db: AsyncSession = Depends(get_db)):
         "max_bot_configured": bool(settings.MAX_BOT_TOKEN)
     }
 
-from .api import rooms_router, ws_router, max_router, routes_quiz, routes_ml2, routes_grove
+from .api import rooms_router, ws_router, max_router, routes_quiz, routes_ml2, routes_grove, routes_auth, routes_classes
 
+app.include_router(routes_auth.router)
+app.include_router(routes_classes.router)
 app.include_router(rooms_router)
 app.include_router(ws_router)
 app.include_router(max_router)
 app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
+app.include_router(routes_quiz.router, prefix="/api/quizzes", tags=["Quizzes"])
 app.include_router(routes_ml2.router, prefix="/api/ml2", tags=["ML 2.0"])
 app.include_router(routes_grove.router, prefix="/api/grove", tags=["Class Grove"])
 

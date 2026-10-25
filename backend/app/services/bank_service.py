@@ -10,6 +10,57 @@ logger = logging.getLogger(__name__)
 SYMBOLS = ["triangle", "diamond", "circle", "square"]
 COLORS = ["red", "blue", "yellow", "green"]
 
+TOPIC_LOCALIZATIONS: Dict[str, str] = {
+    "Abstract algebra": "Абстрактная алгебра и уравнения",
+    "College mathematics": "Высшая математика и математический анализ",
+    "Elementary mathematics": "Элементарная математика и вычисления",
+    "High school mathematics": "Школьная математика и геометрия",
+    "High school statistics": "Теория вероятностей и статистика",
+    "Conceptual physics": "Концептуальная физика и законы природы",
+    "High school physics": "Школьная физика и механика",
+    "College physics": "Общая физика и термодинамика",
+    "Astronomy": "Астрономия и космос",
+    "College computer science": "Компьютерные науки и алгоритмы",
+    "Computer security": "Информационная безопасность и защита данных",
+    "Electrical engineering": "Электротехника и схемотехника",
+    "Formal logic": "Формальная логика и логические законы",
+    "High school computer science": "Школьная информатика и ИКТ",
+    "Logical fallacies": "Логические ошибки и анализ рассуждений",
+    "Machine learning": "Искусственный интеллект и машинное обучение",
+    "Anatomy": "Анатомия и физиология человека",
+    "College biology": "Общая биология и цитология",
+    "College chemistry": "Химия и химические реакции",
+    "High school biology": "Школьная биология и генетика",
+    "High school chemistry": "Школьная химия и периодический закон",
+    "Живая природа и физические явления": "Живая природа и физические явления",
+    "High school geography": "Школьная география и картография",
+    "Prehistory": "Первобытное общество и древний мир",
+    "Литературные термины и приемы": "Литературные термины и приемы",
+    "Теория литературы (роды и жанры)": "Теория литературы (роды и жанры)",
+    "Econometrics": "Эконометрика и анализ данных",
+    "High school government and politics": "Политика, государство и власть",
+    "High school macroeconomics": "Макроэкономика и мировая экономика",
+    "High school microeconomics": "Микроэкономика, спрос и предложение",
+    "High school psychology": "Психология и межличностные отношения",
+    "Human sexuality": "Биология человека и социология",
+    "International law": "Международное право",
+    "Jurisprudence": "Основы права и правоведение",
+    "Professional law": "Профессиональное право и юриспруденция",
+    "Professional psychology": "Психология и поведение",
+    "Public relations": "Связи с общественностью и медиа",
+    "Sociology": "Социология и социальные институты",
+    "Us foreign policy": "Мировая политика и международные отношения",
+    "Естествознание и природа": "Естествознание и природа",
+    "Правописание НЕ и НИ": "Правописание НЕ и НИ",
+    "Правописание корней": "Правописание корней с чередованием",
+    "Правописание приставок": "Правописание приставок",
+    "Постановка ударения (Орфоэпия)": "Постановка ударения (Орфоэпия)",
+    "Употребление паронимов": "Употребление паронимов",
+}
+
+REVERSE_TOPIC_LOOKUP: Dict[str, str] = {v.lower(): k for k, v in TOPIC_LOCALIZATIONS.items()}
+
+
 DB_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 DB_PATH = DB_DIR / "question_bank.db"
 
@@ -154,7 +205,9 @@ class BankService:
 
             # Шаг 1: Полнотекстовый поиск по теме в рамках предмета и класса
             clean_topic = topic.replace('"', '').replace("'", "").strip()
-            fts_query = f"{clean_topic}*" if clean_topic else "*"
+            canonical_db_topic = REVERSE_TOPIC_LOOKUP.get(clean_topic.lower(), clean_topic)
+            search_term = canonical_db_topic if canonical_db_topic else clean_topic
+            fts_query = f"{search_term}*" if search_term else "*"
             
             rows = []
             try:
@@ -172,9 +225,9 @@ class BankService:
             if len(rows) < count:
                 cursor.execute("""
                     SELECT * FROM questions
-                    WHERE subject = ? AND grade = ? AND (topic LIKE ? OR question_text LIKE ?)
+                    WHERE subject = ? AND grade = ? AND (topic LIKE ? OR topic LIKE ? OR question_text LIKE ?)
                     LIMIT ?
-                """, (subject, grade, f"%{clean_topic}%", f"%{clean_topic}%", count * 3))
+                """, (subject, grade, f"%{clean_topic}%", f"%{search_term}%", f"%{clean_topic}%", count * 3))
                 like_rows = cursor.fetchall()
                 seen = {r["id"] for r in rows}
                 for lr in like_rows:
@@ -219,8 +272,32 @@ class BankService:
         selected_rows = random.sample(rows, min(len(rows), count))
         
         result_questions = []
+        n_selected = len(selected_rows)
         for idx, row in enumerate(selected_rows, start=1):
             q_model = self._row_to_question(row, question_idx=idx)
+            # Калибровка тиров: Tier 1 (15с, 500пт) -> Tier 2 (25с, 750пт) -> Tier 3 Boss (40с, 1000пт)
+            if n_selected >= 3:
+                if idx == 1:
+                    q_model.tier = 1
+                    q_model.time_limit_sec = 15
+                    q_model.is_boss = False
+                elif idx == n_selected:
+                    q_model.tier = 3
+                    q_model.time_limit_sec = 40
+                    q_model.is_boss = True
+                else:
+                    q_model.tier = 2
+                    q_model.time_limit_sec = 25
+                    q_model.is_boss = False
+            elif n_selected == 2:
+                if idx == 1:
+                    q_model.tier = 1
+                    q_model.time_limit_sec = 15
+                    q_model.is_boss = False
+                else:
+                    q_model.tier = 3
+                    q_model.time_limit_sec = 40
+                    q_model.is_boss = True
             result_questions.append(q_model)
 
         return result_questions
@@ -264,6 +341,45 @@ class BankService:
                 rows = []
 
         return [self._row_to_question(r, idx) for idx, r in enumerate(rows, start=1)]
+
+    def get_available_topics(
+        self,
+        subject: Optional[str] = None,
+        grade: Optional[int] = None
+    ) -> List[Dict[str, Any]]:
+        """Получить список доступных тем из верифицированного банка вопросов."""
+        conditions = []
+        params = []
+        if subject:
+            conditions.append("subject = ?")
+            params.append(subject)
+        if grade:
+            conditions.append("grade = ?")
+            params.append(grade)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        query = f"""
+            SELECT subject, grade, topic, COUNT(*) as count
+            FROM questions
+            {where}
+            GROUP BY subject, grade, topic
+            ORDER BY subject, grade, count DESC
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            results = []
+            for r in cursor.fetchall():
+                raw_topic = r["topic"]
+                display_name = TOPIC_LOCALIZATIONS.get(raw_topic, raw_topic)
+                results.append({
+                    "subject": r["subject"],
+                    "grade": r["grade"],
+                    "topic": raw_topic,
+                    "display_name": display_name,
+                    "count": r["count"]
+                })
+            return results
 
     def get_stats(self) -> Dict[str, Any]:
         """Статистика наполненности банка вопросов"""
@@ -378,6 +494,8 @@ class BankService:
                     options=shuffled_answer_options,
                     explanation=orig_q.explanation,
                     time_limit_sec=orig_q.time_limit_sec,
+                    tier=orig_q.tier,
+                    is_boss=orig_q.is_boss,
                     topic=orig_q.topic,
                     grade=orig_q.grade,
                     subject=orig_q.subject,
@@ -415,17 +533,23 @@ class BankService:
                 color=COLORS[i]
             ))
 
+        diff = (row["difficulty"] or "medium").lower() if "difficulty" in row.keys() else "medium"
+        tier = 1 if diff == "easy" else (3 if diff in ("hard", "boss") else 2)
+        time_limit = 15 if tier == 1 else (40 if tier == 3 else 25)
+
         return Question(
             id=question_idx,
             canonical_id=row["id"],
             text=row["question_text"],
             options=options,
             explanation=row["explanation"] or "",
-            time_limit_sec=20,
+            time_limit_sec=time_limit,
+            tier=tier,
+            is_boss=(tier == 3),
             topic=row["topic"],
             grade=row["grade"],
             subject=row["subject"],
-            difficulty=row["difficulty"],
+            difficulty=diff,
             meta_source=row["meta_source"]
         )
 
