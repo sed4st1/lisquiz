@@ -157,3 +157,73 @@ async def test_user_query_mir_skazok_noisy_string():
         assert data["total"] >= 1
         matched_topics = [t["topic"] for t in data["topics"]]
         assert any("Мир сказок" in t for t in matched_topics)
+
+
+
+@pytest.mark.asyncio
+async def test_chemistry_curriculum_lookup():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Grade 8
+        res8 = await client.get("/api/quiz/curriculum/topics?subject=Химия&grade=8")
+        assert res8.status_code == 200
+        data8 = res8.json()
+        assert data8["total"] >= 5
+        titles8 = [t["topic"] for t in data8["topics"]]
+        assert any("Периодический закон" in t or "Периодическ" in t for t in titles8)
+
+        # Grade 10 (organic chemistry)
+        res10 = await client.get("/api/quiz/curriculum/topics?subject=Химия&grade=10")
+        assert res10.status_code == 200
+        data10 = res10.json()
+        assert data10["total"] >= 5
+        titles10 = [t["topic"] for t in data10["topics"]]
+        assert any("Бутлеров" in t or "Алканы" in t or "Углеводороды" in t for t in titles10)
+
+
+@pytest.mark.asyncio
+async def test_english_curriculum_lookup():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/quiz/curriculum/topics?subject=Английский язык&grade=7")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["total"] >= 1
+        titles = [t["topic"] for t in data["topics"]]
+        assert any("Present Perfect" in t for t in titles)
+
+
+@pytest.mark.asyncio
+async def test_high_school_subjects_complete():
+    from backend.app.services.curriculum_catalog import curriculum_service
+    # Algebra 10th grade
+    alg10 = curriculum_service.get_topics("Алгебра", 10)
+    assert len(alg10) >= 3
+    # Geometry 11th grade
+    geom11 = curriculum_service.get_topics("Геометрия", 11)
+    assert len(geom11) >= 3
+    # Physics 11th grade
+    phys11 = curriculum_service.get_topics("Физика", 11)
+    assert len(phys11) >= 3
+    # History 10th grade (WW2 / Revolution)
+    hist10 = curriculum_service.get_topics("История", 10)
+    assert len(hist10) >= 3
+    # Biology 10th grade
+    bio10 = curriculum_service.get_topics("Биология", 10)
+    assert len(bio10) >= 3
+
+
+@pytest.mark.asyncio
+async def test_exhaustive_subject_coverage():
+    from backend.app.services.curriculum_catalog import curriculum_service, FRP_CURRICULUM_DATABASE
+    assert len(FRP_CURRICULUM_DATABASE) >= 250
+
+    key_subjects = [
+        "Математика", "Алгебра", "Геометрия", "Вероятность и статистика",
+        "Русский язык", "Литература", "Физика", "Химия", "Биология",
+        "История", "Обществознание", "География", "Информатика",
+        "Английский язык", "Окружающий мир"
+    ]
+    for s in key_subjects:
+        topics = curriculum_service.get_topics(subject=s)
+        assert len(topics) >= 4, f"Subject {s} must have at least 4 topics in FRP catalog, found {len(topics)}"
