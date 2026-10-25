@@ -35,6 +35,18 @@ async def get_bank_stats():
     """Получить статистику локального банка заданий Lisquiz (количество по предметам и классам)."""
     return bank_service.get_stats()
 
+@router.get("/bank/topics")
+async def get_bank_topics(
+    subject: Optional[str] = Query(None, description="Фильтр по предмету"),
+    grade: Optional[int] = Query(None, description="Фильтр по классу")
+):
+    """Получить список доступных тем из 6 313 проверенных заданий базы Ивана."""
+    topics = bank_service.get_available_topics(subject=subject, grade=grade)
+    return {
+        "total_topics": len(topics),
+        "topics": topics
+    }
+
 @router.get("/bank/search", response_model=List[Question])
 async def search_bank_questions(
     query: str = Query(..., min_length=1, description="Поисковый запрос (тема или ключевые слова)"),

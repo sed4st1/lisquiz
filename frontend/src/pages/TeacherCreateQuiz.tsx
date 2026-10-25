@@ -15,6 +15,8 @@ import {
   Play,
   Trash2,
   Sparkles,
+  Search,
+  Database,
 } from 'lucide-react';
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
@@ -40,6 +42,14 @@ export interface ParagraphItem {
   skill_id?: string;
   topic?: string;
   keywords?: string[];
+}
+
+export interface BankTopicItem {
+  subject: string;
+  grade: number;
+  topic: string;
+  display_name: string;
+  count: number;
 }
 
 const FALLBACK_TEXTBOOKS: TextbookItem[] = [
@@ -115,6 +125,9 @@ export default function TeacherCreateQuiz({
   const [inspectingTextbook, setInspectingTextbook] = useState<any | null>(null);
   const [textbookModalStep, setTextbookModalStep] = useState<'books' | 'paragraphs'>('books');
   const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | 'textbook' | 'class' | null>(null);
+  const [bankTopics, setBankTopics] = useState<BankTopicItem[]>([]);
+  const [topicSearchQuery, setTopicSearchQuery] = useState<string>('');
+  const [customTopicInput, setCustomTopicInput] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -128,6 +141,15 @@ export default function TeacherCreateQuiz({
       .then((d) => {
         if (d && d.textbooks && d.textbooks.length > 0) {
           setTextbooks(d.textbooks);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/quiz/bank/topics')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.topics && d.topics.length > 0) {
+          setBankTopics(d.topics);
         }
       })
       .catch(() => {});
@@ -149,6 +171,22 @@ export default function TeacherCreateQuiz({
       })
       .catch(() => {});
   }, [initialClassId, initialClassName]);
+
+  const filteredBankTopics = React.useMemo(() => {
+    let list = bankTopics;
+    if (subject) {
+      list = list.filter((t) => t.subject.toLowerCase() === subject.toLowerCase());
+    }
+    if (topicSearchQuery.trim()) {
+      const q = topicSearchQuery.toLowerCase();
+      list = list.filter((t) =>
+        t.display_name.toLowerCase().includes(q) ||
+        t.topic.toLowerCase().includes(q) ||
+        t.subject.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [bankTopics, subject, topicSearchQuery]);
 
   const handleSelectTextbookForInspection = async (tb: TextbookItem) => {
     haptics.selection();
@@ -614,6 +652,57 @@ export default function TeacherCreateQuiz({
             </motion.div>
           </div>
 
+          {/* Verified Question Bank Banner (Anti-AI Bento Card) */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 14px',
+              borderRadius: 12,
+              backgroundColor: 'rgba(255, 122, 0, 0.08)',
+              border: '1px solid rgba(255, 122, 0, 0.25)',
+              marginBottom: 12,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(255, 122, 0, 0.18)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#FF7A00',
+                }}
+              >
+                <Database size={18} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF' }}>
+                  Банк Lisquiz: 6 313 проверенных задач
+                </span>
+                <span style={{ fontSize: 11, color: '#9CA3AF' }}>
+                  0 мс генерация • 0 галлюцинаций • Базовый, средний и босс-вопросы
+                </span>
+              </div>
+            </div>
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: '#34D399',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                padding: '3px 8px',
+                borderRadius: 999,
+              }}
+            >
+              10 предметов
+            </div>
+          </div>
+
           {/* Action Buttons */}
           <div style={styles.submitSection}>
             <div style={styles.dualSubmitRow}>
@@ -957,28 +1046,169 @@ export default function TeacherCreateQuiz({
                     </button>
                   ))}
 
-                {/* Modal: Topic */}
-                {activeModal === 'topic' &&
-                  (TOPIC_PRESETS[subject] || ['Общий повтор', 'Контрольная работа']).map((item) => (
-                    <button
-                      key={item}
-                      onClick={() => {
-                        haptics.selection();
-                        setTopic(item);
-                        setActiveModal(null);
-                      }}
-                      style={{
-                        ...styles.modalOptionBtn,
-                        backgroundColor: topic === item ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                        borderColor: topic === item ? '#F59E0B' : 'rgba(255, 255, 255, 0.1)',
-                      }}
-                    >
-                      <span style={{ color: topic === item ? '#FBBF24' : '#FFFFFF', fontWeight: 700 }}>
-                        {item}
+                {/* Modal: Topic with Bank Search & Presets */}
+                {activeModal === 'topic' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Live search input */}
+                    <div style={{ position: 'relative', width: '100%' }}>
+                      <Search size={15} color="#9CA3AF" style={{ position: 'absolute', left: 12, top: 11 }} />
+                      <input
+                        type="text"
+                        value={topicSearchQuery}
+                        onChange={(e) => setTopicSearchQuery(e.target.value)}
+                        placeholder="Поиск по 6 313 задачам и темам..."
+                        style={{
+                          width: '100%',
+                          padding: '8px 34px 8px 34px',
+                          borderRadius: 10,
+                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          color: '#FFFFFF',
+                          fontSize: 13,
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      {topicSearchQuery && (
+                        <button
+                          onClick={() => setTopicSearchQuery('')}
+                          style={{
+                            position: 'absolute',
+                            right: 8,
+                            top: 8,
+                            background: 'none',
+                            border: 'none',
+                            color: '#9CA3AF',
+                            cursor: 'pointer',
+                            padding: 2,
+                          }}
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Custom Topic Input */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        type="text"
+                        value={customTopicInput}
+                        onChange={(e) => setCustomTopicInput(e.target.value)}
+                        placeholder="Или введите свою тему..."
+                        style={{
+                          flex: 1,
+                          padding: '7px 10px',
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          color: '#FFFFFF',
+                          fontSize: 12,
+                          outline: 'none',
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && customTopicInput.trim()) {
+                            setTopic(customTopicInput.trim());
+                            setActiveModal(null);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customTopicInput.trim()) {
+                            setTopic(customTopicInput.trim());
+                            setActiveModal(null);
+                          }
+                        }}
+                        disabled={!customTopicInput.trim()}
+                        style={{
+                          padding: '7px 12px',
+                          borderRadius: 8,
+                          backgroundColor: customTopicInput.trim() ? '#FF7A00' : 'rgba(255, 255, 255, 0.1)',
+                          border: 'none',
+                          color: '#FFFFFF',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: customTopicInput.trim() ? 'pointer' : 'default',
+                        }}
+                      >
+                        ОК
+                      </button>
+                    </div>
+
+                    {/* Filtered Topics from Question Bank */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 240, overflowY: 'auto' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Темы из банка заданий ({filteredBankTopics.length})
                       </span>
-                      {topic === item && <Check size={18} color="#FBBF24" />}
-                    </button>
-                  ))}
+                      {filteredBankTopics.length > 0 ? (
+                        filteredBankTopics.map((bt, idx) => {
+                          const isSel = topic.toLowerCase() === bt.display_name.toLowerCase() || topic.toLowerCase() === bt.topic.toLowerCase();
+                          return (
+                            <button
+                              key={`${bt.topic}_${bt.grade}_${idx}`}
+                              onClick={() => {
+                                haptics.selection();
+                                setTopic(bt.display_name || bt.topic);
+                                setGrade(bt.grade);
+                                setActiveModal(null);
+                              }}
+                              style={{
+                                ...styles.modalOptionBtn,
+                                backgroundColor: isSel ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                                borderColor: isSel ? '#F59E0B' : 'rgba(255, 255, 255, 0.08)',
+                              }}
+                            >
+                              <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                  <span style={{ color: isSel ? '#FBBF24' : '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
+                                    {bt.display_name || bt.topic}
+                                  </span>
+                                  <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FBBF24', fontWeight: 800 }}>
+                                    {bt.count} зад.
+                                  </span>
+                                </div>
+                                <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                  {bt.subject} • {bt.grade} класс
+                                </span>
+                              </div>
+                              {isSel && <Check size={18} color="#FBBF24" />}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <div style={{ padding: '8px', textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
+                          {topicSearchQuery ? 'Темы по запросу не найдены' : 'Темы не найдены'}
+                        </div>
+                      )}
+
+                      {/* Quick FRP Presets */}
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 6 }}>
+                        Базовые темы ФРП
+                      </span>
+                      {(TOPIC_PRESETS[subject] || ['Общий повтор', 'Итоговая контрольная']).map((item) => (
+                        <button
+                          key={item}
+                          onClick={() => {
+                            haptics.selection();
+                            setTopic(item);
+                            setActiveModal(null);
+                          }}
+                          style={{
+                            ...styles.modalOptionBtn,
+                            backgroundColor: topic === item ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                            borderColor: topic === item ? '#F59E0B' : 'rgba(255, 255, 255, 0.08)',
+                          }}
+                        >
+                          <span style={{ color: topic === item ? '#FBBF24' : '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
+                            {item}
+                          </span>
+                          {topic === item && <Check size={18} color="#FBBF24" />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Modal: Count */}
                 {activeModal === 'count' &&

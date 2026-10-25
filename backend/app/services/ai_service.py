@@ -157,9 +157,22 @@ class AIService:
                 source = "bank"
 
         if len(questions) >= 3:
+            questions[0].tier = 1
+            questions[0].time_limit_sec = 15
+            questions[0].is_boss = False
+            for q_mid in questions[1:-1]:
+                q_mid.tier = 2
+                q_mid.time_limit_sec = 25
+                q_mid.is_boss = False
             questions[-1].tier = 3
             questions[-1].is_boss = True
-            questions[-1].time_limit_sec = max(35, questions[-1].time_limit_sec)
+            questions[-1].time_limit_sec = 40
+        elif len(questions) == 2:
+            questions[0].tier = 1
+            questions[0].time_limit_sec = 15
+            questions[-1].tier = 3
+            questions[-1].is_boss = True
+            questions[-1].time_limit_sec = 40
 
         # 3. Генерация 4 античит-вариантов (перемешивание порядка вопросов + случайные кнопки/фигуры)
         num_variants = getattr(req, "num_variants", 4) or 4

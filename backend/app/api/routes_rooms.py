@@ -121,6 +121,7 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
             if cnt >= 3 and len(tb_questions) >= cnt:
                 tb_questions[-1].tier = 3
                 tb_questions[-1].is_boss = True
+                tb_questions[-1].time_limit_sec = 40
 
             raw_book_title = tb_res.get("textbook_title") or req.subject or "Учебник"
             clean_book_title = re.sub(r'\s*\((?:ФГОС(?:/ФРП)?|ФРП)\)', '', raw_book_title).strip()
@@ -158,6 +159,7 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
             if target_quiz and target_quiz.questions and len(target_quiz.questions) >= 3:
                 target_quiz.questions[-1].tier = 3
                 target_quiz.questions[-1].is_boss = True
+                target_quiz.questions[-1].time_limit_sec = 40
         except Exception:
             # Fallback на банк заданий
             bank_q = bank_service.get_questions_by_topic(subject=subj, grade=grd, topic=top, count=cnt)

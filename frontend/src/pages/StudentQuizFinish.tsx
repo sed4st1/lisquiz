@@ -13,6 +13,7 @@ import {
 import { TactileButton } from '../components/TactileButton';
 import { haptics } from '../services/haptics';
 import { socketService } from '../services/socketService';
+import StudentRedemptionModal from '../components/StudentRedemptionModal';
 
 export interface StudentQuizFinishProps {
   playerId?: string;
@@ -56,17 +57,23 @@ export default function StudentQuizFinish({
   totalQuestions = 3,
   onGoToLeaderboard,
 }: StudentQuizFinishProps) {
-  const [autoExitSeconds, setAutoExitSeconds] = React.useState(10);
+  const [autoExitSeconds, setAutoExitSeconds] = React.useState(12);
+  const [currentScore, setCurrentScore] = React.useState(myScore);
+  const [isRedemptionOpen, setIsRedemptionOpen] = React.useState(false);
+  const [redemptionDone, setRedemptionDone] = React.useState(false);
+  const [restoredPoints, setRestoredPoints] = React.useState(0);
 
   useEffect(() => {
     // Немедленно разрываем связь с завершенной комнатой, чтобы ученик не висел в сети
     socketService.disconnect();
 
+    if (isRedemptionOpen) return; // Пауза таймера при открытой работе над ошибками
+
     const exitTimer = setInterval(() => {
       setAutoExitSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(exitTimer);
-          onGoToLeaderboard(myScore, myRankProp);
+          onGoToLeaderboard(currentScore, myRankProp);
           return 0;
         }
         return prev - 1;
@@ -74,7 +81,7 @@ export default function StudentQuizFinish({
     }, 1000);
 
     return () => clearInterval(exitTimer);
-  }, [myScore, myRankProp, onGoToLeaderboard]);
+  }, [currentScore, myRankProp, onGoToLeaderboard, isRedemptionOpen]);
 
   useEffect(() => {
     haptics.notification('success');
@@ -267,7 +274,7 @@ export default function StudentQuizFinish({
           </div>
           <div style={styles.scorePill}>
             <Trophy size={14} color="#FBBF24" />
-            <span>{myScore} б</span>
+            <span>{currentScore} б</span>
           </div>
         </div>
 
@@ -305,6 +312,75 @@ export default function StudentQuizFinish({
         </div>
       </motion.div>
 
+      {/* Redemption: Работа над ошибками (+60% баллов) */}
+      {!redemptionDone ? (
+        <motion.div
+          initial={{ scale: 0.96, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.25 }}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            padding: '14px 16px',
+            borderRadius: 14,
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+            border: '1px solid rgba(16, 185, 129, 0.35)',
+            gap: 10,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sparkles size={18} color="#34D399" />
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF' }}>
+                Работа над ошибками
+              </span>
+            </div>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#34D399', backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: 999 }}>
+              +60% возврат баллов
+            </span>
+          </div>
+          <p style={{ margin: 0, fontSize: 12, color: '#CBD5E1', lineHeight: '1.4' }}>
+            Решите 1 задачу с подсказкой, закрепите правило и верните до 60% потерянных очков в рейтинг класса!
+          </p>
+          <TactileButton
+            theme="green"
+            size="md"
+            fullWidth
+            onClick={() => {
+              haptics.impact('medium');
+              setIsRedemptionOpen(true);
+            }}
+            iconBefore={<Sparkles size={16} />}
+          >
+            Исправить ошибку (+60% баллов)
+          </TactileButton>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '12px 14px',
+            borderRadius: 14,
+            backgroundColor: 'rgba(16, 185, 129, 0.22)',
+            border: '1px solid #10B981',
+          }}
+        >
+          <CheckCircle2 size={20} color="#34D399" />
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF' }}>
+              Ошибка исправлена!
+            </span>
+            <span style={{ fontSize: 11, color: '#34D399', fontWeight: 600 }}>
+              +{restoredPoints} очков успешно добавлены к вашему результату
+            </span>
+          </div>
+        </motion.div>
+      )}
+
       {/* Exit Button: Directly to class leaderboard */}
       <motion.div
         initial={{ y: 12, opacity: 0 }}
@@ -318,7 +394,7 @@ export default function StudentQuizFinish({
           fullWidth
           onClick={() => {
             haptics.impact('medium');
-            onGoToLeaderboard(myScore, myRank);
+            onGoToLeaderboard(currentScore, myRank);
           }}
           iconAfter={<ArrowRight size={18} />}
         >
@@ -328,6 +404,21 @@ export default function StudentQuizFinish({
           {autoExitSeconds > 0 ? `Автоматический переход в класс через ${autoExitSeconds}с` : 'Завершение...'}
         </span>
       </motion.div>
+
+      {/* Student Redemption Modal */}
+      <StudentRedemptionModal
+        isOpen={isRedemptionOpen}
+        onClose={() => setIsRedemptionOpen(false)}
+        studentId={playerId || 'std_student'}
+        basePoints={750}
+        onPointsRestored={(pts) => {
+          setRestoredPoints(pts);
+          setCurrentScore((prev) => prev + pts);
+          setRedemptionDone(true);
+          setIsRedemptionOpen(false);
+          haptics.notification('success');
+        }}
+      />
     </div>
   );
 }
