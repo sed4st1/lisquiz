@@ -79,3 +79,55 @@ async def test_sympy_cas_synthesis_fallback():
     for q in qs:
         assert len(q.options) == 4
         assert any(opt.is_correct for opt in q.options)
+
+
+@pytest.mark.asyncio
+async def test_curriculum_catalog_edsoo_grade_5():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/quiz/curriculum/topics?subject=Математика&grade=5")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["source"] == "edsoo.ru (ФРП Минпросвещения РФ)"
+        assert data["total"] >= 5
+        
+        topics = data["topics"]
+        topic_titles = [t["topic"] for t in topics]
+        assert any("Обыкновенные дроби" in t for t in topic_titles)
+        
+        # Verify schema
+        first = topics[0]
+        assert "id" in first
+        assert "subject" in first
+        assert "grade" in first
+        assert "section" in first
+        assert "description" in first
+        assert len(first["description"]) > 10
+
+
+@pytest.mark.asyncio
+async def test_curriculum_catalog_search_query():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        res = await client.get("/api/quiz/curriculum/topics?subject=Математика&query=дроб")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["total"] >= 2
+        for t in data["topics"]:
+            content = (t["topic"] + t["section"] + t["description"]).lower()
+            assert "дроб" in content
+
+
+@pytest.mark.asyncio
+async def test_curriculum_service_direct_lookup():
+    from backend.app.services.curriculum_catalog import curriculum_service
+    # Direct lookup by grade & subject
+    topics = curriculum_service.get_topics("Физика", 7)
+    assert len(topics) >= 5
+    titles = [t["topic"] for t in topics]
+    assert any("Архимед" in t for t in titles)
+    
+    # Lookup by ID
+    item = curriculum_service.get_topic_by_id(topics[0]["id"])
+    assert item is not None
+    assert item["subject"] == "Физика"

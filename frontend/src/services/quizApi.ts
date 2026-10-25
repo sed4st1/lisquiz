@@ -1,7 +1,35 @@
 import { authService } from './authService';
 import { SavedQuiz } from './quizStorage';
 
+export interface CurriculumTopicItem {
+  id: string;
+  subject: string;
+  grade: number;
+  section: string;
+  topic: string;
+  description: string;
+  keywords: string[];
+  has_cas?: boolean;
+}
+
 export const quizApi = {
+  async getCurriculumTopics(params?: { subject?: string; grade?: number; query?: string }): Promise<CurriculumTopicItem[]> {
+    try {
+      const queryParts: string[] = [];
+      if (params?.subject) queryParts.push(`subject=${encodeURIComponent(params.subject)}`);
+      if (params?.grade) queryParts.push(`grade=${params.grade}`);
+      if (params?.query) queryParts.push(`query=${encodeURIComponent(params.query)}`);
+      const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+      const res = await fetch(`/api/quiz/curriculum/topics${qs}`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.topics || [];
+      }
+    } catch (e) {
+      console.warn('Failed to fetch curriculum topics:', e);
+    }
+    return [];
+  },
   async generateQuiz(payload: {
     subject: string;
     grade: number;
