@@ -1,4 +1,5 @@
 import sqlite3
+import uuid
 import random
 import logging
 from pathlib import Path
@@ -209,56 +210,97 @@ class BankService:
             search_term = canonical_db_topic if canonical_db_topic else clean_topic
             fts_query = f"{search_term}*" if search_term else "*"
             
+            exclude_clause = " AND q.meta_source != 'ru_mmlu'" if grade <= 9 else ""
             rows = []
             try:
-                cursor.execute("""
+                cursor.execute(f"""
                     SELECT q.* FROM questions q
                     JOIN questions_fts f ON q.id = f.question_id
-                    WHERE questions_fts MATCH ? AND q.subject = ? AND q.grade = ?
+                    WHERE questions_fts MATCH ? AND q.subject = ? AND q.grade = ? {exclude_clause}
                     LIMIT ?
                 """, (fts_query, subject, grade, count * 3))
-                rows = cursor.fetchall()
+                rows = [dict(r) for r in cursor.fetchall()]
             except Exception:
                 rows = []
 
-            # Шаг 2: Если мало, ищем по LIKE или только по предмету и классу
+            # Шаг 2: Если мало, ищем по LIKE
             if len(rows) < count:
-                cursor.execute("""
+                exclude_clause2 = " AND meta_source != 'ru_mmlu'" if grade <= 9 else ""
+                cursor.execute(f"""
                     SELECT * FROM questions
-                    WHERE subject = ? AND grade = ? AND (topic LIKE ? OR topic LIKE ? OR question_text LIKE ?)
+                    WHERE subject = ? AND grade = ? AND (topic LIKE ? OR topic LIKE ? OR question_text LIKE ?) {exclude_clause2}
                     LIMIT ?
                 """, (subject, grade, f"%{clean_topic}%", f"%{search_term}%", f"%{clean_topic}%", count * 3))
-                like_rows = cursor.fetchall()
+                like_rows = [dict(r) for r in cursor.fetchall()]
                 seen = {r["id"] for r in rows}
                 for lr in like_rows:
                     if lr["id"] not in seen:
                         rows.append(lr)
                         seen.add(lr["id"])
 
-            # Шаг 3: Если все еще недостаточно, берем любые вопросы того же предмета и класса
+            # Шаг 3: Если предмет Математика или Физика — синтезируем недостающие задачи через SymPy CAS
+            if len(rows) < count and subject in ("Математика", "Физика"):
+                try:
+                    from .sympy_math_engine import sympy_math_engine
+                    needed = count - len(rows)
+                    for _ in range(needed):
+                        cas_data = sympy_math_engine.generate_by_topic_or_subject(subject, topic, grade)
+                        if cas_data:
+                            opts = cas_data["options"]
+                            keys = ["A", "B", "C", "D"]
+                            correct_key = "A"
+                            for ki, opt in enumerate(opts):
+                                if opt.get("is_correct"):
+                                    correct_key = keys[ki]
+                                    break
+                            cas_row = {
+                                "id": abs(hash(cas_data["stem"])) % 10000000,
+                                "canonical_id": cas_data.get("canonical_id", f"cas_{uuid.uuid4().hex[:8]}"),
+                                "subject": subject,
+                                "grade": grade,
+                                "topic": topic,
+                                "section": "ФГОС РФ",
+                                "kes_code": cas_data.get("skill_id", ""),
+                                "question_text": cas_data["stem"],
+                                "option_a": opts[0]["text"],
+                                "option_b": opts[1]["text"],
+                                "option_c": opts[2]["text"],
+                                "option_d": opts[3]["text"],
+                                "correct_key": correct_key,
+                                "explanation": cas_data.get("explanation", ""),
+                                "difficulty": "medium",
+                                "meta_source": "sympy_cas"
+                            }
+                            rows.append(cas_row)
+                except Exception as ce:
+                    logger.warning("Ошибка генерации SymPy в bank_service: %s", ce)
+
+            # Шаг 4: Если все еще недостаточно, берем любые проверенные школьные вопросы того же предмета и класса (без ru_mmlu!)
             if len(rows) < count:
-                cursor.execute("""
+                exclude_clause3 = " AND meta_source != 'ru_mmlu'" if grade <= 9 else ""
+                cursor.execute(f"""
                     SELECT * FROM questions
-                    WHERE subject = ? AND grade = ?
+                    WHERE subject = ? AND grade = ? {exclude_clause3}
                     ORDER BY RANDOM()
                     LIMIT ?
                 """, (subject, grade, count * 3))
-                subj_grade_rows = cursor.fetchall()
+                subj_grade_rows = [dict(r) for r in cursor.fetchall()]
                 seen = {r["id"] for r in rows}
                 for sr in subj_grade_rows:
                     if sr["id"] not in seen:
                         rows.append(sr)
                         seen.add(sr["id"])
 
-            # Шаг 4: Если для данного класса вопросов нет, берем из того же предмета смежных классов
+            # Шаг 5: Если для данного класса вопросов нет, берем из смежных школьных классов (без ru_mmlu!)
             if len(rows) < count:
-                cursor.execute("""
+                exclude_clause4 = " AND meta_source != 'ru_mmlu'" if grade <= 9 else ""
+                cursor.execute(f"""
                     SELECT * FROM questions
-                    WHERE subject = ?
+                    WHERE subject = ? AND grade IN (?, ?) {exclude_clause4}
                     ORDER BY RANDOM()
                     LIMIT ?
-                """, (subject, count * 3))
-                subj_rows = cursor.fetchall()
+                """, (subject, max(1, grade - 1), grade + 1, count * 3))
+                subj_rows = [dict(r) for r in cursor.fetchall()]
                 seen = {r["id"] for r in rows}
                 for sr in subj_rows:
                     if sr["id"] not in seen:
@@ -356,14 +398,24 @@ class BankService:
         if grade:
             conditions.append("grade = ?")
             params.append(grade)
+            if grade <= 9:
+                conditions.append("meta_source != 'ru_mmlu'")
+        else:
+            # Для школьного диапазона по умолчанию отсекаем университетский датасет MMLU
+            conditions.append("meta_source != 'ru_mmlu'")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         query = f"""
-            SELECT subject, grade, topic, COUNT(*) as count
+            SELECT subject, grade, topic, COUNT(*) as count,
+                   CASE 
+                       WHEN meta_source = 'frp_curriculum' THEN 0 
+                       WHEN meta_source = 'sdamgia_gigachat' THEN 1 
+                       ELSE 2 
+                   END as priority
             FROM questions
             {where}
             GROUP BY subject, grade, topic
-            ORDER BY subject, grade, count DESC
+            ORDER BY subject, grade, priority ASC, count DESC
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
