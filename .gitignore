@@ -49,3 +49,11 @@ docs/guide/
 *.code-workspace
 .agents/
 .mcp.json
+
+# Local FRP PDFs & downloads
+downloads/
+*.pdf
+angl_*.txt
+edsoo_pdf_links.json
+generate_curriculum_catalog.py
+get_pdf_map.py
