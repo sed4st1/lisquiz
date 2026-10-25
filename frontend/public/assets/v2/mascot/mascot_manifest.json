@@ -1,0 +1,107 @@
+{
+  "name": "SprintFoxV2",
+  "canvas": { "width": 560, "height": 560 },
+  "layers": [
+    {
+      "id": "tail",
+      "src": "/assets/v2/mascot/rig/tail.png",
+      "zIndex": 1,
+      "baseX": 60,
+      "baseY": 180,
+      "origin": "75% 75%",
+      "defaultRotation": 25,
+      "anim": { "type": "tail_wag", "range": [-8, 8], "periodSec": 2.6 }
+    },
+    {
+      "id": "torso",
+      "src": "/assets/v2/mascot/rig/torso.png",
+      "zIndex": 2,
+      "baseX": 130,
+      "baseY": 210,
+      "origin": "50% 90%",
+      "anim": { "type": "breathing", "scaleY": [1.0, 1.02, 1.0], "periodSec": 3.0 }
+    },
+    {
+      "id": "scarf_loop",
+      "src": "/assets/v2/mascot/rig/scarf_loop.png",
+      "zIndex": 3,
+      "baseX": 205,
+      "baseY": 220,
+      "width": 150
+    },
+    {
+      "id": "ear_left",
+      "src": "/assets/v2/mascot/rig/ear_left.png",
+      "zIndex": 4,
+      "baseX": 160,
+      "baseY": 0,
+      "origin": "70% 90%",
+      "anim": { "type": "ear_twitch", "range": [0, -6, 0], "periodSec": 4.5 }
+    },
+    {
+      "id": "ear_right",
+      "src": "/assets/v2/mascot/rig/ear_right.png",
+      "zIndex": 4,
+      "baseX": 290,
+      "baseY": 0,
+      "origin": "30% 90%",
+      "anim": { "type": "ear_twitch", "range": [0, 6, 0], "periodSec": 5.0 }
+    },
+    {
+      "id": "head",
+      "src": "/assets/v2/mascot/rig/head.png",
+      "zIndex": 5,
+      "baseX": 145,
+      "baseY": 65,
+      "origin": "50% 90%",
+      "anim": { "type": "head_tilt", "range": [-3, 3], "periodSec": 3.2 }
+    },
+    {
+      "id": "eyes",
+      "zIndex": 6,
+      "states": {
+        "open": {
+          "left": { "src": "/assets/v2/mascot/expressions/eye_left_open.png", "x": 210, "y": 153 },
+          "right": { "src": "/assets/v2/mascot/expressions/eye_right_open.png", "x": 290, "y": 153 }
+        },
+        "blink": {
+          "left": { "src": "/assets/v2/mascot/expressions/eye_left_blink.png", "x": 210, "y": 175 },
+          "right": { "src": "/assets/v2/mascot/expressions/eye_right_blink.png", "x": 290, "y": 175 }
+        }
+      }
+    },
+    {
+      "id": "eyebrows",
+      "zIndex": 6,
+      "left": { "src": "/assets/v2/mascot/expressions/eyebrow_left_open.png", "x": 223, "y": 131 },
+      "right": { "src": "/assets/v2/mascot/expressions/eyebrow_right_open.png", "x": 305, "y": 131 }
+    },
+    {
+      "id": "mouth",
+      "zIndex": 6,
+      "states": {
+        "open": { "src": "/assets/v2/mascot/expressions/mouth_open.png", "x": 250, "y": 223 },
+        "smile": { "src": "/assets/v2/mascot/expressions/mouth_smile.png", "x": 255, "y": 240 }
+      }
+    },
+    {
+      "id": "scarf_tails",
+      "src": "/assets/v2/mascot/rig/scarf_tails.png",
+      "zIndex": 7,
+      "baseX": 290,
+      "baseY": 245,
+      "width": 125,
+      "origin": "25% 15%",
+      "anim": { "type": "cloth_flutter", "range": [-4, 4], "periodSec": 2.0 }
+    },
+    {
+      "id": "arm_wave",
+      "src": "/assets/v2/mascot/rig/arm_wave.png",
+      "zIndex": 8,
+      "baseX": 355,
+      "baseY": 265,
+      "origin": "25% 20%",
+      "anim": { "type": "wave", "range": [-12, 12], "periodSec": 1.2 }
+    }
+  ]
+}

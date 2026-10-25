@@ -5,6 +5,7 @@ import { Spinner } from '@maxhub/max-ui';
 import { colors, spacing, borderRadius, transitions, fonts, studentAvatars } from '../theme/tokens';
 import { hapticImpact } from '../services/maxBridge';
 import { TactileButton } from '../components/TactileButton';
+import MascotPuppet from '../components/MascotPuppet';
 
 export interface StudentJoinProps {
   initialPin?: string;
@@ -354,13 +355,9 @@ export default function StudentJoin({
       >
         {/* Mascot Greeting */}
         <div style={styles.mascotHeader}>
-          <motion.img
-            src="/assets/mascot/sprint_idle.png"
-            alt="Спринт"
-            style={styles.mascotImg}
-            animate={{ y: [0, -4, 0] }}
-            transition={{ repeat: Infinity, duration: 2.8, ease: 'easeInOut' }}
-          />
+          <div style={{ flexShrink: 0, filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.3))' }}>
+            <MascotPuppet size={90} />
+          </div>
           <div style={styles.welcomeBubble}>
             <h2 style={styles.welcomeBubbleTitle}>Привет! Заходи в игру</h2>
             <p style={styles.welcomeBubbleText}>

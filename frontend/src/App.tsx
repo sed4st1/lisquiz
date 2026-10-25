@@ -34,7 +34,7 @@ type SubScreenType =
 
 export default function App() {
   const [role, setRole] = useState<'teacher' | 'student'>('student');
-  const [tab, setTab] = useState<TabType>('grove');
+  const [tab, setTab] = useState<TabType>('home');
   const [subScreen, setSubScreen] = useState<SubScreenType>(null);
   const [isMobileDevOpen, setIsMobileDevOpen] = useState(false);
 
@@ -362,6 +362,8 @@ export default function App() {
                 setSubScreen('student_waiting');
               }}
               onGoToGrove={() => setTab('grove')}
+              onGoToLeaderboard={() => setTab('leaderboard')}
+              onSwitchToTeacher={() => handleRoleSwitch('teacher')}
             />
           );
         case 'grove':
@@ -446,7 +448,9 @@ export default function App() {
     return null;
   };
 
-  const activeBg = (tab === 'grove' && !subScreen)
+  const activeBg = (tab === 'home' && !subScreen)
+    ? "url('/assets/backgrounds/main_menu_clean.png')"
+    : (tab === 'grove' && !subScreen)
     ? "url('/assets/backgrounds/grove_bg_clean.png')"
     : "url('/assets/backgrounds/quiz_bg_clean.png')";
 
@@ -464,8 +468,9 @@ export default function App() {
           backgroundRepeat: 'no-repeat',
         }}
       >
-        {/* Mobile Top App Bar: Grove Stats + Role Switch */}
-        <header style={styles.topHeader}>
+        {/* Mobile Top App Bar: Grove Stats + Role Switch (hidden on home tab where StudentHome has its own header) */}
+        {tab !== 'home' && (
+          <header style={styles.topHeader}>
           <div style={styles.topStatsGroup}>
             <div style={styles.topStatPill} title="Стрик 5 дней">
               <Flame size={15} color="#FF7A00" />
@@ -505,6 +510,7 @@ export default function App() {
             </button>
           </div>
         </header>
+        )}
 
         {/* Scrollable Screen Body */}
         <main style={styles.mainContent}>
@@ -524,13 +530,14 @@ export default function App() {
 
         {/* ========================================================
             TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Icon only)
+            Hidden on home screen where the 3D tablets handle navigation
            ======================================================== */}
-        {!subScreen && (
+        {!subScreen && tab !== 'home' && (
           <div style={styles.dockWrapper}>
             <nav style={styles.bottomNavDock}>
               {/* Tab 1: Домой */}
               {(() => {
-                const isActive = tab === 'home' && !subScreen;
+                const isActive = (tab as string) === 'home';
                 return (
                   <button
                     onClick={() => handleTabChange('home')}
@@ -540,12 +547,11 @@ export default function App() {
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
                         border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                       }}
                     >
-                      <Home size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                      <Home size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
                   </button>
                 );
@@ -563,12 +569,11 @@ export default function App() {
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
                         border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                       }}
                     >
-                      <Sprout size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                      <Sprout size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
                   </button>
                 );
@@ -586,35 +591,33 @@ export default function App() {
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
                         border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                       }}
                     >
-                      <Crown size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                      <Crown size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
                   </button>
                 );
               })()}
 
-              {/* Tab 4: Статистика / Отчёт */}
-              {(() => {
+              {/* Tab 4: Статистика / Отчёт (Teacher only) */}
+              {role === 'teacher' && (() => {
                 const isActive = tab === 'stats' && !subScreen;
                 return (
                   <button
                     onClick={() => handleTabChange('stats')}
                     style={styles.navBtn}
-                    title={role === 'teacher' ? 'Отчёт' : 'Статистика'}
+                    title="Отчёт"
                   >
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
                         border: isActive ? '2px solid #10B981' : '2px solid transparent',
-                        boxShadow: isActive ? '0 0 16px rgba(16, 185, 129, 0.45)' : 'none',
                       }}
                     >
-                      <BarChart2 size={22} color={isActive ? '#10B981' : '#7E8B9B'} />
+                      <BarChart2 size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
                   </button>
                 );
@@ -971,7 +974,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   screenWrapper: {
     width: '100%',
-    minHeight: '100%',
+    height: '100%',
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: 'transparent',
@@ -985,19 +989,22 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: 'transparent',
     zIndex: 25,
     pointerEvents: 'none',
+    display: 'flex',
+    justifyContent: 'center',
   },
   bottomNavDock: {
     display: 'flex',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 58,
-    backgroundColor: 'rgba(12, 20, 37, 0.94)',
-    backdropFilter: 'blur(20px)',
-    WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid rgba(255, 255, 255, 0.08)',
-    borderRadius: 29,
+    height: 54,
+    width: '100%',
+    maxWidth: 240,
+    backgroundColor: '#FFFDF2',
+    border: '2px solid #F3EEDB',
+    borderBottom: '4px solid #E5DBC7',
+    borderRadius: 9999,
     padding: '0 8px',
-    boxShadow: '0 12px 32px rgba(0, 0, 0, 0.6)',
+    boxShadow: '0 10px 24px rgba(45, 30, 10, 0.16)',
     pointerEvents: 'auto',
   },
   navBtn: {
@@ -1012,8 +1019,8 @@ const styles: Record<string, React.CSSProperties> = {
     transition: 'all 0.18s ease',
   },
   navIconCircle: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',

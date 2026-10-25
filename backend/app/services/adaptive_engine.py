@@ -55,6 +55,9 @@ class AdaptiveEngine:
     @staticmethod
     def sigmoid(x: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         """Логистическая функция с защитой от переполнения float."""
+        if isinstance(x, (int, float)):
+            x_clipped = -15.0 if x < -15.0 else (15.0 if x > 15.0 else float(x))
+            return 1.0 / (1.0 + math.exp(-x_clipped))
         x_clipped = np.clip(x, -15.0, 15.0)
         return 1.0 / (1.0 + np.exp(-x_clipped))
 
@@ -65,7 +68,7 @@ class AdaptiveEngine:
         """
         sig = float(self.sigmoid(theta - b))
         p = self.c_guessing + (1.0 - self.c_guessing) * sig
-        return float(np.clip(p, 0.001, 0.999))
+        return 0.001 if p < 0.001 else (0.999 if p > 0.999 else p)
 
     def batch_predict_p(self, thetas: np.ndarray, bs: np.ndarray) -> np.ndarray:
         """Векторизованный расчёт вероятностей для матриц учеников и заданий."""
@@ -152,10 +155,12 @@ class AdaptiveEngine:
         lr_theta = self.default_lr_theta / (1.0 + 0.05 * n_answered)
 
         # Обновление theta (Rasch step)
-        new_theta = float(np.clip(theta + lr_theta * delta, -3.5, 3.5))
+        raw_theta = theta + lr_theta * delta
+        new_theta = -3.5 if raw_theta < -3.5 else (3.5 if raw_theta > 3.5 else float(raw_theta))
 
         # Обновление сложности b задания (медленнее, чем ученик)
-        new_b = float(np.clip(b - self.default_lr_b * delta, -3.5, 3.5))
+        raw_b = b - self.default_lr_b * delta
+        new_b = -3.5 if raw_b < -3.5 else (3.5 if raw_b > 3.5 else float(raw_b))
 
         return new_theta, new_b, p_pred
 
