@@ -195,6 +195,18 @@ export default function TeacherCreateQuiz({
       .catch(() => {});
   }, [initialClassId, initialClassName]);
 
+  // Re-fetch curriculum topics if modal opened and list is empty
+  useEffect(() => {
+    if (activeModal === 'topic' && curriculumTopics.length === 0) {
+      quizApi.getCurriculumTopics().then((list) => {
+        if (list && list.length > 0) {
+          setCurriculumTopics(list);
+        }
+      });
+    }
+  }, [activeModal, curriculumTopics.length]);
+
+
   const isSubjectMatch = (subjA?: string, subjB?: string) => {
     const a = (subjA || '').trim().toLowerCase();
     const b = (subjB || '').trim().toLowerCase();
@@ -215,6 +227,13 @@ export default function TeacherCreateQuiz({
     }
     if (topicSearchQuery.trim()) {
       const rawQ = topicSearchQuery.toLowerCase();
+      const direct = list.filter(t =>
+        `${t.subject} ${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase().includes(rawQ)
+      );
+      if (direct.length > 0) {
+        return direct;
+      }
+
       const cleanTokens = rawQ.replace(/[^\w\sа-яё]/gi, ' ').split(/\s+/).filter(Boolean);
       const stopWords = new Set([
         'для', 'по', 'в', 'во', 'на', 'о', 'об', 'обо', 'с', 'со', 'и', 'к', 'ко',
@@ -223,26 +242,35 @@ export default function TeacherCreateQuiz({
         'п', 'пп', 'номер', 'урок', 'урока', 'уроку', 'тема', 'теме', 'тему',
         'тест', 'квиз', 'задание', 'викторина'
       ]);
-      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t));
-      const targetTokens = meaningfulTokens.length > 0 ? meaningfulTokens : cleanTokens;
+      const subjTokens = new Set(subject ? subject.toLowerCase().split(/\s+/) : []);
+      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t) && !subjTokens.has(t));
 
-      const direct = list.filter(t => `${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase().includes(rawQ));
-      if (direct.length > 0) {
-        list = direct;
-      } else {
-        const allMatch = list.filter(t => {
-          const fullText = `${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
-          return targetTokens.every(token => fullText.includes(token));
-        });
-        if (allMatch.length > 0) {
-          list = allMatch;
-        } else {
-          list = list.filter(t => {
-            const fullText = `${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
-            return targetTokens.some(token => fullText.includes(token));
-          });
-        }
+      // Если в запросе были только стоп-слова, цифры класса или название выбранного предмета,
+      // сохраняем полный список тем предмета/класса
+      if (meaningfulTokens.length === 0) {
+        return list;
       }
+
+      const matchToken = (token: string, text: string) => {
+        if (text.includes(token)) return true;
+        if (token.length >= 4) {
+          const stem = token.slice(0, Math.max(4, token.length - 2));
+          return text.includes(stem);
+        }
+        return false;
+      };
+
+      const allMatch = list.filter(t => {
+        const fullText = `${t.subject} ${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
+        return meaningfulTokens.every(token => matchToken(token, fullText));
+      });
+      if (allMatch.length > 0) {
+        return allMatch;
+      }
+      return list.filter(t => {
+        const fullText = `${t.subject} ${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
+        return meaningfulTokens.some(token => matchToken(token, fullText));
+      });
     }
     return list;
   }, [curriculumTopics, subject, grade, topicSearchQuery]);
@@ -260,6 +288,13 @@ export default function TeacherCreateQuiz({
     }
     if (topicSearchQuery.trim()) {
       const rawQ = topicSearchQuery.toLowerCase();
+      const direct = list.filter(t =>
+        `${t.subject} ${t.display_name} ${t.topic}`.toLowerCase().includes(rawQ)
+      );
+      if (direct.length > 0) {
+        return direct;
+      }
+
       const cleanTokens = rawQ.replace(/[^\w\sа-яё]/gi, ' ').split(/\s+/).filter(Boolean);
       const stopWords = new Set([
         'для', 'по', 'в', 'во', 'на', 'о', 'об', 'обо', 'с', 'со', 'и', 'к', 'ко',
@@ -268,33 +303,43 @@ export default function TeacherCreateQuiz({
         'п', 'пп', 'номер', 'урок', 'урока', 'уроку', 'тема', 'теме', 'тему',
         'тест', 'квиз', 'задание', 'викторина'
       ]);
-      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t));
-      const targetTokens = meaningfulTokens.length > 0 ? meaningfulTokens : cleanTokens;
+      const subjTokens = new Set(subject ? subject.toLowerCase().split(/\s+/) : []);
+      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t) && !subjTokens.has(t));
 
-      const direct = list.filter(t =>
-        t.display_name.toLowerCase().includes(rawQ) ||
-        t.topic.toLowerCase().includes(rawQ) ||
-        t.subject.toLowerCase().includes(rawQ)
-      );
-      if (direct.length > 0) {
-        list = direct;
-      } else {
-        const allMatch = list.filter(t => {
-          const fullText = `${t.display_name} ${t.topic} ${t.subject}`.toLowerCase();
-          return targetTokens.every(token => fullText.includes(token));
-        });
-        if (allMatch.length > 0) {
-          list = allMatch;
-        } else {
-          list = list.filter(t => {
-            const fullText = `${t.display_name} ${t.topic} ${t.subject}`.toLowerCase();
-            return targetTokens.some(token => fullText.includes(token));
-          });
-        }
+      if (meaningfulTokens.length === 0) {
+        return list;
       }
+
+      const matchToken = (token: string, text: string) => {
+        if (text.includes(token)) return true;
+        if (token.length >= 4) {
+          const stem = token.slice(0, Math.max(4, token.length - 2));
+          return text.includes(stem);
+        }
+        return false;
+      };
+
+      const allMatch = list.filter(t => {
+        const fullText = `${t.subject} ${t.display_name} ${t.topic}`.toLowerCase();
+        return meaningfulTokens.every(token => matchToken(token, fullText));
+      });
+      if (allMatch.length > 0) {
+        return allMatch;
+      }
+      return list.filter(t => {
+        const fullText = `${t.subject} ${t.display_name} ${t.topic}`.toLowerCase();
+        return meaningfulTokens.some(token => matchToken(token, fullText));
+      });
     }
     return list;
   }, [bankTopics, subject, grade, topicSearchQuery]);
+
+  // Auto-switch to FRP tab if Bank tab is active but has 0 topics while FRP has topics
+  useEffect(() => {
+    if (activeModal === 'topic' && topicSourceTab === 'bank' && filteredBankTopics.length === 0 && filteredCurriculumTopics.length > 0) {
+      setTopicSourceTab('frp');
+    }
+  }, [activeModal, topicSourceTab, filteredBankTopics.length, filteredCurriculumTopics.length]);
 
   const handleSelectTextbookForInspection = async (tb: TextbookItem) => {
     haptics.selection();
@@ -1360,8 +1405,29 @@ export default function TeacherCreateQuiz({
                               );
                             })
                           ) : (
-                            <div style={{ padding: '12px', textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
-                              По запросу ничего не найдено в программе {grade} класса
+                            <div style={{ padding: '16px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                              <span style={{ color: '#9CA3AF', fontSize: 12 }}>
+                                {topicSearchQuery.trim()
+                                  ? `По запросу «${topicSearchQuery}» ничего не найдено в программе ${grade} класса`
+                                  : `В каталоге ФРП для ${subject} (${grade} класс) темы пока не загружены`}
+                              </span>
+                              {topicSearchQuery.trim() && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTopicSearchQuery('')}
+                                  style={{
+                                    padding: '5px 10px',
+                                    borderRadius: 6,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    color: '#FFFFFF',
+                                    fontSize: 11,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Сбросить поиск
+                                </button>
+                              )}
                             </div>
                           )}
                         </>
@@ -1407,8 +1473,35 @@ export default function TeacherCreateQuiz({
                               );
                             })
                           ) : (
-                            <div style={{ padding: '12px', textAlign: 'center', color: '#9CA3AF', fontSize: 12 }}>
-                              Темы в банке не найдены
+                            <div style={{ padding: '16px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                              <span style={{ color: '#9CA3AF', fontSize: 12 }}>
+                                В банке заданий пока нет тестов по {subject} ({grade} класс).
+                              </span>
+                              {filteredCurriculumTopics.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    haptics.selection();
+                                    setTopicSourceTab('frp');
+                                  }}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '7px 12px',
+                                    borderRadius: 8,
+                                    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                                    border: '1px solid #F59E0B',
+                                    color: '#FBBF24',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <GraduationCap size={14} />
+                                  <span>Показать темы ФРП edsoo.ru ({filteredCurriculumTopics.length})</span>
+                                </button>
+                              )}
                             </div>
                           )}
                         </>

@@ -7697,7 +7697,8 @@ class CurriculumService:
             direct_matches = [
                 t for t in results
                 if raw_q in t["topic"].lower()
-                or raw_q in t["section"].lower()
+                or raw_q in t.get("section", "").lower()
+                or raw_q in t.get("subject", "").lower()
                 or raw_q in t.get("description", "").lower()
                 or any(raw_q in kw.lower() for kw in t.get("keywords", []))
             ]
@@ -7715,14 +7716,32 @@ class CurriculumService:
                 'п', 'пп', 'номер', 'урок', 'урока', 'уроку', 'тема', 'теме', 'тему',
                 'тест', 'квиз', 'задание', 'викторина'
             }
-            meaningful_tokens = [t for t in tokens if t not in stop_words and not t.isdigit()]
-            target_tokens = meaningful_tokens if meaningful_tokens else [t for t in tokens if not t.isdigit()]
-            if not target_tokens:
-                target_tokens = tokens
+            subj_tokens = set(subject.lower().split()) if subject else set()
+            meaningful_tokens = [
+                t for t in tokens
+                if t not in stop_words
+                and not t.isdigit()
+                and t not in subj_tokens
+            ]
+
+            # Если запрос состоял только из названия выбранного предмета, класса или стоп-слов,
+            # возвращаем все темы этого предмета/класса, не сбрасывая в 0
+            if not meaningful_tokens:
+                return results
+
+            target_tokens = meaningful_tokens
+
+            def match_token(tok: str, haystack: str) -> bool:
+                if tok in haystack:
+                    return True
+                if len(tok) >= 4:
+                    stem = tok[:max(4, len(tok) - 2)]
+                    return stem in haystack
+                return False
 
             def score_topic(t: Dict[str, Any]) -> int:
-                haystack = f"{t['topic']} {t['section']} {t.get('description', '')} {' '.join(t.get('keywords', []))}".lower()
-                return sum(1 for tok in target_tokens if tok in haystack)
+                haystack = f"{t.get('subject', '')} {t['topic']} {t.get('section', '')} {t.get('description', '')} {' '.join(t.get('keywords', []))}".lower()
+                return sum(1 for tok in target_tokens if match_token(tok, haystack))
 
             scored = [(score_topic(t), t) for t in results]
             min_matches = 1 if len(target_tokens) <= 2 else max(1, len(target_tokens) - 1)
