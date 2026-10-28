@@ -382,6 +382,19 @@ export default function StudentHome({
         {/* Currency & Daily Streak Status Pills + Sound Toggle */}
         <div style={styles.topRightStats}>
           <SoundToggleButton variant="round" size={14} />
+          {onSwitchToTeacher && (
+            <motion.button
+              whileTap={{ scale: 0.94 }}
+              onClick={() => {
+                haptics.selection();
+                onSwitchToTeacher();
+              }}
+              style={styles.teacherSwitchChip}
+              title="Перейти в режим Учителя"
+            >
+              <span>🦉 Учитель</span>
+            </motion.button>
+          )}
           <motion.div
             whileTap={{ scale: 0.94 }}
             onClick={() => {
@@ -1086,6 +1099,22 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: 6,
     flexShrink: 0,
+  },
+  teacherSwitchChip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFDF2',
+    border: '1.5px solid #FDE68A',
+    borderBottom: '2.5px solid #F59E0B',
+    borderRadius: 9999,
+    padding: '4px 8px',
+    fontSize: 11,
+    fontWeight: 800,
+    color: '#D97706',
+    cursor: 'pointer',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.06)',
+    userSelect: 'none',
   },
   statPill: {
     display: 'flex',

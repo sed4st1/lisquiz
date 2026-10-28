@@ -398,7 +398,11 @@ button, input, select, a, [role="button"] {
   .mode-switcher-bar {
     max-width: 95%;
     margin: 6px auto;
-    padding: 4px 10px;
+    padding: 6px 10px;
+    border-radius: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
   }
 }
 

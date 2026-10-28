@@ -13,6 +13,7 @@ export default function TeacherHomeScreen({
   onCreateQuiz,
   onOpenClasses,
   onOpenQuizzes,
+  onSwitchRole,
 }: TeacherHomeScreenProps) {
   const [isJumping, setIsJumping] = useState(false);
 
@@ -36,6 +37,22 @@ export default function TeacherHomeScreen({
 
         {/* Ambient warm sunlight filter */}
         <div style={styles.sunbeamGlow} />
+
+        {/* Quick Switch to Student Mode Pill */}
+        {onSwitchRole && (
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={() => {
+              haptics.impact('light');
+              onSwitchRole();
+            }}
+            style={styles.switchRoleBtn}
+            title="Перейти в режим Ученика"
+          >
+            <span>🦊 Режим Ученика</span>
+          </motion.button>
+        )}
 
         {/* ========================================================
             2. TOP HANGING SIGN: "Кабинет учителя"
@@ -419,5 +436,25 @@ const styles: Record<string, React.CSSProperties> = {
     maxHeight: 'clamp(68px, 9.5vh, 92px)',
     height: 'auto',
     display: 'block',
+  },
+  switchRoleBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 35,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 12px',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 253, 242, 0.94)',
+    border: '2px solid #E5DBC7',
+    borderBottom: '3px solid #D5C7B0',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+    color: '#5C3B1E',
+    fontWeight: 800,
+    fontSize: 12,
+    cursor: 'pointer',
+    userSelect: 'none',
   },
 };

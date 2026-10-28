@@ -40,6 +40,7 @@ import { roomApi } from './services/roomApi';
 import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
 import SoundToggleButton from './components/SoundToggleButton';
+import { soundManager } from './services/soundManager';
 
 type TabType = 'home' | 'grove' | 'leaderboard' | 'stats';
 type SubScreenType =
@@ -65,6 +66,9 @@ export default function App() {
       const r = params.get('role');
       const s = params.get('screen') || params.get('subScreen');
       if (r === 'teacher' || s === 'teacher_classes' || s === 'teacher_quizzes' || s === 'teacher_game' || s === 'teacher_waiting' || s === 'teacher_report' || s === 'stats') return 'teacher';
+      if (r === 'student') return 'student';
+      const saved = sessionStorage.getItem('lisquiz_role');
+      if (saved === 'teacher' || saved === 'student') return saved;
     } catch {}
     return 'student';
   });
@@ -91,6 +95,10 @@ export default function App() {
       if (s === 'student_round_wait' || s === 'wait') return 'student_round_wait';
       if (s === 'student_quiz_finish' || s === 'finish') return 'student_quiz_finish';
       if (s === 'student_leaderboard' || s === 'leaderboard') return 'student_leaderboard';
+      const savedRole = sessionStorage.getItem('lisquiz_role');
+      if (!savedRole && !params.get('role')) {
+        return 'role_select';
+      }
     } catch {}
     return null;
   });
@@ -356,12 +364,18 @@ export default function App() {
 
   const handleRoleSwitch = (newRole: 'teacher' | 'student') => {
     haptics.impact('light');
+    try {
+      soundManager.playTap();
+    } catch {}
     setRole(newRole);
+    try {
+      sessionStorage.setItem('lisquiz_role', newRole);
+    } catch {}
     setSubScreen(null);
-    setTab(newRole === 'teacher' ? 'home' : 'grove');
+    setTab('home');
 
     const name = newRole === 'teacher' ? 'Марья Ивановна' : (studentName || 'Иван К');
-    const avatar = newRole === 'teacher' ? 'owl' : studentAvatar;
+    const avatar = newRole === 'teacher' ? 'owl' : (studentAvatar || 'fox_smart');
     authService.quickLogin(newRole, name, avatar)
       .then((res) => setCurrentUser(res.user))
       .catch((err) => console.warn('Role switch quickLogin error:', err));
@@ -871,12 +885,44 @@ export default function App() {
 
   return (
     <div className="desktop-shell-wrapper">
-      {/* Top Mode Header: User vs Developer mode switcher */}
+      {/* Top Mode Header: User vs Developer mode switcher & Role selector */}
       <div className="mode-switcher-bar">
         <div style={styles.modeBarBrand}>
           <span style={{ fontSize: 18 }}>🦊</span>
           <span style={styles.modeBarTitle}>Лисквиз</span>
           <span style={styles.modeBarVersion}>v2.2</span>
+        </div>
+
+        {/* Central Role Selector: Student vs Teacher */}
+        <div style={styles.roleHeaderSwitch}>
+          <button
+            onClick={() => handleRoleSwitch('student')}
+            style={{
+              ...styles.roleHeaderBtn,
+              backgroundColor: role === 'student' ? 'rgba(16, 185, 129, 0.24)' : 'transparent',
+              borderColor: role === 'student' ? '#10B981' : 'transparent',
+              color: role === 'student' ? '#34D399' : '#94A3B8',
+              fontWeight: role === 'student' ? 800 : 600,
+              boxShadow: role === 'student' ? '0 0 12px rgba(16, 185, 129, 0.35)' : 'none',
+            }}
+            title="Переключиться на версию Ученика"
+          >
+            <span>🦊 Версия Ученика</span>
+          </button>
+          <button
+            onClick={() => handleRoleSwitch('teacher')}
+            style={{
+              ...styles.roleHeaderBtn,
+              backgroundColor: role === 'teacher' ? 'rgba(255, 122, 0, 0.24)' : 'transparent',
+              borderColor: role === 'teacher' ? '#FF7A00' : 'transparent',
+              color: role === 'teacher' ? '#FFA726' : '#94A3B8',
+              fontWeight: role === 'teacher' ? 800 : 600,
+              boxShadow: role === 'teacher' ? '0 0 12px rgba(255, 122, 0, 0.35)' : 'none',
+            }}
+            title="Переключиться на версию Учителя"
+          >
+            <span>🦉 Версия Учителя</span>
+          </button>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -890,8 +936,9 @@ export default function App() {
                 color: appMode === 'user' ? '#FFFFFF' : '#94A3B8',
                 fontWeight: appMode === 'user' ? 800 : 600,
               }}
+              title="Пользовательский интерфейс"
             >
-              👤 Версия для пользователей
+              👤 Пользователь
             </button>
             <button
               onClick={() => handleModeChange('dev')}
@@ -901,6 +948,7 @@ export default function App() {
                 color: appMode === 'dev' ? '#FFFFFF' : '#94A3B8',
                 fontWeight: appMode === 'dev' ? 800 : 600,
               }}
+              title="Панель тестирования разработчика"
             >
               🛠️ Для разработчиков
             </button>
@@ -1132,30 +1180,43 @@ export default function App() {
         </main>
 
         {/* ========================================================
-            TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Icon only)
-            Hidden on home, leaderboard, all student screens, and all subscreens
+            TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (4 Tabs with Role Labels)
+            Distinguishes Teacher ("Кабинет", "Роща", "Лобби", "Отчёт")
+            and Student ("Главная", "Роща", "Рейтинг", "Достижения")
            ======================================================== */}
         {showBottomDock && (
           <div style={styles.dockWrapper}>
             <nav style={styles.bottomNavDock}>
-              {/* Tab 1: Домой */}
+              {/* Tab 1: Домой / Кабинет */}
               {(() => {
                 const isActive = (tab as string) === 'home';
+                const label = role === 'teacher' ? 'Кабинет' : 'Главная';
+                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
+                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
                 return (
                   <button
                     onClick={() => handleTabChange('home')}
                     style={styles.navBtn}
-                    title="Домой"
+                    title={label}
                   >
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
-                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        backgroundColor: isActive ? activeBg : 'transparent',
+                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
                       }}
                     >
-                      <Home size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
+                      <Home size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
+                    <span
+                      style={{
+                        ...styles.navLabel,
+                        color: isActive ? accent : '#94A3B8',
+                        fontWeight: isActive ? 800 : 600,
+                      }}
+                    >
+                      {label}
+                    </span>
                   </button>
                 );
               })()}
@@ -1163,21 +1224,33 @@ export default function App() {
               {/* Tab 2: Роща */}
               {(() => {
                 const isActive = tab === 'grove' && !subScreen;
+                const label = 'Роща';
+                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
+                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
                 return (
                   <button
                     onClick={() => handleTabChange('grove')}
                     style={styles.navBtn}
-                    title="Роща"
+                    title={label}
                   >
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
-                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        backgroundColor: isActive ? activeBg : 'transparent',
+                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
                       }}
                     >
-                      <Sprout size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
+                      <Sprout size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
+                    <span
+                      style={{
+                        ...styles.navLabel,
+                        color: isActive ? accent : '#94A3B8',
+                        fontWeight: isActive ? 800 : 600,
+                      }}
+                    >
+                      {label}
+                    </span>
                   </button>
                 );
               })()}
@@ -1185,21 +1258,33 @@ export default function App() {
               {/* Tab 3: Рейтинг / Лобби */}
               {(() => {
                 const isActive = tab === 'leaderboard' && !subScreen;
+                const label = role === 'teacher' ? 'Лобби' : 'Рейтинг';
+                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
+                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
                 return (
                   <button
                     onClick={() => handleTabChange('leaderboard')}
                     style={styles.navBtn}
-                    title={role === 'teacher' ? 'Лобби' : 'Рейтинг'}
+                    title={label}
                   >
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
-                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        backgroundColor: isActive ? activeBg : 'transparent',
+                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
                       }}
                     >
-                      <Crown size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
+                      <Crown size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
+                    <span
+                      style={{
+                        ...styles.navLabel,
+                        color: isActive ? accent : '#94A3B8',
+                        fontWeight: isActive ? 800 : 600,
+                      }}
+                    >
+                      {label}
+                    </span>
                   </button>
                 );
               })()}
@@ -1207,21 +1292,33 @@ export default function App() {
               {/* Tab 4: Статистика / Отчёт (Teacher & Student) */}
               {(() => {
                 const isActive = (tab as string) === 'stats' && !subScreen;
+                const label = role === 'teacher' ? 'Отчёт' : 'Достижения';
+                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
+                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
                 return (
                   <button
                     onClick={() => handleTabChange('stats')}
                     style={styles.navBtn}
-                    title={role === 'teacher' ? 'Отчёт' : 'Достижения'}
+                    title={label}
                   >
                     <div
                       style={{
                         ...styles.navIconCircle,
-                        backgroundColor: isActive ? 'rgba(16, 185, 129, 0.14)' : 'transparent',
-                        border: isActive ? '2px solid #10B981' : '2px solid transparent',
+                        backgroundColor: isActive ? activeBg : 'transparent',
+                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
                       }}
                     >
-                      <BarChart2 size={22} color={isActive ? '#10B981' : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
+                      <BarChart2 size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
                     </div>
+                    <span
+                      style={{
+                        ...styles.navLabel,
+                        color: isActive ? accent : '#94A3B8',
+                        fontWeight: isActive ? 800 : 600,
+                      }}
+                    >
+                      {label}
+                    </span>
                   </button>
                 );
               })()}
@@ -1243,18 +1340,81 @@ export default function App() {
         <p style={styles.devSub}>Быстрый переход к экранам и мокам:</p>
 
         <div style={styles.devList}>
-          {/* QA Test Scenarios Header */}
+          {/* Section 1: Teacher */}
           <div style={{ padding: '4px 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: '#FBBF24', textTransform: 'uppercase' }}>
-              ⚡ Тест-сценарии (Демо)
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#F59E0B', textTransform: 'uppercase' }}>
+              🦉 Для Учителя
             </span>
           </div>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setTab('home');
+              setSubScreen(null);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(255, 122, 0, 0.4)', color: '#FDBA74' }}
+          >
+            🏠 Кабинет учителя
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setTab('leaderboard');
+              setSubScreen(null);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(245, 158, 11, 0.4)', color: '#FDE68A' }}
+          >
+            👥 Лобби викторины (PIN)
+          </button>
 
           <button
             onClick={handleQuickBotGame}
             style={{ ...styles.devBtn, borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
           >
             🎮 Запустить игру с 4 ботами
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setSubScreen('teacher_classes');
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            🏫 Мои классы и рейтинг
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setSubScreen('teacher_quizzes');
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
+          >
+            📝 Конструктор викторин
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setSubScreen('teacher_game');
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            📺 Проектор: Игра Live
+          </button>
+
+          <button
+            onClick={() => {
+              setRole('teacher');
+              setTab('stats');
+              setSubScreen(null);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
+          >
+            📋 Отчёт дефицитов (Gap Report)
           </button>
 
           <button
@@ -1277,6 +1437,25 @@ export default function App() {
           </button>
 
           <div style={styles.devDivider} />
+
+          {/* Section 2: Student */}
+          <div style={{ padding: '4px 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#10B981', textTransform: 'uppercase' }}>
+              🦊 Для Ученика
+            </span>
+          </div>
+
+          <button
+            onClick={() => {
+              setRole('student');
+              setTab('home');
+              setSubScreen(null);
+            }}
+            style={{ ...styles.devBtn, borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
+          >
+            🔑 Домой: Вход по PIN (Ученик)
+          </button>
+
           <button
             onClick={() => {
               setRole('student');
@@ -1286,17 +1465,6 @@ export default function App() {
             style={styles.devBtn}
           >
             🌳 Роща класса (Спринт)
-          </button>
-
-          <button
-            onClick={() => {
-              setRole('student');
-              setTab('home');
-              setSubScreen(null);
-            }}
-            style={styles.devBtn}
-          >
-            🔑 Домой: Вход по PIN (Ученик)
           </button>
 
           <button
@@ -1383,15 +1551,14 @@ export default function App() {
             📊 Статистика ученика (Ачивки)
           </button>
 
-          <button
-            onClick={() => {
-              setRole('teacher');
-              setSubScreen('teacher_classes');
-            }}
-            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
-          >
-            🏫 Классы и рейтинг
-          </button>
+          <div style={styles.devDivider} />
+
+          {/* Section 3: General */}
+          <div style={{ padding: '4px 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: '#A78BFA', textTransform: 'uppercase' }}>
+              ⚙️ Общие инструменты
+            </span>
+          </div>
 
           <button
             onClick={() => {
@@ -1399,7 +1566,7 @@ export default function App() {
             }}
             style={{ ...styles.devBtn, borderColor: '#F59E0B', color: '#FDE68A' }}
           >
-            🎭 Выбор роли (Новый экран)
+            🎭 Экран выбора роли
           </button>
 
           <button
@@ -1408,56 +1575,12 @@ export default function App() {
           >
             🔐 Авторизация Сферум / MAX
           </button>
+
           <button
             onClick={() => handleSimulateBotStart(role)}
             style={{ ...styles.devBtn, borderColor: 'rgba(168, 85, 247, 0.4)', color: '#D8B4FE' }}
           >
             🤖 Симулировать /start в боте
-          </button>
-
-          <div style={styles.devDivider} />
-
-          <button
-            onClick={() => {
-              setRole('teacher');
-              setTab('home');
-              setSubScreen(null);
-            }}
-            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
-          >
-            ✨ Создать квиз (Учитель)
-          </button>
-
-          <button
-            onClick={() => {
-              setRole('teacher');
-              setTab('leaderboard');
-              setSubScreen(null);
-            }}
-            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
-          >
-            🧑‍🏫 Лобби учителя (PIN)
-          </button>
-
-          <button
-            onClick={() => {
-              setRole('teacher');
-              setSubScreen('teacher_game');
-            }}
-            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
-          >
-            🎮 Игра Live (Учитель)
-          </button>
-
-          <button
-            onClick={() => {
-              setRole('teacher');
-              setTab('stats');
-              setSubScreen(null);
-            }}
-            style={{ ...styles.devBtn, borderColor: 'rgba(59, 130, 246, 0.4)', color: '#93C5FD' }}
-          >
-            📋 Отчёт дефицитов (Gap Report)
           </button>
 
           <button
@@ -1678,6 +1801,27 @@ const styles: Record<string, React.CSSProperties> = {
     padding: 3,
     borderRadius: 9999,
   },
+  roleHeaderSwitch: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.40)',
+    padding: 3,
+    borderRadius: 9999,
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+  },
+  roleHeaderBtn: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 12,
+    borderRadius: 9999,
+    padding: '5px 12px',
+    border: '1.5px solid transparent',
+    cursor: 'pointer',
+    transition: 'all 0.18s ease',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+  },
   modeSwitchBtn: {
     fontFamily: "'Nunito', sans-serif",
     fontSize: 11.5,
@@ -1772,35 +1916,44 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: 54,
+    height: 58,
     width: '100%',
-    maxWidth: 290,
+    maxWidth: 310,
     backgroundColor: '#FFFDF2',
     border: '2px solid #F3EEDB',
     borderBottom: '4px solid #E5DBC7',
     borderRadius: 9999,
-    padding: '0 8px',
+    padding: '2px 8px',
     boxShadow: '0 10px 24px rgba(45, 30, 10, 0.16)',
     pointerEvents: 'auto',
   },
   navBtn: {
     flex: 1,
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 2,
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: 0,
+    padding: '2px 0',
     transition: 'all 0.18s ease',
   },
   navIconCircle: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'all 0.18s ease',
+  },
+  navLabel: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 10,
+    letterSpacing: '0.1px',
+    lineHeight: 1,
     transition: 'all 0.18s ease',
   },
   devHeader: {
