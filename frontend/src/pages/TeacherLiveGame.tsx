@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { socketService } from '../services/socketService';
 import { haptics } from '../services/haptics';
+import { soundManager } from '../services/soundManager';
+import SoundToggleButton from '../components/SoundToggleButton';
 import TeacherMascotRig from '../components/TeacherMascotRig';
 
 export interface TeacherLiveGameProps {
@@ -59,6 +61,14 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
   const progressPct = Math.round((completedCount / Math.max(1, totalCount)) * 100);
   const isAllFinished = completedCount >= totalCount && totalCount > 0;
 
+  // Countdown suspense BGM stream for teacher classroom projector during active quiz
+  useEffect(() => {
+    soundManager.playBgm('countdown', true);
+    return () => {
+      soundManager.stopBgm();
+    };
+  }, []);
+
   // Listen to live WebSocket events
   useEffect(() => {
     let isMounted = true;
@@ -66,6 +76,7 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
     const handleAnswerCollected = (data: any) => {
       if (!isMounted) return;
       haptics.impact('light');
+      soundManager.playTap();
 
       const studentId = data?.player_id || data?.student_id;
       if (!studentId) return;
@@ -108,6 +119,8 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
 
     const handleGameFinished = () => {
       if (!isMounted) return;
+      soundManager.stopBgm();
+      soundManager.playVictory();
       haptics.notification('success');
       onFinishQuiz();
     };
@@ -125,6 +138,8 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
   }, [totalQuestions, onFinishQuiz]);
 
   const handleEndQuiz = () => {
+    soundManager.stopBgm();
+    soundManager.playVictory();
     haptics.notification('success');
     setIsFinishing(true);
 
@@ -151,9 +166,12 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
             <span>{subject}</span>
           </div>
 
-          <div style={styles.pinTagPill}>
-            <span>Код комнаты:</span>
-            <span style={styles.pinCodeText}>{roomCode || '482 915'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <SoundToggleButton variant="round" size={14} />
+            <div style={styles.pinTagPill}>
+              <span>Код комнаты:</span>
+              <span style={styles.pinCodeText}>{roomCode || '482 915'}</span>
+            </div>
           </div>
         </div>
 

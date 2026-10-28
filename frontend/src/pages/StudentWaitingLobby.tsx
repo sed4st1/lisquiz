@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import { socketService } from '../services/socketService';
 import { roomApi } from '../services/roomApi';
 import { haptics } from '../services/haptics';
+import { soundManager } from '../services/soundManager';
 import { LobbyBoardScene, LobbyStudent } from '../components/LobbyBoardScene';
 import { HangingPinSign } from '../components/HangingPinSign';
 import { StudentsCountPill } from '../components/StudentsCountPill';
@@ -94,6 +95,7 @@ export default function StudentWaitingLobby({
     const handlePlayerJoined = (data: any) => {
       if (!isMounted) return;
       haptics.notification('success');
+      soundManager.playKnock();
       setPlayers((prev) => {
         if (prev.some((p) => p.id === data.player_id)) return prev;
         return [...prev, { id: data.player_id, name: data.name, avatar: data.avatar, division: data.division }];
@@ -109,6 +111,7 @@ export default function StudentWaitingLobby({
       if (!isMounted) return;
       const sec = data.countdown_sec || 3;
       setCountdown(sec);
+      soundManager.playKnock();
 
       let cur = sec;
       const timer = setInterval(() => {
@@ -120,7 +123,10 @@ export default function StudentWaitingLobby({
             onGameStart();
           }
         } else {
-          if (isMounted) setCountdown(cur);
+          if (isMounted) {
+            soundManager.playKnock();
+            setCountdown(cur);
+          }
         }
       }, 1000);
     };

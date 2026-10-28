@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { socketService } from '../services/socketService';
 import { haptics } from '../services/haptics';
+import { soundManager } from '../services/soundManager';
 import { TactileButton } from '../components/TactileButton';
 
 export interface StudentRoundWaitProps {
@@ -61,6 +62,7 @@ export default function StudentRoundWait({
   // Celebratory confetti on mount if correct
   useEffect(() => {
     if (personalResult?.is_correct) {
+      soundManager.playCorrect();
       try {
         confetti({
           particleCount: 100,
@@ -70,6 +72,8 @@ export default function StudentRoundWait({
           disableForReducedMotion: true,
         });
       } catch {}
+    } else if (personalResult?.is_correct === false) {
+      soundManager.playWrong();
     }
   }, [personalResult?.is_correct]);
 

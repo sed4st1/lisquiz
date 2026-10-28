@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { Check, ChevronRight, Flame, Sparkles } from 'lucide-react';
 import { haptics } from '../services/haptics';
+import { soundManager } from '../services/soundManager';
 import { JuicyScoreCounter } from '../components/JuicyScoreCounter';
 import { TactileButton } from '../components/TactileButton';
 import StudentRedemptionModal from '../components/StudentRedemptionModal';
@@ -36,6 +37,7 @@ export default function FeedbackStreak({
 
     if (isCorrect) {
       haptics.notification('success');
+      soundManager.playCorrect();
       if (streak > 1) {
         setTimeout(() => haptics.streak(), 200);
       }
@@ -52,6 +54,7 @@ export default function FeedbackStreak({
       } catch {}
     } else {
       haptics.notification('error');
+      soundManager.playWrong();
     }
 
     const duration = isCorrect ? 3500 : 7000;
