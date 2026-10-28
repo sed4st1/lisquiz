@@ -5,6 +5,7 @@ import {
   Layers,
   Users,
   Award,
+  ArrowLeft,
 } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { MascotPuppet } from '../components/MascotPuppet';
@@ -43,7 +44,7 @@ interface ClassGroveProps {
 }
 
 export default function ClassGrove({
-  onBack: _onBack,
+  onBack,
   onStartQuiz: _onStartQuiz,
   onOpenLeaderboard: _onOpenLeaderboard,
   onOpenStats: _onOpenStats,
@@ -188,6 +189,38 @@ export default function ClassGrove({
       {/* Particle Canvas */}
       <WaterParticlesCanvas ref={particlesRef} />
 
+      {/* Back button */}
+      {onBack && (
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          onClick={() => {
+            haptics.impact('light');
+            onBack();
+          }}
+          style={{
+            position: 'absolute',
+            top: 10,
+            left: 12,
+            width: 38,
+            height: 38,
+            borderRadius: '50%',
+            backgroundColor: '#FFFDF2',
+            border: '2px solid #F3EEDB',
+            borderBottom: '3px solid #E5DBC7',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 35,
+          }}
+          title="Назад на главную"
+        >
+          <ArrowLeft size={20} color="#4A2E18" strokeWidth={2.5} />
+        </motion.button>
+      )}
+
       {/* =========================================================================
           1. TOP RESOURCE BAR (Droplet, Soil, Sun, Settings Gear)
           ========================================================================= */}
@@ -197,7 +230,7 @@ export default function ClassGrove({
           top: 10,
           left: 0,
           right: 0,
-          padding: '0 12px',
+          padding: onBack ? '0 12px 0 52px' : '0 12px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

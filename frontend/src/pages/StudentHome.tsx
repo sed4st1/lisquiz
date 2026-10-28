@@ -216,6 +216,7 @@ export default function StudentHome({
   onJoinGame,
   onGoToGrove,
   onGoToLeaderboard,
+  onSwitchToTeacher,
 }: StudentHomeProps) {
   // Profile & Division state
   const [division, setDivision] = useState<DivisionType>(() => {
@@ -792,6 +793,35 @@ export default function StudentHome({
                 <Check size={18} strokeWidth={3} />
                 <span>Сохранить профиль</span>
               </motion.button>
+
+              {onSwitchToTeacher && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.selection();
+                    setIsProfileModalOpen(false);
+                    onSwitchToTeacher();
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    padding: '9px 14px',
+                    borderRadius: 14,
+                    backgroundColor: 'rgba(255, 122, 0, 0.08)',
+                    border: '1.5px solid rgba(255, 122, 0, 0.25)',
+                    color: '#D97706',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    marginTop: 8,
+                    width: '100%',
+                  }}
+                >
+                  <span>🦉 Переключиться в режим Учителя</span>
+                </button>
+              )}
             </motion.div>
           </div>
         )}

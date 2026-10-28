@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Target, Zap, Flame, Award, Droplets, CheckCircle2, Lock } from 'lucide-react';
+import { Target, Zap, Flame, Award, Droplets, CheckCircle2, Lock, ArrowLeft } from 'lucide-react';
 import { haptics } from '../services/haptics';
 
 interface AchievementItem {
@@ -21,12 +21,30 @@ const ACHIEVEMENTS: AchievementItem[] = [
   { id: '6', icon: '🐾', title: 'Друг Спринта', desc: 'Сыграй 20 викторин в Лисквизе', unlocked: false, progress: '12 из 20' },
 ];
 
-export default function StudentStats() {
+export interface StudentStatsProps {
+  onBack?: () => void;
+}
+
+export default function StudentStats({ onBack }: StudentStatsProps) {
   return (
     <div style={styles.container}>
       {/* Top Header */}
       <header style={styles.header}>
-        <h1 style={styles.headerTitle}>Статистика и достижения</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {onBack && (
+            <button
+              onClick={() => {
+                haptics.selection();
+                onBack();
+              }}
+              style={styles.backBtn}
+              title="Назад на главную"
+            >
+              <ArrowLeft size={18} color="#FFFFFF" strokeWidth={2.5} />
+            </button>
+          )}
+          <h1 style={styles.headerTitle}>Статистика и достижения</h1>
+        </div>
       </header>
 
       {/* Hero KPI Grid */}
@@ -137,6 +155,18 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 14,
     overflowY: 'auto',
     overflowX: 'hidden',
+  },
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: '50%',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    border: '1px solid rgba(255, 255, 255, 0.15)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    flexShrink: 0,
   },
   header: {
     display: 'flex',

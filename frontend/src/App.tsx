@@ -738,17 +738,21 @@ export default function App() {
                     setAuthFeedback(err?.message || 'Комната не найдена или не отвечает');
                   });
               }}
-              onGoToGrove={() => setTab('grove')}
-              onGoToLeaderboard={() => setTab('leaderboard')}
-              onSwitchToTeacher={() => setSubScreen('role_select')}
+              onGoToGrove={() => handleTabChange('grove')}
+              onGoToLeaderboard={() => handleTabChange('leaderboard')}
+              onSwitchToTeacher={() => {
+                handleRoleSwitch('teacher');
+                handleTabChange('home');
+              }}
             />
           );
         case 'grove':
           return (
             <ClassGrove
+              onBack={() => handleTabChange('home')}
               onStartQuiz={() => setSubScreen('student_game')}
-              onOpenLeaderboard={() => setTab('leaderboard')}
-              onOpenStats={() => setTab('stats')}
+              onOpenLeaderboard={() => handleTabChange('leaderboard')}
+              onOpenStats={() => handleTabChange('stats')}
             />
           );
         case 'leaderboard':
@@ -760,6 +764,7 @@ export default function App() {
               currentStudentAvatar={studentAvatar || 'raccoon'}
               currentScore={quizFinishData?.myScore || 750}
               currentRank={quizFinishData?.myRank || 4}
+              onBack={() => handleTabChange('home')}
               onClearBoost={() => {
                 setLeaderboardBoostPoints(null);
                 setLeaderboardBoostRank(null);
@@ -767,7 +772,7 @@ export default function App() {
             />
           );
         case 'stats':
-          return <StudentStats />;
+          return <StudentStats onBack={() => handleTabChange('home')} />;
       }
     }
 
@@ -798,9 +803,10 @@ export default function App() {
         case 'grove':
           return (
             <ClassGrove
-              onStartQuiz={() => setTab('leaderboard')}
-              onOpenLeaderboard={() => setTab('leaderboard')}
-              onOpenStats={() => setTab('stats')}
+              onBack={() => handleTabChange('home')}
+              onStartQuiz={() => handleTabChange('leaderboard')}
+              onOpenLeaderboard={() => handleTabChange('leaderboard')}
+              onOpenStats={() => handleTabChange('stats')}
             />
           );
         case 'leaderboard':
@@ -860,7 +866,7 @@ export default function App() {
     : "url('/assets/backgrounds/quiz_bg_clean.png')";
 
   const showTopHeader = (tab as string) !== 'home' && (tab as string) !== 'leaderboard' && !isStatsTab && (role as string) !== 'student' && !subScreen;
-  const showBottomDock = !subScreen && (tab as string) !== 'home' && (tab as string) !== 'leaderboard' && !isStatsTab && (role as string) !== 'student';
+  const showBottomDock = !subScreen;
 
   return (
     <div className="desktop-shell-wrapper">
@@ -1101,7 +1107,12 @@ export default function App() {
         </AnimatePresence>
 
         {/* Scrollable Screen Body */}
-        <main style={styles.mainContent}>
+        <main
+          style={{
+            ...styles.mainContent,
+            paddingBottom: showBottomDock ? 74 : 0,
+          }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={`${role}-${tab}-${subScreen || 'main'}`}
@@ -1189,14 +1200,14 @@ export default function App() {
                 );
               })()}
 
-              {/* Tab 4: Статистика / Отчёт (Teacher only) */}
-              {role === 'teacher' && (() => {
+              {/* Tab 4: Статистика / Отчёт (Teacher & Student) */}
+              {(() => {
                 const isActive = (tab as string) === 'stats' && !subScreen;
                 return (
                   <button
                     onClick={() => handleTabChange('stats')}
                     style={styles.navBtn}
-                    title="Отчёт"
+                    title={role === 'teacher' ? 'Отчёт' : 'Достижения'}
                   >
                     <div
                       style={{
@@ -1759,7 +1770,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     height: 54,
     width: '100%',
-    maxWidth: 240,
+    maxWidth: 290,
     backgroundColor: '#FFFDF2',
     border: '2px solid #F3EEDB',
     borderBottom: '4px solid #E5DBC7',
