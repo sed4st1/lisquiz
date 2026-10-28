@@ -760,6 +760,7 @@ export default function App() {
                     setSubScreen(null);
                     setAuthFeedback(err?.message || 'Комната не найдена или не отвечает');
                   });
+              }}
               onGoToGrove={() => handleTabChange('grove')}
               onGoToLeaderboard={() => handleTabChange('leaderboard')}
               onGoToClasses={() => setSubScreen('teacher_classes')}
@@ -773,10 +774,6 @@ export default function App() {
               appMode={appMode}
               onBack={() => handleTabChange('home')}
               onStartQuiz={() => setSubScreen('student_game')}
-              onOpenLeaderboard={() => handleTabChange('leaderboard')}
-              onOpenStats={() => handleTabChange('stats')}
-            />
-          );
               onOpenLeaderboard={() => handleTabChange('leaderboard')}
               onOpenStats={() => handleTabChange('stats')}
             />
