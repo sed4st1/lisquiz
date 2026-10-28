@@ -1,10 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  Home,
-  Sprout,
-  Crown,
-  BarChart2,
   Wrench,
   X,
   Flame,
@@ -168,6 +164,7 @@ export default function App() {
   const [leaderboardBoostPoints, setLeaderboardBoostPoints] = useState<number | null>(null);
   const [leaderboardBoostRank, setLeaderboardBoostRank] = useState<number | null>(null);
   const [lastFinishedRoomCode, setLastFinishedRoomCode] = useState<string>('');
+  const [quizCreateInitialTab, setQuizCreateInitialTab] = useState<'create' | 'saved'>('create');
   const studentQuizStatsRef = useRef<{ correct: number; wrong: number; total: number; score: number }>({ correct: 0, wrong: 0, total: 3, score: 0 });
 
   // Listen to incoming WebSocket events
@@ -492,6 +489,7 @@ export default function App() {
     if (subScreen === 'teacher_quizzes') {
       return (
         <TeacherCreateQuiz
+          initialTab={quizCreateInitialTab}
           initialClassId={quizClassId}
           initialClassName={quizClass}
           onBack={() => setSubScreen(null)}
@@ -807,6 +805,7 @@ export default function App() {
             <TeacherHomeScreen
               onCreateQuiz={() => {
                 haptics.impact('medium');
+                setQuizCreateInitialTab('create');
                 setSubScreen('teacher_quizzes');
               }}
               onOpenClasses={() => {
@@ -815,6 +814,7 @@ export default function App() {
               }}
               onOpenQuizzes={() => {
                 haptics.impact('medium');
+                setQuizCreateInitialTab('saved');
                 setSubScreen('teacher_quizzes');
               }}
               onSwitchRole={() => {
@@ -845,7 +845,9 @@ export default function App() {
                 setTeacherToken(token);
               }}
               onQuizTitleChange={(newTitle) => setQuizTitle(newTitle)}
+              onGoHome={() => handleTabChange('home')}
               onNavigateToCreateQuiz={() => {
+                setQuizCreateInitialTab('create');
                 setSubScreen('teacher_quizzes');
               }}
               onStartQuiz={() => {
@@ -889,7 +891,6 @@ export default function App() {
     : "url('/assets/backgrounds/quiz_bg_clean.png')";
 
   const showTopHeader = (tab as string) !== 'home' && (tab as string) !== 'leaderboard' && !isStatsTab && (role as string) !== 'student' && !subScreen;
-  const showBottomDock = !subScreen;
 
   return (
     <div className="desktop-shell-wrapper">
@@ -1167,12 +1168,7 @@ export default function App() {
         </AnimatePresence>
 
         {/* Scrollable Screen Body */}
-        <main
-          style={{
-            ...styles.mainContent,
-            paddingBottom: showBottomDock ? 74 : 0,
-          }}
-        >
+        <main style={styles.mainContent}>
           <AnimatePresence mode="wait">
             <motion.div
               key={`${role}-${tab}-${subScreen || 'main'}`}
@@ -1186,153 +1182,6 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </main>
-
-        {/* ========================================================
-            TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (4 Tabs with Role Labels)
-            Distinguishes Teacher ("Кабинет", "Роща", "Лобби", "Отчёт")
-            and Student ("Главная", "Роща", "Рейтинг", "Достижения")
-           ======================================================== */}
-        {showBottomDock && (
-          <div style={styles.dockWrapper}>
-            <nav style={styles.bottomNavDock}>
-              {/* Tab 1: Домой / Кабинет */}
-              {(() => {
-                const isActive = (tab as string) === 'home';
-                const label = role === 'teacher' ? 'Кабинет' : 'Главная';
-                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
-                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
-                return (
-                  <button
-                    onClick={() => handleTabChange('home')}
-                    style={styles.navBtn}
-                    title={label}
-                  >
-                    <div
-                      style={{
-                        ...styles.navIconCircle,
-                        backgroundColor: isActive ? activeBg : 'transparent',
-                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
-                      }}
-                    >
-                      <Home size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
-                    </div>
-                    <span
-                      style={{
-                        ...styles.navLabel,
-                        color: isActive ? accent : '#94A3B8',
-                        fontWeight: isActive ? 800 : 600,
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </button>
-                );
-              })()}
-
-              {/* Tab 2: Роща */}
-              {(() => {
-                const isActive = tab === 'grove' && !subScreen;
-                const label = 'Роща';
-                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
-                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
-                return (
-                  <button
-                    onClick={() => handleTabChange('grove')}
-                    style={styles.navBtn}
-                    title={label}
-                  >
-                    <div
-                      style={{
-                        ...styles.navIconCircle,
-                        backgroundColor: isActive ? activeBg : 'transparent',
-                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
-                      }}
-                    >
-                      <Sprout size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
-                    </div>
-                    <span
-                      style={{
-                        ...styles.navLabel,
-                        color: isActive ? accent : '#94A3B8',
-                        fontWeight: isActive ? 800 : 600,
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </button>
-                );
-              })()}
-
-              {/* Tab 3: Рейтинг / Лобби */}
-              {(() => {
-                const isActive = tab === 'leaderboard' && !subScreen;
-                const label = role === 'teacher' ? 'Лобби' : 'Рейтинг';
-                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
-                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
-                return (
-                  <button
-                    onClick={() => handleTabChange('leaderboard')}
-                    style={styles.navBtn}
-                    title={label}
-                  >
-                    <div
-                      style={{
-                        ...styles.navIconCircle,
-                        backgroundColor: isActive ? activeBg : 'transparent',
-                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
-                      }}
-                    >
-                      <Crown size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
-                    </div>
-                    <span
-                      style={{
-                        ...styles.navLabel,
-                        color: isActive ? accent : '#94A3B8',
-                        fontWeight: isActive ? 800 : 600,
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </button>
-                );
-              })()}
-
-              {/* Tab 4: Статистика / Отчёт (Teacher & Student) */}
-              {(() => {
-                const isActive = (tab as string) === 'stats' && !subScreen;
-                const label = role === 'teacher' ? 'Отчёт' : 'Достижения';
-                const accent = role === 'teacher' ? '#FF7A00' : '#10B981';
-                const activeBg = role === 'teacher' ? 'rgba(255, 122, 0, 0.16)' : 'rgba(16, 185, 129, 0.14)';
-                return (
-                  <button
-                    onClick={() => handleTabChange('stats')}
-                    style={styles.navBtn}
-                    title={label}
-                  >
-                    <div
-                      style={{
-                        ...styles.navIconCircle,
-                        backgroundColor: isActive ? activeBg : 'transparent',
-                        border: isActive ? `2px solid ${accent}` : '2px solid transparent',
-                      }}
-                    >
-                      <BarChart2 size={19} color={isActive ? accent : '#94A3B8'} strokeWidth={isActive ? 2.5 : 2} />
-                    </div>
-                    <span
-                      style={{
-                        ...styles.navLabel,
-                        color: isActive ? accent : '#94A3B8',
-                        fontWeight: isActive ? 800 : 600,
-                      }}
-                    >
-                      {label}
-                    </span>
-                  </button>
-                );
-              })()}
-            </nav>
-          </div>
-        )}
       </div>
 
       {/* ========================================================

@@ -1197,17 +1197,26 @@ export default function ClassGrove({
               {/* SHEET 4: ACHIEVEMENTS */}
               {activeSheet === 'achievements' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ padding: '10px 14px', backgroundColor: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0' }}>
-                    <div style={{ fontWeight: 800, color: '#15803D', fontSize: 13 }}>🌱 Первые всходы</div>
-                    <div style={{ fontSize: 11, color: '#166534' }}>Сыграть 10 совместных викторин всем классом</div>
+                  <div style={{ padding: '10px 14px', backgroundColor: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, color: '#334155', fontSize: 13 }}>🌱 Первые всходы</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', backgroundColor: '#E2E8F0', padding: '2px 6px', borderRadius: 6 }}>0 из 10</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>Сыграть 10 совместных викторин всем классом</div>
                   </div>
-                  <div style={{ padding: '10px 14px', backgroundColor: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0' }}>
-                    <div style={{ fontWeight: 800, color: '#15803D', fontSize: 13 }}>🔥 Горячий стрик</div>
-                    <div style={{ fontSize: 11, color: '#166534' }}>Удерживать стрик в течение 7 дней подряд</div>
+                  <div style={{ padding: '10px 14px', backgroundColor: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, color: '#334155', fontSize: 13 }}>🔥 Горячий стрик</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', backgroundColor: '#E2E8F0', padding: '2px 6px', borderRadius: 6 }}>0 из 7 дн.</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>Удерживать стрик в течение 7 дней подряд</div>
                   </div>
-                  <div style={{ padding: '10px 14px', backgroundColor: '#F0FDF4', borderRadius: 12, border: '1px solid #BBF7D0' }}>
-                    <div style={{ fontWeight: 800, color: '#15803D', fontSize: 13 }}>👑 Совет Рощи</div>
-                    <div style={{ fontSize: 11, color: '#166534' }}>Поднять среднюю точность ответов класса выше 85%</div>
+                  <div style={{ padding: '10px 14px', backgroundColor: '#F8FAFC', borderRadius: 12, border: '1px solid #E2E8F0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, color: '#334155', fontSize: 13 }}>👑 Совет Рощи</span>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#64748B', backgroundColor: '#E2E8F0', padding: '2px 6px', borderRadius: 6 }}>0% из 85%</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>Поднять среднюю точность ответов класса выше 85%</div>
                   </div>
                 </div>
               )}

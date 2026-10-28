@@ -62,6 +62,7 @@ export interface TeacherCreateQuizProps {
   onNavigateToLobby?: () => void;
   initialClassId?: string;
   initialClassName?: string;
+  initialTab?: 'create' | 'saved';
 }
 
 export interface SubjectConfig {
@@ -744,9 +745,11 @@ export default function TeacherCreateQuiz({
   onNavigateToLobby,
   initialClassId,
   initialClassName,
+  initialTab = 'create',
 }: TeacherCreateQuizProps) {
   // Main view mode: 'create' or 'saved'
   const [activeTab, setActiveTab] = useState<'create' | 'saved'>(() => {
+    if (initialTab) return initialTab;
     try {
       const p = new URLSearchParams(window.location.search);
       const tab = p.get('tab') || p.get('view');
@@ -755,23 +758,26 @@ export default function TeacherCreateQuiz({
     return 'create';
   });
 
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
+
   // Classes state
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
 
-  // Saved quizzes state & editor
+  // Saved quizzes state & editor: empty for fresh user
   const [savedQuizzes, setSavedQuizzes] = useState<SavedQuiz[]>(() => {
     const list = quizStorage.getSavedQuizzes();
-    if (list && list.length > 0) return list;
-    return INITIAL_STARTER_QUIZZES;
+    return list || [];
   });
   const [editingQuiz, setEditingQuiz] = useState<SavedQuiz | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
 
-  // Creation form state
-  const [subject, setSubject] = useState<string>('Физика');
+  // Creation form state: clean neutral defaults
+  const [subject, setSubject] = useState<string>('Математика');
   const [grade, setGrade] = useState<number>(5);
-  const [topic, setTopic] = useState<string>('Законы Ньютона');
+  const [topic, setTopic] = useState<string>('');
   const [questionCount, setQuestionCount] = useState<number>(5);
   const [isPhotoUploaded, setIsPhotoUploaded] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
@@ -1360,7 +1366,7 @@ export default function TeacherCreateQuiz({
                   type="text"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder="Например: Законы Ньютона"
+                  placeholder={subject === 'Математика' ? 'Например: Обыкновенные дроби' : 'Например: Законы Ньютона'}
                   style={styles.topicTextInput}
                 />
               </div>

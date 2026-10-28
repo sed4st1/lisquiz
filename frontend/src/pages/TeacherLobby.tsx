@@ -10,6 +10,7 @@ import {
   UserPlus,
   RotateCcw,
   BookOpen,
+  ArrowLeft,
 } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { socketService } from '../services/socketService';
@@ -42,6 +43,7 @@ export interface TeacherLobbyProps {
   onRoomReady?: (pin: string, token: string) => void;
   onQuizTitleChange?: (newTitle: string) => void;
   onNavigateToCreateQuiz?: () => void;
+  onGoHome?: () => void;
 }
 
 const DEMO_NAMES = [
@@ -94,6 +96,7 @@ export default function TeacherLobby({
   onRoomReady,
   onQuizTitleChange,
   onNavigateToCreateQuiz,
+  onGoHome,
 }: TeacherLobbyProps) {
   const [activePin, setActivePin] = useState<string>(propPin || '482915');
   const [currentQuizTitle, setCurrentQuizTitle] = useState<string>(quizTitle);
@@ -533,9 +536,41 @@ export default function TeacherLobby({
 
   return (
     <div style={styles.container}>
-      {/* Floating Sound Toggle Button for Teacher Projector */}
-      <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 90 }}>
-        <SoundToggleButton variant="round" size={16} />
+      {/* Floating Header: Back to Cabinet (Left) & Sound Toggle (Right) */}
+      <div style={{ position: 'fixed', top: 16, left: 16, right: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 90, pointerEvents: 'none' }}>
+        {onGoHome ? (
+          <motion.button
+            whileHover={{ scale: 1.08 }}
+            whileTap={{ scale: 0.92 }}
+            onClick={() => {
+              soundManager.playTap();
+              onGoHome();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 14px',
+              borderRadius: 24,
+              backgroundColor: '#FFFDF9',
+              border: '2px solid #E5C39E',
+              boxShadow: '0 3px 0 #D8BEA3, 0 3px 10px rgba(0, 0, 0, 0.12)',
+              cursor: 'pointer',
+              color: '#4A2E18',
+              fontWeight: 800,
+              fontSize: 12,
+              pointerEvents: 'auto',
+            }}
+            title="Вернуться в кабинет учителя"
+          >
+            <ArrowLeft size={16} color="#4A2E18" strokeWidth={2.5} />
+            <span>Кабинет</span>
+          </motion.button>
+        ) : <div />}
+
+        <div style={{ pointerEvents: 'auto' }}>
+          <SoundToggleButton variant="round" size={16} />
+        </div>
       </div>
 
       {/* Toast Notification */}

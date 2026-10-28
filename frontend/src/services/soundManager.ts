@@ -54,6 +54,19 @@ class SoundManager {
       }
     } catch {}
 
+    // Link global audio element if previously created in window/HMR
+    if (typeof window !== 'undefined') {
+      const existing = (window as unknown as { __LISQUIZ_GLOBAL_BGM_AUDIO__?: HTMLAudioElement }).__LISQUIZ_GLOBAL_BGM_AUDIO__;
+      if (existing) {
+        this.bgmAudio = existing;
+        if (this.isMuted) {
+          existing.pause();
+          existing.volume = 0;
+          existing.muted = true;
+        }
+      }
+    }
+
     // Auto-setup interaction listener for browser audio unlock
     this.setupUnlockListeners();
     this.setupVisibilityListener();
@@ -114,19 +127,26 @@ class SoundManager {
 
   private setupUnlockListeners(): void {
     if (typeof window === 'undefined') return;
+    if ((window as unknown as { __LISQUIZ_LISTENERS_SET__?: boolean }).__LISQUIZ_LISTENERS_SET__) return;
+    (window as unknown as { __LISQUIZ_LISTENERS_SET__?: boolean }).__LISQUIZ_LISTENERS_SET__ = true;
 
     const onUserGesture = async () => {
       await this.unlock();
-      this.tryResumePendingBgm();
+      if (!this.isMuted) {
+        this.tryResumePendingBgm();
+      }
     };
 
-    ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'].forEach((evt) => {
+    ['pointerdown', 'touchstart', 'click', 'keydown'].forEach((evt) => {
       window.addEventListener(evt, onUserGesture, { capture: true, passive: true });
     });
   }
 
   public tryResumePendingBgm(): void {
-    if (this.currentBgmTrack && this.bgmAudio && !this.isMuted && this.bgmAudio.paused) {
+    if (this.isMuted) return;
+    if (this.currentBgmTrack && this.bgmAudio && this.bgmAudio.paused) {
+      this.bgmAudio.muted = false;
+      this.bgmAudio.volume = this.bgmTargetVolume * this.masterVolume;
       this.bgmAudio.play().catch(() => {});
     }
   }
@@ -170,13 +190,38 @@ class SoundManager {
       localStorage.setItem('lisquiz_audio_muted', muted ? 'true' : 'false');
     } catch {}
 
-    if (this.bgmAudio) {
-      if (muted) {
-        this.bgmAudio.volume = 0;
+    this.stopFade();
+
+    if (muted) {
+      if (this.bgmAudio) {
         this.bgmAudio.pause();
-      } else if (this.currentBgmTrack) {
-        this.bgmAudio.volume = this.bgmTargetVolume * this.masterVolume;
-        this.bgmAudio.play().catch(() => {});
+        this.bgmAudio.volume = 0;
+        this.bgmAudio.muted = true;
+      }
+      if (typeof window !== 'undefined') {
+        const globalAudio = (window as unknown as { __LISQUIZ_GLOBAL_BGM_AUDIO__?: HTMLAudioElement }).__LISQUIZ_GLOBAL_BGM_AUDIO__;
+        if (globalAudio) {
+          globalAudio.pause();
+          globalAudio.volume = 0;
+          globalAudio.muted = true;
+        }
+      }
+      if (typeof document !== 'undefined') {
+        document.querySelectorAll('audio').forEach((el) => {
+          try {
+            el.pause();
+            el.volume = 0;
+            el.muted = true;
+          } catch {}
+        });
+      }
+    } else {
+      if (this.bgmAudio) {
+        this.bgmAudio.muted = false;
+        if (this.currentBgmTrack) {
+          this.bgmAudio.volume = this.bgmTargetVolume * this.masterVolume;
+          this.bgmAudio.play().catch(() => {});
+        }
       }
     }
 
@@ -268,32 +313,54 @@ class SoundManager {
   // ========================================================
 
   public playBgm(track: BgmTrack, loop = true): void {
-    if (this.currentBgmTrack === track && this.bgmAudio && !this.bgmAudio.paused) {
+    this.stopFade();
+
+    if (this.isMuted) {
+      this.currentBgmTrack = track;
+      if (this.bgmAudio) {
+        this.bgmAudio.pause();
+        this.bgmAudio.volume = 0;
+        this.bgmAudio.muted = true;
+      }
       return;
     }
 
-    this.stopFade();
-    this.currentBgmTrack = track;
-
     if (!this.bgmAudio) {
-      this.bgmAudio = new Audio();
+      if (typeof window !== 'undefined') {
+        const globalAudio = (window as unknown as { __LISQUIZ_GLOBAL_BGM_AUDIO__?: HTMLAudioElement }).__LISQUIZ_GLOBAL_BGM_AUDIO__;
+        if (globalAudio) {
+          this.bgmAudio = globalAudio;
+        } else {
+          this.bgmAudio = new Audio();
+          (window as unknown as { __LISQUIZ_GLOBAL_BGM_AUDIO__?: HTMLAudioElement }).__LISQUIZ_GLOBAL_BGM_AUDIO__ = this.bgmAudio;
+        }
+      } else {
+        this.bgmAudio = new Audio();
+      }
       this.bgmAudio.preload = 'auto';
     }
 
+    if (this.currentBgmTrack === track && !this.bgmAudio.paused) {
+      // Already actively playing this track
+      return;
+    }
+
+    this.currentBgmTrack = track;
     const src = BGM_SOURCES[track];
+
     if (this.bgmAudio.src !== window.location.origin + src && !this.bgmAudio.src.endsWith(src)) {
+      this.bgmAudio.pause();
       this.bgmAudio.src = src;
+      this.bgmAudio.currentTime = 0;
     }
 
     this.bgmAudio.loop = loop;
-    const targetVol = this.isMuted ? 0 : this.bgmTargetVolume * this.masterVolume;
-    this.bgmAudio.volume = targetVol;
+    this.bgmAudio.muted = false;
+    this.bgmAudio.volume = this.bgmTargetVolume * this.masterVolume;
 
-    if (!this.isMuted) {
-      this.bgmAudio.play().catch((err) => {
-        console.warn('[SoundManager] BGM autoplay blocked until user gesture:', err);
-      });
-    }
+    this.bgmAudio.play().catch((err) => {
+      console.warn('[SoundManager] BGM autoplay blocked until user gesture:', err);
+    });
   }
 
   public stopBgm(fadeOutMs = 600): void {

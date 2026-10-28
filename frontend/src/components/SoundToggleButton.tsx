@@ -23,7 +23,9 @@ export default function SoundToggleButton({
     return unsub;
   }, []);
 
-  const handleToggle = () => {
+  const handleToggle = (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
     const nextMuted = soundManager.toggleMute();
     setIsMuted(nextMuted);
     if (!nextMuted) {
@@ -37,6 +39,7 @@ export default function SoundToggleButton({
         whileHover={{ scale: 1.08 }}
         whileTap={{ scale: 0.92 }}
         onClick={handleToggle}
+        onPointerDown={(e) => e.stopPropagation()}
         title={isMuted ? 'Включить звук' : 'Выключить звук'}
         style={{
           width: 38,
@@ -66,6 +69,7 @@ export default function SoundToggleButton({
       whileHover={{ scale: 1.04 }}
       whileTap={{ scale: 0.95 }}
       onClick={handleToggle}
+      onPointerDown={(e) => e.stopPropagation()}
       title={isMuted ? 'Включить звук' : 'Выключить звук'}
       style={{
         display: 'inline-flex',

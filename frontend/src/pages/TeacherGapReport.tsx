@@ -8,6 +8,7 @@ import {
 import { roomApi } from '../services/roomApi';
 import { haptics } from '../services/haptics';
 import TeacherMascotRig from '../components/TeacherMascotRig';
+import SoundToggleButton from '../components/SoundToggleButton';
 
 export interface QuestionAnalyticsItem {
   id: number;
@@ -159,12 +160,16 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   onSendReviewTasks,
   onBackToLobby,
 }) => {
-  const [questions, setQuestions] = useState<QuestionAnalyticsItem[]>(
-    initialQuestions && initialQuestions.length > 0 ? initialQuestions : DEFAULT_QUESTIONS
-  );
-  const [cheatingLog, setCheatingLog] = useState<CheatingAuditItem[]>(
-    initialCheatingLog && initialCheatingLog.length > 0 ? initialCheatingLog : DEFAULT_CHEATING_LOG
-  );
+  const [questions, setQuestions] = useState<QuestionAnalyticsItem[]>(() => {
+    if (initialQuestions && initialQuestions.length > 0) return initialQuestions;
+    if (roomCode) return DEFAULT_QUESTIONS;
+    return [];
+  });
+  const [cheatingLog, setCheatingLog] = useState<CheatingAuditItem[]>(() => {
+    if (initialCheatingLog && initialCheatingLog.length > 0) return initialCheatingLog;
+    if (roomCode) return DEFAULT_CHEATING_LOG;
+    return [];
+  });
   const [expandedTier, setExpandedTier] = useState<number | null>(null);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isRemedialSent, setIsRemedialSent] = useState(false);
@@ -292,18 +297,21 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
                 onBackToLobby();
               }}
               style={styles.woodNavBtn}
-              title="Назад"
+              title="В кабинет учителя"
             >
               <ArrowLeft size={20} color="#4A2E18" strokeWidth={2.5} />
-              <span style={styles.woodNavBtnText}>В меню</span>
+              <span style={styles.woodNavBtnText}>В кабинет</span>
             </motion.button>
           )}
 
           <div style={{ flex: 1 }} />
 
-          <div style={styles.roomTagPill}>
-            <span>{grade}А класс</span>
-            {roomCode && <span style={styles.roomCodeSub}>код: {roomCode}</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={styles.roomTagPill}>
+              <span>{grade}А класс</span>
+              {roomCode && <span style={styles.roomCodeSub}>код: {roomCode}</span>}
+            </div>
+            <SoundToggleButton variant="round" size={15} />
           </div>
         </div>
 
@@ -325,10 +333,37 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
           />
         </motion.div>
 
-        {/* ========================================================
-            2. 4 BENTO STAT CARDS (Wood Plates)
-           ======================================================== */}
-        <div style={styles.statsGrid}>
+        {questions.length === 0 ? (
+          <div style={styles.emptyReportCard}>
+            <img
+              src="/assets/classes/v2/avatar_sprint_head.png"
+              alt="Спринт"
+              style={{ width: 68, height: 68, borderRadius: 999, objectFit: 'cover', marginBottom: 12 }}
+            />
+            <h3 style={styles.emptyReportTitle}>Отчётов пока нет</h3>
+            <p style={styles.emptyReportSub}>
+              Проведите первую викторину в классе, и здесь появится глубокий анализ понимания темы и пробелов каждого ученика!
+            </p>
+            {onBackToLobby && (
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={() => {
+                  haptics.impact('medium');
+                  onBackToLobby();
+                }}
+                style={styles.emptyReportBtn}
+              >
+                Вернуться в кабинет
+              </motion.button>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* ========================================================
+                2. 4 BENTO STAT CARDS (Wood Plates)
+               ======================================================== */}
+            <div style={styles.statsGrid}>
           {/* Card 1: Точность класса */}
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
@@ -721,6 +756,8 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
             </motion.button>
           )}
         </motion.div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1257,5 +1294,48 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 2,
     fontSize: 12.5,
     color: '#166534',
+  },
+  emptyReportCard: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    padding: '36px 20px',
+    backgroundColor: '#FFFDF9',
+    border: '2px solid #E5C39E',
+    borderBottom: '4px solid #D8BEA3',
+    borderRadius: 24,
+    boxShadow: '0 8px 24px rgba(74, 46, 24, 0.08)',
+    marginTop: 20,
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  emptyReportTitle: {
+    fontSize: 18,
+    fontWeight: 900,
+    color: '#4A2E18',
+    margin: '0 0 8px 0',
+  },
+  emptyReportSub: {
+    fontSize: 13,
+    color: '#855F3F',
+    lineHeight: 1.5,
+    margin: '0 0 20px 0',
+    maxWidth: 340,
+  },
+  emptyReportBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '11px 24px',
+    borderRadius: 999,
+    backgroundColor: '#10B981',
+    border: '2px solid #34D399',
+    borderBottom: '3px solid #059669',
+    color: '#FFFFFF',
+    fontWeight: 800,
+    fontSize: 13,
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.25)',
   },
 };

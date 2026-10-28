@@ -12,20 +12,85 @@ interface AchievementItem {
   progress?: string;
 }
 
-const ACHIEVEMENTS: AchievementItem[] = [
-  { id: '1', icon: '🌳', title: 'Хранитель Рощи', desc: 'Полил Древо Знаний 5 дней подряд', unlocked: true },
-  { id: '2', icon: '⚡', title: 'Быстрый Лис', desc: 'Ответил верно быстрее чем за 3 секунды', unlocked: true },
-  { id: '3', icon: '🦉', title: 'Мудрая Сова', desc: 'Серия из 10 правильных ответов', unlocked: true },
-  { id: '4', icon: '👑', title: 'Топ-3 Класса', desc: 'Вошел в тройку лидеров викторины', unlocked: true },
-  { id: '5', icon: '💎', title: 'Мастер Дробей', desc: 'Реши 15 задач на сложение дробей', unlocked: false, progress: '8 из 15' },
-  { id: '6', icon: '🐾', title: 'Друг Спринта', desc: 'Сыграй 20 викторин в Лисквизе', unlocked: false, progress: '12 из 20' },
-];
 
 export interface StudentStatsProps {
   onBack?: () => void;
+  xp?: number;
+  acorns?: number;
+  streak?: number;
+  quizzesCount?: number;
+  accuracy?: number | null;
 }
 
-export default function StudentStats({ onBack }: StudentStatsProps) {
+export default function StudentStats({
+  onBack,
+  xp: propXp,
+  acorns: propAcorns,
+  streak: propStreak,
+  quizzesCount: propQuizzesCount,
+  accuracy: propAccuracy,
+}: StudentStatsProps) {
+  // Read real persisted student state or default to fresh zero-account
+  const xp = propXp ?? Number(localStorage.getItem('lisquiz_student_xp') || '0');
+  const acorns = propAcorns ?? Number(localStorage.getItem('lisquiz_student_acorns') || '0');
+  const streak = propStreak ?? Number(localStorage.getItem('lisquiz_student_streak') || '0');
+  const quizzesCount = propQuizzesCount ?? Number(localStorage.getItem('lisquiz_student_quizzes') || '0');
+  const accuracy = propAccuracy ?? (quizzesCount > 0 ? 85 : null);
+
+  const achievements: AchievementItem[] = [
+    {
+      id: '1',
+      icon: '🌱',
+      title: 'Первый росток',
+      desc: 'Сыграй свою первую школьную викторину',
+      unlocked: quizzesCount >= 1,
+      progress: `${quizzesCount} из 1`,
+    },
+    {
+      id: '2',
+      icon: '⚡',
+      title: 'Быстрый Лис',
+      desc: 'Ответь правильно и набери 200 XP',
+      unlocked: xp >= 200,
+      progress: `${xp} из 200 XP`,
+    },
+    {
+      id: '3',
+      icon: '🌰',
+      title: 'Запас желудей',
+      desc: 'Собери 50 лесных желудей за правильные ответы',
+      unlocked: acorns >= 50,
+      progress: `${acorns} из 50 🌰`,
+    },
+    {
+      id: '4',
+      icon: '🔥',
+      title: 'Горящий стрик',
+      desc: 'Удерживай серию викторин 3 дня подряд',
+      unlocked: streak >= 3,
+      progress: `${streak} из 3 дн.`,
+    },
+    {
+      id: '5',
+      icon: '🌿',
+      title: 'Страж Дубрав',
+      desc: 'Набери 600 XP и перейди в Серебряный дивизион',
+      unlocked: xp >= 600,
+      progress: `${xp} из 600 XP`,
+    },
+    {
+      id: '6',
+      icon: '👑',
+      title: 'Совет Рощи',
+      desc: 'Набери 1 500 XP и войди в высший Золотой совет',
+      unlocked: xp >= 1500,
+      progress: `${xp} из 1 500 XP`,
+    },
+  ];
+
+  const unlockedCount = achievements.filter((a) => a.unlocked).length;
+  const energyPercent = Math.min(100, Math.round((xp / 2000) * 100));
+
   return (
     <div style={styles.container}>
       {/* Top Header */}
@@ -53,15 +118,15 @@ export default function StudentStats({ onBack }: StudentStatsProps) {
           <div style={styles.kpiIconWrapOrange}>
             <Zap size={18} color="#FF7A00" />
           </div>
-          <span style={styles.kpiValue}>1 450</span>
-          <span style={styles.kpiLabel}>Очков набрано</span>
+          <span style={styles.kpiValue}>{xp}</span>
+          <span style={styles.kpiLabel}>Очков опыта (XP)</span>
         </motion.div>
 
         <motion.div whileHover={{ scale: 1.02 }} style={styles.kpiCard}>
           <div style={styles.kpiIconWrapGreen}>
             <Target size={18} color="#10B981" />
           </div>
-          <span style={styles.kpiValue}>88%</span>
+          <span style={styles.kpiValue}>{accuracy !== null ? `${accuracy}%` : '—'}</span>
           <span style={styles.kpiLabel}>Точность ответов</span>
         </motion.div>
 
@@ -69,7 +134,7 @@ export default function StudentStats({ onBack }: StudentStatsProps) {
           <div style={styles.kpiIconWrapAmber}>
             <Flame size={18} color="#F59E0B" />
           </div>
-          <span style={styles.kpiValue}>5 дней</span>
+          <span style={styles.kpiValue}>{streak} дн.</span>
           <span style={styles.kpiLabel}>Стрик активности</span>
         </motion.div>
 
@@ -77,8 +142,8 @@ export default function StudentStats({ onBack }: StudentStatsProps) {
           <div style={styles.kpiIconWrapBlue}>
             <CheckCircle2 size={18} color="#3B82F6" />
           </div>
-          <span style={styles.kpiValue}>42</span>
-          <span style={styles.kpiLabel}>Вопросов решено</span>
+          <span style={styles.kpiValue}>{quizzesCount}</span>
+          <span style={styles.kpiLabel}>Викторин пройдено</span>
         </motion.div>
       </div>
 
@@ -89,15 +154,17 @@ export default function StudentStats({ onBack }: StudentStatsProps) {
             <Droplets size={16} color="#34D399" />
             <span style={styles.groveTitle}>Твой вклад в Рощу класса</span>
           </div>
-          <span style={styles.grovePercentBadge}>18% энергии</span>
+          <span style={styles.grovePercentBadge}>{energyPercent}% энергии</span>
         </div>
 
         <p style={styles.groveText}>
-          Благодаря твоим правильным ответам Волшебный Дуб распустил 4 новых золотых листа!
+          {xp > 0
+            ? 'Благодаря твоим правильным ответам Волшебный Дуб распускает новые золотые листья!'
+            : 'Сыграй свою первую викторину, чтобы направить живительную энергию Древу Знаний!'}
         </p>
 
         <div style={styles.progressTrack}>
-          <div style={{ ...styles.progressFill, width: '72%' }} />
+          <div style={{ ...styles.progressFill, width: `${Math.max(4, energyPercent)}%` }} />
         </div>
       </div>
 
@@ -105,18 +172,21 @@ export default function StudentStats({ onBack }: StudentStatsProps) {
       <div style={styles.achievementsSection}>
         <div style={styles.achievementsHeader}>
           <Award size={16} color="#F59E0B" />
-          <span style={styles.sectionTitle}>Достижения и значки (4 из 6)</span>
+          <span style={styles.sectionTitle}>
+            Достижения и значки ({unlockedCount} из {achievements.length})
+          </span>
         </div>
 
         <div style={styles.achievementsList}>
-          {ACHIEVEMENTS.map((a) => (
+          {achievements.map((a) => (
             <motion.div
               key={a.id}
               whileTap={{ scale: 0.98 }}
               onClick={() => haptics.selection()}
               style={{
                 ...styles.achievementCard,
-                opacity: a.unlocked ? 1 : 0.6,
+                opacity: a.unlocked ? 1 : 0.65,
+                borderColor: a.unlocked ? '#10B981' : '#283756',
               }}
             >
               <div style={styles.badgeEmoji}>{a.icon}</div>

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { haptics } from '../services/haptics';
+import { soundManager } from '../services/soundManager';
+import SoundToggleButton from '../components/SoundToggleButton';
 
 export interface TeacherHomeScreenProps {
   onCreateQuiz?: () => void;
@@ -20,6 +22,7 @@ export default function TeacherHomeScreen({
   const handleOwlClick = () => {
     if (isJumping) return;
     haptics.impact('medium');
+    soundManager.playTap();
     setIsJumping(true);
 
     setTimeout(() => {
@@ -38,21 +41,26 @@ export default function TeacherHomeScreen({
         {/* Ambient warm sunlight filter */}
         <div style={styles.sunbeamGlow} />
 
-        {/* Quick Switch to Student Mode Pill */}
-        {onSwitchRole && (
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => {
-              haptics.impact('light');
-              onSwitchRole();
-            }}
-            style={styles.switchRoleBtn}
-            title="Перейти в режим Ученика"
-          >
-            <span>🦊 Режим Ученика</span>
-          </motion.button>
-        )}
+        {/* Top Header Bar: Switch Role Pill (Left) & Sound Toggle (Right) */}
+        <div style={styles.topControlBar}>
+          {onSwitchRole ? (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                haptics.impact('light');
+                soundManager.playTap();
+                onSwitchRole();
+              }}
+              style={styles.switchRoleBtn}
+              title="Перейти в режим Ученика"
+            >
+              <span>🦊 Режим Ученика</span>
+            </motion.button>
+          ) : <div />}
+
+          <SoundToggleButton variant="round" size={15} />
+        </div>
 
         {/* ========================================================
             2. TOP HANGING SIGN: "Кабинет учителя"
@@ -214,6 +222,7 @@ export default function TeacherHomeScreen({
             whileTap={{ scale: 0.95, y: 3 }}
             onClick={() => {
               haptics.impact('medium');
+              soundManager.playKnock();
               if (onCreateQuiz) {
                 onCreateQuiz();
               } else {
@@ -236,6 +245,7 @@ export default function TeacherHomeScreen({
             whileTap={{ scale: 0.95, y: 3 }}
             onClick={() => {
               haptics.impact('medium');
+              soundManager.playKnock();
               onOpenQuizzes();
             }}
             style={styles.woodButton}
@@ -254,6 +264,7 @@ export default function TeacherHomeScreen({
             whileTap={{ scale: 0.95, y: 3 }}
             onClick={() => {
               haptics.impact('medium');
+              soundManager.playKnock();
               onOpenClasses();
             }}
             style={styles.woodButton}
@@ -437,11 +448,18 @@ const styles: Record<string, React.CSSProperties> = {
     height: 'auto',
     display: 'block',
   },
-  switchRoleBtn: {
+  topControlBar: {
     position: 'absolute',
     top: 12,
-    right: 12,
+    left: 14,
+    right: 14,
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     zIndex: 35,
+    pointerEvents: 'auto',
+  },
+  switchRoleBtn: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
