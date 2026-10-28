@@ -11,6 +11,7 @@ import { haptics } from '../services/haptics';
 import { soundManager } from '../services/soundManager';
 import SoundToggleButton from '../components/SoundToggleButton';
 import { roomApi, JoinRoomResponse } from '../services/roomApi';
+import { pullKnowledgeCard, fetchStudentInventory, KnowledgeCard } from '../services/groveApi';
 import MascotPuppet from '../components/MascotPuppet';
 
 export interface JoinRoomPayload {
@@ -256,6 +257,70 @@ export default function StudentHome({
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isQuestsModalOpen, setIsQuestsModalOpen] = useState(false);
   const [isCardsModalOpen, setIsCardsModalOpen] = useState(false);
+
+  // Gacha & Cards state
+  const [inventoryCards, setInventoryCards] = useState<KnowledgeCard[]>([]);
+  const [pulledCardResult, setPulledCardResult] = useState<any | null>(null);
+  const [isPulling, setIsPulling] = useState(false);
+
+  // Sync cards from backend on modal open or mount
+  useEffect(() => {
+    let isMounted = true;
+    fetchStudentInventory('current_student')
+      .then((inv) => {
+        if (!isMounted || !inv) return;
+        if (inv.cards && inv.cards.length > 0) {
+          setInventoryCards(inv.cards);
+        }
+        if (inv.acorns_balance !== undefined && inv.acorns_balance > 0) {
+          setAcorns(inv.acorns_balance);
+          sessionStorage.setItem('lisquiz_user_acorns', String(inv.acorns_balance));
+          localStorage.setItem('lisquiz_student_acorns', String(inv.acorns_balance));
+        }
+      })
+      .catch((e) => console.warn('[StudentHome] Notice syncing inventory:', e));
+    return () => {
+      isMounted = false;
+    };
+  }, [isCardsModalOpen]);
+
+  const handlePullCard = async () => {
+    if (isPulling) return;
+    if (acorns < 50) {
+      haptics.notification('warning');
+      soundManager.playWrong();
+      alert('Нужно 50 желудей для открытия пака. Решай викторины с классом!');
+      return;
+    }
+
+    try {
+      setIsPulling(true);
+      haptics.impact('medium');
+      const res = await pullKnowledgeCard('current_student', 50);
+      if (res.success && res.card) {
+        soundManager.playCollect();
+        haptics.notification('success');
+        setPulledCardResult(res);
+        const nextAcorns = res.remaining_acorns ?? (acorns - 50);
+        setAcorns(nextAcorns);
+        sessionStorage.setItem('lisquiz_user_acorns', String(nextAcorns));
+        localStorage.setItem('lisquiz_student_acorns', String(nextAcorns));
+
+        const updated = await fetchStudentInventory('current_student');
+        if (updated?.cards) {
+          setInventoryCards(updated.cards);
+        }
+      } else {
+        soundManager.playWrong();
+        alert(res.error || 'Не удалось открыть пак');
+      }
+    } catch (e: any) {
+      soundManager.playWrong();
+      alert(e.message || 'Ошибка связи с сервером');
+    } finally {
+      setIsPulling(false);
+    }
+  };
 
   // Economy & Progression state (Fresh player begins with 0)
   const [acorns, setAcorns] = useState<number>(() => {
@@ -1178,46 +1243,84 @@ export default function StudentHome({
                 </div>
               </div>
 
+              {/* Recently Pulled Card Banner */}
+              {pulledCardResult?.card && (
+                <motion.div
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  style={{
+                    backgroundColor: '#FEF3C7',
+                    border: '2px solid #F59E0B',
+                    borderRadius: 16,
+                    padding: '12px 14px',
+                    marginBottom: 14,
+                    textAlign: 'center',
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase' }}>
+                    🎉 {pulledCardResult.is_duplicate ? 'Повторная карточка (Кэшбэк +25 🌰)' : 'Новая карточка!'}
+                  </div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: '#78350F', marginTop: 3 }}>
+                    {pulledCardResult.card.card_name}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#92400E', marginTop: 2, fontStyle: 'italic' }}>
+                    «{pulledCardResult.card.lore_microfact}»
+                  </div>
+                </motion.div>
+              )}
+
               {/* Showcase preview cards */}
               <div style={styles.gachaCardsRow}>
-                <div style={styles.gachaCardItem}>
-                  <div style={styles.gachaRarityTag}>Легендарная</div>
-                  <div style={{ fontSize: 32 }}>🏛️</div>
-                  <div style={styles.gachaCardName}>Архимед</div>
-                  <div style={styles.gachaCardFact}>«Эврика! Законы физики»</div>
-                </div>
-                <div style={styles.gachaCardItem}>
-                  <div style={styles.gachaRarityTag}>Легендарная</div>
-                  <div style={{ fontSize: 32 }}>🦊</div>
-                  <div style={styles.gachaCardName}>Лис Спринт</div>
-                  <div style={styles.gachaCardFact}>Хранитель Сердца Рощи</div>
-                </div>
-                <div style={{ ...styles.gachaCardItem, borderStyle: 'dashed' }}>
-                  <div style={{ ...styles.gachaRarityTag, backgroundColor: '#94A3B8' }}>Эпическая</div>
-                  <div style={{ fontSize: 32, opacity: 0.4 }}>🍎</div>
-                  <div style={styles.gachaCardName}>Ньютон</div>
-                  <div style={styles.gachaCardFact}>Закрыто (в паках)</div>
-                </div>
+                {inventoryCards.length > 0 ? (
+                  inventoryCards.slice(0, 3).map((c) => (
+                    <div key={c.card_id} style={styles.gachaCardItem}>
+                      <div style={{
+                        ...styles.gachaRarityTag,
+                        backgroundColor: c.rarity === 'legendary' ? '#F59E0B' : c.rarity === 'epic' ? '#8B5CF6' : '#10B981',
+                      }}>
+                        {c.rarity === 'legendary' ? 'Легендарная' : c.rarity === 'epic' ? 'Эпическая' : 'Редкая'}
+                      </div>
+                      <div style={{ fontSize: 30 }}>📜</div>
+                      <div style={styles.gachaCardName}>{c.card_name}</div>
+                      <div style={styles.gachaCardFact}>«{c.lore_microfact}»</div>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div style={styles.gachaCardItem}>
+                      <div style={styles.gachaRarityTag}>Легендарная</div>
+                      <div style={{ fontSize: 32 }}>🏛️</div>
+                      <div style={styles.gachaCardName}>Архимед</div>
+                      <div style={styles.gachaCardFact}>«Эврика! Законы физики»</div>
+                    </div>
+                    <div style={styles.gachaCardItem}>
+                      <div style={styles.gachaRarityTag}>Легендарная</div>
+                      <div style={{ fontSize: 32 }}>🦊</div>
+                      <div style={styles.gachaCardName}>Лис Спринт</div>
+                      <div style={styles.gachaCardFact}>Хранитель Сердца Рощи</div>
+                    </div>
+                    <div style={{ ...styles.gachaCardItem, borderStyle: 'dashed' }}>
+                      <div style={{ ...styles.gachaRarityTag, backgroundColor: '#94A3B8' }}>Эпическая</div>
+                      <div style={{ fontSize: 32, opacity: 0.4 }}>🍎</div>
+                      <div style={styles.gachaCardName}>Ньютон</div>
+                      <div style={styles.gachaCardFact}>Закрыто (в паках)</div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Gacha Pull Action */}
               <motion.button
                 whileTap={{ y: 2 }}
-                onClick={() => {
-                  if (acorns >= 50) {
-                    haptics.notification('success');
-                    soundManager.playCollect();
-                    setAcorns((prev) => prev - 50);
-                    alert('🎉 Поздравляем! Открыта карта «Золотое Яблоко Ньютона»!');
-                  } else {
-                    haptics.notification('warning');
-                    soundManager.playWrong();
-                    alert('Нужно 50 желудей для открытия пака. Решай викторины!');
-                  }
+                onClick={handlePullCard}
+                disabled={isPulling}
+                style={{
+                  ...styles.gachaPullBtn,
+                  opacity: isPulling ? 0.7 : 1,
+                  cursor: isPulling ? 'wait' : 'pointer',
                 }}
-                style={styles.gachaPullBtn}
               >
-                <span>Открыть пак</span>
+                <span>{isPulling ? 'Открываем пак...' : 'Открыть пак'}</span>
                 <span style={styles.gachaCost}>50 🌰</span>
               </motion.button>
             </motion.div>

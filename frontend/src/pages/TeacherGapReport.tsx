@@ -174,6 +174,7 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isRemedialSent, setIsRemedialSent] = useState(false);
   const [_isLoading, setIsLoading] = useState(false);
+  const [serverHomeworkRec, setServerHomeworkRec] = useState<string | null>(null);
 
   // Load report from API if roomCode is provided
   useEffect(() => {
@@ -186,28 +187,47 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
         const report = await roomApi.getGapReport(roomCode);
         if (!isMounted || !report) return;
 
-        if (report.questions_analytics && report.questions_analytics.length > 0) {
-          const mapped = report.questions_analytics.map((q: any, idx: number) => {
-            const pct = Math.round(q.correct_percentage ?? (q.total_count ? (q.correct_count / q.total_count) * 100 : 75));
+        const questionsRaw = report.questions_stats || report.questions_analytics || [];
+        if (questionsRaw.length > 0) {
+          const mapped = questionsRaw.map((q: any, idx: number) => {
+            const pct = Math.round(
+              q.correct_percent ??
+              q.correct_percentage ??
+              (q.total_count ? (q.correct_count / q.total_count) * 100 : 75)
+            );
             const tier: 1 | 2 | 3 = pct >= 80 ? 1 : pct >= 60 ? 2 : 3;
             return {
-              id: q.id ?? idx + 1,
-              questionNumber: idx + 1,
+              id: q.id ?? q.question_index ?? idx + 1,
+              questionNumber: q.question_index ?? idx + 1,
               topic: q.topic || `Вопрос ${idx + 1}`,
-              text: q.question_text || `Вопрос #${idx + 1}`,
+              text: q.text || q.question_text || `Вопрос #${idx + 1}`,
               correctPercentage: pct,
               kesCode: q.kes_code || '1.2',
-              totalAnswers: q.total_count || totalStudents,
-              correctAnswers: q.correct_count || Math.round((pct / 100) * totalStudents),
-              commonMistake: q.common_mistake,
+              totalAnswers: q.total_count || report.total_participants || totalStudents,
+              correctAnswers: q.correct_count || Math.round((pct / 100) * (report.total_participants || totalStudents)),
+              commonMistake: q.dominant_distractor || q.common_mistake,
               tier,
             };
           });
           setQuestions(mapped);
         }
 
+        if (report.homework_recommendation) {
+          setServerHomeworkRec(report.homework_recommendation);
+        }
+
         if (report.cheating_audit_log && report.cheating_audit_log.length > 0) {
           setCheatingLog(report.cheating_audit_log);
+        } else if (report.flagged_cheaters && report.flagged_cheaters.length > 0) {
+          setCheatingLog(report.flagged_cheaters.map((name: string, i: number) => ({
+            student_id: `f_${i}`,
+            student_name: name,
+            blur_count: 2,
+            rapid_guess_count: 0,
+            total_answers: questionsRaw.length || 6,
+            risk_level: 'MEDIUM',
+            flags: ['Переключение вкладок браузера во время вопроса'],
+          })));
         }
       } catch (err) {
         console.warn('Could not fetch gap report from server, using pre-calculated session metrics:', err);
@@ -266,11 +286,12 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
 
   // Dynamic AI pedagogical recommendation text
   const recommendationText = useMemo(() => {
+    if (serverHomeworkRec) return serverHomeworkRec;
     if (tier3Questions.length > 0) {
       return `Обратите внимание на темы второго и третьего уровня. У ${100 - tier2Pct}% учеников есть затруднения при решении комбинированных задач. Рекомендуем повторить ключевые понятия и провести дополнительную практику.`;
     }
     return `Класс отлично справился с базовыми заданиями (${tier1Pct}% верных ответов). Рекомендуется закрепить сложные вопросы повышенного уровня на следующем уроке.`;
-  }, [tier1Pct, tier2Pct, tier3Questions.length]);
+  }, [serverHomeworkRec, tier1Pct, tier2Pct, tier3Questions.length]);
 
   const handleGenerateRemedial = () => {
     haptics.notification('success');
