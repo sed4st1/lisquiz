@@ -17,6 +17,7 @@ export interface TeacherLiveGameProps {
   initialQuestionData?: any;
   subject?: string;
   classNameTitle?: string;
+  initialStudents?: Array<{ id: string; name: string; avatar: string }>;
   onFinishQuiz: () => void;
 }
 
@@ -30,26 +31,29 @@ interface StudentLiveStatus {
   score: number;
 }
 
-const DEFAULT_MOCK_STUDENTS: StudentLiveStatus[] = [
-  { id: '1', name: 'Егор В.', avatar: 'fox', answeredCount: 6, totalQuestions: 6, isFinished: true, score: 920 },
-  { id: '2', name: 'София М.', avatar: 'owl', answeredCount: 6, totalQuestions: 6, isFinished: true, score: 880 },
-  { id: '3', name: 'Максим Г.', avatar: 'bear', answeredCount: 6, totalQuestions: 6, isFinished: true, score: 850 },
-  { id: '4', name: 'Анна С.', avatar: 'bunny', answeredCount: 6, totalQuestions: 6, isFinished: true, score: 810 },
-  { id: '5', name: 'Дмитрий П.', avatar: 'hedgehog', answeredCount: 5, totalQuestions: 6, isFinished: false, score: 680 },
-  { id: '6', name: 'Полина К.', avatar: 'squirrel', answeredCount: 4, totalQuestions: 6, isFinished: false, score: 540 },
-  { id: '7', name: 'Артём Л.', avatar: 'raccoon', answeredCount: 5, totalQuestions: 6, isFinished: false, score: 710 },
-  { id: '8', name: 'Мария Т.', avatar: 'bear', answeredCount: 6, totalQuestions: 6, isFinished: true, score: 790 },
-];
-
 export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
   roomCode,
   initialQuestionData,
   subject = 'Математика',
   classNameTitle = '7А',
+  initialStudents,
   onFinishQuiz,
 }) => {
   const totalQuestions = initialQuestionData?.total_questions || 6;
-  const [students, setStudents] = useState<StudentLiveStatus[]>(DEFAULT_MOCK_STUDENTS);
+  const [students, setStudents] = useState<StudentLiveStatus[]>(() => {
+    if (initialStudents && initialStudents.length > 0) {
+      return initialStudents.map((s) => ({
+        id: s.id,
+        name: s.name,
+        avatar: s.avatar,
+        answeredCount: 0,
+        totalQuestions,
+        isFinished: false,
+        score: 0,
+      }));
+    }
+    return [];
+  });
   const [isFinishing, setIsFinishing] = useState(false);
 
   // Completed count
@@ -69,6 +73,38 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
     };
   }, []);
 
+  // Sync players from room on mount if none provided
+  useEffect(() => {
+    let isMounted = true;
+    if (!roomCode) return;
+    fetch(`/api/rooms/${roomCode}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data?.players) return;
+        const pList = Object.values(data.players) as any[];
+        if (pList.length > 0) {
+          setStudents((prev) => {
+            if (prev.length > 0) return prev;
+            return pList.map((p) => ({
+              id: String(p.id || p.user_id || p.name),
+              name: p.name || p.display_name || 'Ученик',
+              avatar: p.avatar || 'fox',
+              answeredCount: p.answered_count || 0,
+              totalQuestions,
+              isFinished: (p.answered_count || 0) >= totalQuestions,
+              score: p.score || 0,
+            }));
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('[TeacherLiveGame] Notice syncing room players:', err);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [roomCode, totalQuestions]);
+
   // Listen to live WebSocket events
   useEffect(() => {
     let isMounted = true;
@@ -79,11 +115,27 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
       soundManager.playTap();
 
       const studentId = data?.player_id || data?.student_id;
-      if (!studentId) return;
+      const studentName = data?.player_name || data?.student_name;
+      if (!studentId && !studentName) return;
 
-      setStudents((prev) =>
-        prev.map((s) => {
-          if (s.id === studentId || s.name === data?.student_name) {
+      setStudents((prev) => {
+        const idx = prev.findIndex((s) => (studentId && s.id === studentId) || (studentName && s.name === studentName));
+        if (idx === -1) {
+          return [
+            ...prev,
+            {
+              id: studentId || String(Date.now()),
+              name: studentName || 'Ученик',
+              avatar: data?.avatar || 'fox',
+              answeredCount: 1,
+              totalQuestions,
+              isFinished: 1 >= totalQuestions,
+              score: data?.points_earned || 100,
+            },
+          ];
+        }
+        return prev.map((s, i) => {
+          if (i === idx) {
             const nextAnswered = Math.min(totalQuestions, s.answeredCount + 1);
             return {
               ...s,
@@ -93,15 +145,15 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
             };
           }
           return s;
-        })
-      );
+        });
+      });
     };
 
     const handlePlayerJoined = (data: any) => {
       if (!isMounted || !data?.player) return;
       const p = data.player;
       setStudents((prev) => {
-        if (prev.some((s) => s.id === p.id)) return prev;
+        if (prev.some((s) => s.id === p.id || s.name === p.name)) return prev;
         return [
           ...prev,
           {
@@ -239,11 +291,16 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
 
             {/* Waiting prompt & progress */}
             <div style={styles.waitingContentCol}>
-              <h2 style={styles.waitingTitle}>Ждём, пока ваши ученики закончат решать тест</h2>
+              <h2 style={styles.waitingTitle}>
+                {totalCount === 0
+                  ? 'Ожидаем подключения учеников'
+                  : 'Ждём, пока ваши ученики закончат отвечать'}
+              </h2>
 
               <p style={styles.waitingDesc}>
-                Ученики отвечают в своём комфортном темпе. Отчёт по пробелам в знаниях и пьедестал
-                появятся автоматически, когда все завершат тест.
+                {totalCount === 0
+                  ? `Попросите учеников открыть Лисквиз и ввести PIN-код ${roomCode || 'комнаты'}. Как только они подключатся и начнут отвечать, их прогресс появится здесь.`
+                  : 'Ученики отвечают в своём комфортном темпе. Отчёт по пробелам в знаниях и пьедестал появятся автоматически, когда все завершат тест.'}
               </p>
 
               {/* Progress pill & bar */}
@@ -252,10 +309,14 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
                   <div style={styles.progressCountLabel}>
                     <Clock size={16} color="#B45309" strokeWidth={2.5} />
                     <span>
-                      Завершили: <strong>{completedCount}</strong> из <strong>{totalCount}</strong> учеников
+                      {totalCount === 0 ? (
+                        'Подключено: 0 учеников (ожидание)'
+                      ) : (
+                        <>Завершили: <strong>{completedCount}</strong> из <strong>{totalCount}</strong> учеников</>
+                      )}
                     </span>
                   </div>
-                  <span style={styles.progressPctText}>{progressPct}%</span>
+                  <span style={styles.progressPctText}>{totalCount === 0 ? '0%' : `${progressPct}%`}</span>
                 </div>
 
                 <div style={styles.progressBarTrack}>
@@ -289,7 +350,18 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
             </span>
           </div>
 
-          <div style={styles.studentGrid}>
+          {students.length === 0 ? (
+            <div style={styles.emptyStudentsCard}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+              <p style={{ margin: '0 0 6px 0', fontWeight: 800, color: '#4A2E18', fontSize: 16 }}>
+                Ученики ещё не начали отвечать
+              </p>
+              <p style={{ margin: 0, fontSize: 13, color: '#78350F', maxWidth: 320, lineHeight: 1.4 }}>
+                Сообщите ученикам PIN-код <strong>{roomCode}</strong>. Карточки с именами и баллами появятся в реальном времени!
+              </p>
+            </div>
+          ) : (
+            <div style={styles.studentGrid}>
             {students.map((st) => (
               <motion.div
                 key={st.id}
@@ -333,6 +405,7 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
               </motion.div>
             ))}
           </div>
+          )}
         </div>
 
         {/* ========================================================
@@ -563,6 +636,18 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 700,
     color: '#784E2D',
     fontVariantNumeric: 'tabular-nums',
+  },
+  emptyStudentsCard: {
+    background: '#FFFFFF',
+    border: '2px dashed #E2D4BF',
+    borderRadius: 16,
+    padding: '24px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    width: '100%',
+    boxSizing: 'border-box',
   },
   studentGrid: {
     display: 'grid',

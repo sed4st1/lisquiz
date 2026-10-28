@@ -39,11 +39,12 @@ export interface TeacherLobbyProps {
   subject?: string;
   grade?: number;
   maxStudents?: number;
-  onStartQuiz?: () => void;
+  onStartQuiz?: (connectedStudents?: ConnectedStudent[]) => void;
   onRoomReady?: (pin: string, token: string) => void;
   onQuizTitleChange?: (newTitle: string) => void;
   onNavigateToCreateQuiz?: () => void;
   onGoHome?: () => void;
+  isDev?: boolean;
 }
 
 const DEMO_NAMES = [
@@ -97,10 +98,15 @@ export default function TeacherLobby({
   onQuizTitleChange,
   onNavigateToCreateQuiz,
   onGoHome,
+  isDev = false,
 }: TeacherLobbyProps) {
   const [activePin, setActivePin] = useState<string>(propPin || '482915');
   const [currentQuizTitle, setCurrentQuizTitle] = useState<string>(quizTitle);
   const [students, setStudents] = useState<ConnectedStudent[]>([]);
+  const studentsRef = useRef<ConnectedStudent[]>(students);
+  useEffect(() => {
+    studentsRef.current = students;
+  }, [students]);
   const [countdown, setCountdown] = useState<number | null>(null);
   const [selectedStudentToKick, setSelectedStudentToKick] = useState<ConnectedStudent | null>(null);
   const [quizToDelete, setQuizToDelete] = useState<SavedQuiz | null>(null);
@@ -308,7 +314,7 @@ export default function TeacherLobby({
               clearInterval(timer);
               if (isMounted) {
                 setCountdown(null);
-                onStartQuiz?.();
+                onStartQuiz?.(studentsRef.current);
               }
             } else {
               if (isMounted) {
@@ -374,7 +380,7 @@ export default function TeacherLobby({
         if (cur <= 0) {
           clearInterval(timer);
           setCountdown(null);
-          onStartQuiz?.();
+          onStartQuiz?.(students);
         } else {
           soundManager.playKnock();
           setCountdown(cur);
@@ -624,40 +630,42 @@ export default function TeacherLobby({
         />
       </div>
 
-      {/* 5. Developer & Demo Helpers Toolbar */}
-      <div style={styles.devControlsRow}>
-        <button
-          type="button"
-          onClick={handleAddDemoStudent}
-          style={styles.devBtn}
-          title="Подключить тестового ученика для демонстрации динамики"
-        >
-          <UserPlus size={14} color="#5C3317" />
-          <span>+ Ученик</span>
-        </button>
-
-        {students.length > 0 && (
+      {/* 5. Developer & Demo Helpers Toolbar (Strictly hidden for regular teachers) */}
+      {isDev && (
+        <div style={styles.devControlsRow}>
           <button
             type="button"
-            onClick={handleClearDemoStudents}
-            style={{ ...styles.devBtn, color: '#B91C1C' }}
-            title="Очистить список учеников"
+            onClick={handleAddDemoStudent}
+            style={styles.devBtn}
+            title="Подключить тестового ученика для демонстрации динамики"
           >
-            <RotateCcw size={14} color="#B91C1C" />
-            <span>Очистить</span>
+            <UserPlus size={14} color="#5C3317" />
+            <span>+ Ученик</span>
           </button>
-        )}
 
-        <button
-          type="button"
-          onClick={() => setShowTemplatesSection((prev) => !prev)}
-          style={styles.devBtn}
-          title="Управление темами викторин"
-        >
-          <BookOpen size={14} color="#5C3317" />
-          <span>{showTemplatesSection ? 'Скрыть темы' : 'Сменить тему'}</span>
-        </button>
-      </div>
+          {students.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearDemoStudents}
+              style={{ ...styles.devBtn, color: '#B91C1C' }}
+              title="Очистить список учеников"
+            >
+              <RotateCcw size={14} color="#B91C1C" />
+              <span>Очистить</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowTemplatesSection((prev) => !prev)}
+            style={styles.devBtn}
+            title="Управление темами викторин"
+          >
+            <BookOpen size={14} color="#5C3317" />
+            <span>{showTemplatesSection ? 'Скрыть темы' : 'Сменить тему'}</span>
+          </button>
+        </div>
+      )}
 
       {/* 6. Quiz Templates Management Section (Collapsible) */}
       <AnimatePresence>

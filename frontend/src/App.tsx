@@ -104,25 +104,26 @@ export default function App() {
   });
   const [isMobileDevOpen, setIsMobileDevOpen] = useState(false);
 
-  // App mode: 'user' (production-clean) or 'dev' (tools, shortcuts, mocks)
-  type AppMode = 'user' | 'dev';
-  const [appMode, setAppMode] = useState<AppMode>(() => {
+  // Check if developer mode is explicitly requested via URL (?dev=true or ?mode=dev)
+  const isDevExplicit = (() => {
     try {
       const params = new URLSearchParams(window.location.search);
       const m = params.get('mode');
-      if (m === 'dev' || m === 'developer' || params.has('dev')) return 'dev';
-      if (m === 'user') return 'user';
-      const saved = localStorage.getItem('lisquiz_app_mode') as AppMode;
-      if (saved === 'dev' || saved === 'user') return saved;
-    } catch {}
-    return 'user';
-  });
+      return m === 'dev' || m === 'developer' || params.has('dev');
+    } catch {
+      return false;
+    }
+  })();
+
+  // App mode: 'user' (production-clean for all users) or 'dev' (explicit URL parameter only)
+  type AppMode = 'user' | 'dev';
+  const [appMode, setAppMode] = useState<AppMode>(() => (isDevExplicit ? 'dev' : 'user'));
+  const isDevMode = appMode === 'dev' && isDevExplicit;
 
   const handleModeChange = (newMode: AppMode) => {
     haptics.selection();
     setAppMode(newMode);
     try {
-      localStorage.setItem('lisquiz_app_mode', newMode);
       const url = new URL(window.location.href);
       if (newMode === 'dev') {
         url.searchParams.set('mode', 'dev');
@@ -165,6 +166,7 @@ export default function App() {
   const [leaderboardBoostRank, setLeaderboardBoostRank] = useState<number | null>(null);
   const [lastFinishedRoomCode, setLastFinishedRoomCode] = useState<string>('');
   const [quizCreateInitialTab, setQuizCreateInitialTab] = useState<'create' | 'saved'>('create');
+  const [liveGameStudents, setLiveGameStudents] = useState<Array<{ id: string; name: string; avatar: string }>>([]);
   const studentQuizStatsRef = useRef<{ correct: number; wrong: number; total: number; score: number }>({ correct: 0, wrong: 0, total: 3, score: 0 });
 
   // Listen to incoming WebSocket events
@@ -627,11 +629,13 @@ export default function App() {
           initialQuestionData={currentQuestionData}
           subject={quizSubject}
           classNameTitle={quizClass}
+          initialStudents={liveGameStudents}
           onFinishQuiz={() => {
             socketService.disconnect();
             setLastFinishedRoomCode(activePin);
             setActivePin('');
             setTeacherToken('');
+            setLiveGameStudents([]);
             setSubScreen(null);
             setTab('stats');
           }}
@@ -840,6 +844,7 @@ export default function App() {
               quizTitle={quizTitle}
               subject={quizSubject}
               grade={quizGrade}
+              isDev={isDevMode}
               onRoomReady={(pin, token) => {
                 setActivePin(pin);
                 setTeacherToken(token);
@@ -850,10 +855,11 @@ export default function App() {
                 setQuizCreateInitialTab('create');
                 setSubScreen('teacher_quizzes');
               }}
-              onStartQuiz={() => {
+              onStartQuiz={(lobbyStudents) => {
                 if (socketService.isConnected()) {
                   socketService.send('TEACHER_ACTION', { action: 'START_QUESTION', question_index: 0 });
                 }
+                setLiveGameStudents(lobbyStudents || []);
                 setSubScreen('teacher_game');
               }}
             />
@@ -894,76 +900,78 @@ export default function App() {
 
   return (
     <div className="desktop-shell-wrapper">
-      {/* Top Mode Header: User vs Developer mode switcher & Role selector */}
-      <div className="mode-switcher-bar">
-        <div style={styles.modeBarBrand}>
-          <span style={{ fontSize: 18 }}>🦊</span>
-          <span style={styles.modeBarTitle}>Лисквиз</span>
-          <span style={styles.modeBarVersion}>v2.2</span>
-        </div>
+      {/* Top Mode Header: User vs Developer mode switcher (strictly visible only when ?dev=true) */}
+      {isDevExplicit && (
+        <div className="mode-switcher-bar">
+          <div style={styles.modeBarBrand}>
+            <span style={{ fontSize: 18 }}>🦊</span>
+            <span style={styles.modeBarTitle}>Лисквиз</span>
+            <span style={styles.modeBarVersion}>v2.2</span>
+          </div>
 
-        {/* Central Role Selector: Student vs Teacher */}
-        <div style={styles.roleHeaderSwitch}>
-          <button
-            onClick={() => handleRoleSwitch('student')}
-            style={{
-              ...styles.roleHeaderBtn,
-              backgroundColor: role === 'student' ? 'rgba(16, 185, 129, 0.24)' : 'transparent',
-              borderColor: role === 'student' ? '#10B981' : 'transparent',
-              color: role === 'student' ? '#34D399' : '#94A3B8',
-              fontWeight: role === 'student' ? 800 : 600,
-              boxShadow: role === 'student' ? '0 0 12px rgba(16, 185, 129, 0.35)' : 'none',
-            }}
-            title="Переключиться на версию Ученика"
-          >
-            <span>🦊 Версия Ученика</span>
-          </button>
-          <button
-            onClick={() => handleRoleSwitch('teacher')}
-            style={{
-              ...styles.roleHeaderBtn,
-              backgroundColor: role === 'teacher' ? 'rgba(255, 122, 0, 0.24)' : 'transparent',
-              borderColor: role === 'teacher' ? '#FF7A00' : 'transparent',
-              color: role === 'teacher' ? '#FFA726' : '#94A3B8',
-              fontWeight: role === 'teacher' ? 800 : 600,
-              boxShadow: role === 'teacher' ? '0 0 12px rgba(255, 122, 0, 0.35)' : 'none',
-            }}
-            title="Переключиться на версию Учителя"
-          >
-            <span>🦉 Версия Учителя</span>
-          </button>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <SoundToggleButton variant="pill" />
-          <div style={styles.modeSwitchTabs}>
+          {/* Central Role Selector: Student vs Teacher */}
+          <div style={styles.roleHeaderSwitch}>
             <button
-              onClick={() => handleModeChange('user')}
+              onClick={() => handleRoleSwitch('student')}
               style={{
-                ...styles.modeSwitchBtn,
-                backgroundColor: appMode === 'user' ? '#10B981' : 'transparent',
-                color: appMode === 'user' ? '#FFFFFF' : '#94A3B8',
-                fontWeight: appMode === 'user' ? 800 : 600,
+                ...styles.roleHeaderBtn,
+                backgroundColor: role === 'student' ? 'rgba(16, 185, 129, 0.24)' : 'transparent',
+                borderColor: role === 'student' ? '#10B981' : 'transparent',
+                color: role === 'student' ? '#34D399' : '#94A3B8',
+                fontWeight: role === 'student' ? 800 : 600,
+                boxShadow: role === 'student' ? '0 0 12px rgba(16, 185, 129, 0.35)' : 'none',
               }}
-              title="Пользовательский интерфейс"
+              title="Переключиться на версию Ученика"
             >
-              👤 Пользователь
+              <span>🦊 Версия Ученика</span>
             </button>
             <button
-              onClick={() => handleModeChange('dev')}
+              onClick={() => handleRoleSwitch('teacher')}
               style={{
-                ...styles.modeSwitchBtn,
-                backgroundColor: appMode === 'dev' ? '#FF7A00' : 'transparent',
-                color: appMode === 'dev' ? '#FFFFFF' : '#94A3B8',
-                fontWeight: appMode === 'dev' ? 800 : 600,
+                ...styles.roleHeaderBtn,
+                backgroundColor: role === 'teacher' ? 'rgba(255, 122, 0, 0.24)' : 'transparent',
+                borderColor: role === 'teacher' ? '#FF7A00' : 'transparent',
+                color: role === 'teacher' ? '#FFA726' : '#94A3B8',
+                fontWeight: role === 'teacher' ? 800 : 600,
+                boxShadow: role === 'teacher' ? '0 0 12px rgba(255, 122, 0, 0.35)' : 'none',
               }}
-              title="Панель тестирования разработчика"
+              title="Переключиться на версию Учителя"
             >
-              🛠️ Для разработчиков
+              <span>🦉 Версия Учителя</span>
             </button>
           </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <SoundToggleButton variant="pill" />
+            <div style={styles.modeSwitchTabs}>
+              <button
+                onClick={() => handleModeChange('user')}
+                style={{
+                  ...styles.modeSwitchBtn,
+                  backgroundColor: appMode === 'user' ? '#10B981' : 'transparent',
+                  color: appMode === 'user' ? '#FFFFFF' : '#94A3B8',
+                  fontWeight: appMode === 'user' ? 800 : 600,
+                }}
+                title="Пользовательский интерфейс"
+              >
+                👤 Пользователь
+              </button>
+              <button
+                onClick={() => handleModeChange('dev')}
+                style={{
+                  ...styles.modeSwitchBtn,
+                  backgroundColor: appMode === 'dev' ? '#FF7A00' : 'transparent',
+                  color: appMode === 'dev' ? '#FFFFFF' : '#94A3B8',
+                  fontWeight: appMode === 'dev' ? 800 : 600,
+                }}
+                title="Панель тестирования разработчика"
+              >
+                🛠️ Для разработчиков
+              </button>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="desktop-layout">
         {/* ========================================================
@@ -1186,9 +1194,9 @@ export default function App() {
 
       {/* ========================================================
           DESKTOP DEV TOOLS SIDEBAR (Outside mobile screen)
-          Only rendered in Developer mode
+          Only rendered when developer mode is explicitly enabled via URL
          ======================================================== */}
-      {appMode === 'dev' && (
+      {isDevMode && (
         <aside className="dev-sidebar">
         <div style={styles.devHeader}>
           <Wrench size={16} color="#FF7A00" />
@@ -1453,7 +1461,7 @@ export default function App() {
       )}
 
       {/* Floating Toggle for Dev tools on small mobile screens */}
-      {appMode === 'dev' && (
+      {isDevMode && (
         <button
           className="mobile-dev-toggle"
           onClick={() => setIsMobileDevOpen((prev) => !prev)}
@@ -1464,7 +1472,7 @@ export default function App() {
       )}
 
       {/* Mobile Dev Drawer */}
-      {appMode === 'dev' && isMobileDevOpen && (
+      {isDevMode && isMobileDevOpen && (
         <div className="mobile-dev-drawer">
           <div style={styles.mobileDevDrawerHeader}>
             <span style={{ fontWeight: 800, fontSize: 13, color: '#FF7A00' }}>
