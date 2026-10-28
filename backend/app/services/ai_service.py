@@ -227,6 +227,7 @@ class AIService:
         resolved_topic = topic.strip() if topic and topic.strip() else f"Материалы с фото ({subject})"
         title = f"{subject} ({grade} класс) — {resolved_topic}"
 
+        source_model = "GigaChat-Pro Vision"
         try:
             raw_questions = await gigachat_client.generate_quiz_from_image_raw(
                 image_bytes=image_bytes,
@@ -238,6 +239,7 @@ class AIService:
             questions = self._parse_raw_questions(raw_questions, subject, grade, resolved_topic)
         except Exception as e:
             logger.error("Vision generation failed: %s. Falling back to local OCR.", e)
+            source_model = "RapidOCR CPU + Fallback"
             # Фолбэк на локальный OCR
             ocr_res = ocr_service.extract_text(image_bytes)
             req = QuizCreateRequest(
@@ -247,6 +249,27 @@ class AIService:
                 question_count=question_count,
                 source_notes=ocr_res.text
             )
+            quiz_fallback = await self.generate_quiz(req)
+            questions = quiz_fallback.questions
+
+        if len(questions) >= 3:
+            questions[0].tier = 1
+            questions[0].time_limit_sec = 15
+            questions[0].is_boss = False
+            for q_mid in questions[1:-1]:
+                q_mid.tier = 2
+                q_mid.time_limit_sec = 25
+                q_mid.is_boss = False
+            questions[-1].tier = 3
+            questions[-1].is_boss = True
+            questions[-1].time_limit_sec = 40
+        elif len(questions) == 2:
+            questions[0].tier = 1
+            questions[0].time_limit_sec = 15
+            questions[-1].tier = 3
+            questions[-1].is_boss = True
+            questions[-1].time_limit_sec = 40
+
         variants = bank_service.generate_anti_cheat_variants(
             quiz_id=quiz_id,
             canonical_questions=questions,
@@ -263,7 +286,7 @@ class AIService:
             source="ocr",
             variants=variants
         )
-        return quiz, {"model": "GigaChat-Pro Vision", "status": "success"}
+        return quiz, {"model": source_model, "status": "success"}
 
     def _cache_questions_to_bank(self, questions: List[Question], req: QuizCreateRequest):
         """Кэширование вопросов, сгенерированных LLM, в локальный банк"""

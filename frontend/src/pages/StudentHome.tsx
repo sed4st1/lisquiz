@@ -686,7 +686,13 @@ export default function StudentHome({
             onClick={() => {
               haptics.impact('light');
               soundManager.playTap();
-              onGoToClasses?.() ?? onGoToLeaderboard?.() ?? onGoToGrove?.();
+              if (onGoToClasses) {
+                onGoToClasses();
+              } else if (onGoToLeaderboard) {
+                onGoToLeaderboard();
+              } else if (onGoToGrove) {
+                onGoToGrove();
+              }
             }}
             style={{
               ...styles.featureCard,

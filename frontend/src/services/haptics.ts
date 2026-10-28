@@ -30,7 +30,9 @@ declare global {
 
 class CrossPlatformHapticBridge {
   private get tg(): TelegramHapticApi | null {
-    return typeof window !== 'undefined' ? window.Telegram?.WebApp?.HapticFeedback || null : null;
+    return typeof window !== 'undefined'
+      ? (window.Telegram?.WebApp?.HapticFeedback || (window.WebApp as any)?.HapticFeedback || null)
+      : null;
   }
 
   private get isVk(): boolean {

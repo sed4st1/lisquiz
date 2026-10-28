@@ -120,6 +120,22 @@ async def get_class_by_id(
     return result.scalar_one_or_none()
 
 
+async def get_class_by_student(
+    db: AsyncSession,
+    pseudonym_id: str,
+) -> Optional[ClassModel]:
+    """Находит класс, в котором состоит ученик по его Zero-PII идентификатору."""
+    stmt = (
+        select(ClassModel)
+        .join(ClassStudentModel, ClassStudentModel.class_id == ClassModel.id)
+        .where(ClassStudentModel.pseudonym_id == pseudonym_id)
+        .order_by(desc(ClassStudentModel.joined_at))
+        .options(selectinload(ClassModel.students), selectinload(ClassModel.rooms))
+    )
+    result = await db.execute(stmt)
+    return result.scalars().first()
+
+
 async def get_class_by_invite_code(
     db: AsyncSession,
     invite_code: str,

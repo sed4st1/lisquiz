@@ -54,100 +54,6 @@ export interface TeacherGapReportProps {
   onBackToLobby?: () => void;
 }
 
-const DEFAULT_QUESTIONS: QuestionAnalyticsItem[] = [
-  {
-    id: 1,
-    questionNumber: 1,
-    topic: 'Обыкновенные дроби: понятие',
-    text: 'Что показывает числитель обыкновенной дроби?',
-    correctPercentage: 92,
-    kesCode: '1.2.1',
-    totalAnswers: 24,
-    correctAnswers: 22,
-    tier: 1,
-  },
-  {
-    id: 2,
-    questionNumber: 2,
-    topic: 'Сложение с одинаковыми знаменателями',
-    text: 'Вычислите сумму дробей: 3/11 + 5/11',
-    correctPercentage: 92,
-    kesCode: '1.2.5',
-    totalAnswers: 24,
-    correctAnswers: 22,
-    tier: 1,
-  },
-  {
-    id: 3,
-    questionNumber: 3,
-    topic: 'Основное свойство дроби',
-    text: 'Сократите дробь 18/24 до несократимого вида',
-    correctPercentage: 74,
-    kesCode: '1.2.3',
-    totalAnswers: 24,
-    correctAnswers: 18,
-    tier: 2,
-    commonMistake: 'Деление только числителя на общий делитель',
-  },
-  {
-    id: 4,
-    questionNumber: 4,
-    topic: 'Сложение с разными знаменателями',
-    text: 'Вычислите результат сложения: 1/4 + 2/5',
-    correctPercentage: 74,
-    kesCode: '1.2.5',
-    totalAnswers: 24,
-    correctAnswers: 18,
-    tier: 2,
-    commonMistake: 'Сложение числителей и знаменателей без приведения к общему знаменателю',
-  },
-  {
-    id: 5,
-    questionNumber: 5,
-    topic: 'Приведение к общему знаменателю',
-    text: 'Найдите наименьший общий знаменатель для 5/12 и 7/18',
-    correctPercentage: 48,
-    kesCode: '1.2.4',
-    totalAnswers: 24,
-    correctAnswers: 11,
-    tier: 3,
-    commonMistake: 'Перемножение знаменателей (216 вместо 36)',
-  },
-  {
-    id: 6,
-    questionNumber: 6,
-    topic: 'Вычитание смешанных чисел',
-    text: 'Вычислите разность: 3 1/3 − 1 5/6',
-    correctPercentage: 48,
-    kesCode: '1.2.6',
-    totalAnswers: 24,
-    correctAnswers: 11,
-    tier: 3,
-    commonMistake: 'Затруднение при заёме единицы из целой части',
-  },
-];
-
-const DEFAULT_CHEATING_LOG: CheatingAuditItem[] = [
-  {
-    student_id: 'p_104',
-    student_name: 'Максим Г.',
-    blur_count: 2,
-    rapid_guess_count: 1,
-    total_answers: 6,
-    risk_level: 'HIGH',
-    flags: ['Сворачивание вкладки во время вопроса (2 раза)', 'Быстрый клик быстрее порога чтения (1 раз)'],
-  },
-  {
-    student_id: 'p_112',
-    student_name: 'Егор В.',
-    blur_count: 1,
-    rapid_guess_count: 1,
-    total_answers: 6,
-    risk_level: 'MEDIUM',
-    flags: ['Сворачивание вкладки (1 раз)', 'Быстрый клик (1 раз)'],
-  },
-];
-
 export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   roomCode,
   quizTitle: _quizTitle = 'Обыкновенные дроби: сложение и вычитание',
@@ -162,12 +68,10 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
 }) => {
   const [questions, setQuestions] = useState<QuestionAnalyticsItem[]>(() => {
     if (initialQuestions && initialQuestions.length > 0) return initialQuestions;
-    if (roomCode) return DEFAULT_QUESTIONS;
     return [];
   });
   const [cheatingLog, setCheatingLog] = useState<CheatingAuditItem[]>(() => {
     if (initialCheatingLog && initialCheatingLog.length > 0) return initialCheatingLog;
-    if (roomCode) return DEFAULT_CHEATING_LOG;
     return [];
   });
   const [expandedTier, setExpandedTier] = useState<number | null>(null);
@@ -244,19 +148,21 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
 
   // Metric computations
   const avgAccuracy = useMemo(() => {
-    if (questions.length === 0) return 78;
+    if (questions.length === 0) return 0;
     const sum = questions.reduce((acc, q) => acc + q.correctPercentage, 0);
     return Math.round(sum / questions.length);
   }, [questions]);
 
   // Gamification acorns and drops earned by the class
   const totalAcorns = useMemo(() => {
-    return Math.max(1450, totalStudents * 60 + Math.round((avgAccuracy / 100) * 350));
-  }, [totalStudents, avgAccuracy]);
+    if (questions.length === 0) return 0;
+    return Math.max(0, totalStudents * 60 + Math.round((avgAccuracy / 100) * 350));
+  }, [totalStudents, avgAccuracy, questions.length]);
 
   const totalDrops = useMemo(() => {
-    return Math.max(180, totalStudents * 7 + Math.round((avgAccuracy / 100) * 30));
-  }, [totalStudents, avgAccuracy]);
+    if (questions.length === 0) return 0;
+    return Math.max(0, totalStudents * 7 + Math.round((avgAccuracy / 100) * 30));
+  }, [totalStudents, avgAccuracy, questions.length]);
 
   // Tier metrics
   const tier1Questions = useMemo(() => questions.filter((q) => q.tier === 1 || q.correctPercentage >= 80), [questions]);
@@ -264,17 +170,17 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   const tier3Questions = useMemo(() => questions.filter((q) => q.tier === 3 || q.correctPercentage < 60), [questions]);
 
   const tier1Pct = useMemo(() => {
-    if (tier1Questions.length === 0) return 92;
+    if (tier1Questions.length === 0) return 0;
     return Math.round(tier1Questions.reduce((a, b) => a + b.correctPercentage, 0) / tier1Questions.length);
   }, [tier1Questions]);
 
   const tier2Pct = useMemo(() => {
-    if (tier2Questions.length === 0) return 74;
+    if (tier2Questions.length === 0) return 0;
     return Math.round(tier2Questions.reduce((a, b) => a + b.correctPercentage, 0) / tier2Questions.length);
   }, [tier2Questions]);
 
   const tier3Pct = useMemo(() => {
-    if (tier3Questions.length === 0) return 48;
+    if (tier3Questions.length === 0) return 0;
     return Math.round(tier3Questions.reduce((a, b) => a + b.correctPercentage, 0) / tier3Questions.length);
   }, [tier3Questions]);
 
@@ -518,7 +424,7 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
                 style={styles.alertBadgeIcon}
               />
               <span style={styles.alertBadgeTextRed}>
-                Смена вкладки ({totalBlurEvents || 3} раза)
+                Смена вкладки ({totalBlurEvents} {totalBlurEvents === 1 ? 'раз' : totalBlurEvents >= 2 && totalBlurEvents <= 4 ? 'раза' : 'раз'})
               </span>
             </div>
 
@@ -530,7 +436,7 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
                 style={styles.alertBadgeIcon}
               />
               <span style={styles.alertBadgeTextYellow}>
-                Быстрые клики ({totalRapidClicks || 2} раза)
+                Быстрые клики ({totalRapidClicks} {totalRapidClicks === 1 ? 'раз' : totalRapidClicks >= 2 && totalRapidClicks <= 4 ? 'раза' : 'раз'})
               </span>
             </div>
           </div>

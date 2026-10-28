@@ -91,6 +91,31 @@ async def list_classes_endpoint(
     return {"classes": classes}
 
 
+@router.get("/student/{pseudonym_id}")
+async def get_student_class_endpoint(
+    pseudonym_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Возвращает текущий класс ученика по его Zero-PII идентификатору."""
+    cls_obj = await class_service.get_class_by_student(db, pseudonym_id)
+    if not cls_obj:
+        return {"status": "none", "class": None}
+
+    return {
+        "status": "enrolled",
+        "class": {
+            "id": cls_obj.id,
+            "name": cls_obj.name,
+            "subject": cls_obj.subject,
+            "grade": cls_obj.grade,
+            "invite_code": cls_obj.invite_code,
+            "invite_url": f"/?join_class={cls_obj.invite_code}",
+            "students_count": len(cls_obj.students),
+            "created_at": cls_obj.created_at.isoformat() if cls_obj.created_at else None,
+        },
+    }
+
+
 @router.get("/{class_id}")
 async def get_class_endpoint(
     class_id: str,

@@ -35,8 +35,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-async def root():
+@app.get("/api")
+async def api_info():
     return {
         "project": "Лисквиз (Lisquiz)",
         "team": "Вабба-Лабба-Дэдлайн",
@@ -74,5 +74,35 @@ app.include_router(routes_quiz.router, prefix="/api/quiz", tags=["Quiz"])
 app.include_router(routes_quiz.router, prefix="/api/quizzes", tags=["Quizzes"])
 app.include_router(routes_ml2.router, prefix="/api/ml2", tags=["ML 2.0"])
 app.include_router(routes_grove.router, prefix="/api/grove", tags=["Class Grove"])
+
+# ==============================================================================
+# Раздача собранного мини-приложения React / Vite (SPA) для автономного Docker
+# ==============================================================================
+import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+dist_candidates = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")),
+    "/app/frontend/dist",
+    "/app/dist",
+]
+frontend_dist = next((p for p in dist_candidates if os.path.isdir(p) and os.path.isfile(os.path.join(p, "index.html"))), None)
+
+if frontend_dist:
+    assets_dir = os.path.join(frontend_dist, "assets")
+    if os.path.isdir(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="spa-assets")
+
+    @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
+    async def serve_spa(full_path: str):
+        # Если запрошен существующий статический файл (favicon, картинки)
+        target = os.path.join(frontend_dist, full_path)
+        if full_path and os.path.isfile(target):
+            return FileResponse(target)
+        # Иначе отдаем точку входа SPA index.html для client-side routing
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
+
 
 

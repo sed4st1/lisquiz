@@ -130,6 +130,25 @@ export const classApi = {
   },
 
   /**
+   * Получение текущего класса ученика.
+   */
+  async getStudentClass(pseudonymId?: string): Promise<ClassItem | null> {
+    const pid = pseudonymId || localStorage.getItem('lisquiz_student_pseudo_id') || 'student_guest';
+    const res = await fetch(`/api/classes/student/${encodeURIComponent(pid)}`, {
+      headers: {
+        ...authService.getAuthHeaders(),
+      },
+    });
+
+    if (!res.ok) {
+      return null;
+    }
+
+    const data = await res.json();
+    return data?.class || null;
+  },
+
+  /**
    * Вступление ученика в класс по коду приглашения.
    */
   async joinClass(inviteCode: string, pseudonymId?: string): Promise<{ class_id: string; name: string; students_count: number }> {

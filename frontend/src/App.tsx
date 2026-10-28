@@ -29,6 +29,7 @@ import StudentRoundWait from './pages/StudentRoundWait';
 import StudentQuizFinish from './pages/StudentQuizFinish';
 import SleepScreen from './pages/SleepScreen';
 import TeacherClassManagement from './pages/TeacherClassManagement';
+import StudentClassView from './pages/StudentClassView';
 import RoleSelectScreen from './pages/RoleSelectScreen';
 import { classApi } from './services/classApi';
 import { testHarness } from './services/testHarness';
@@ -51,6 +52,7 @@ type SubScreenType =
   | 'student_quiz_finish'
   | 'student_leaderboard'
   | 'sleep_screen'
+  | 'student_class'
   | 'teacher_classes'
   | 'teacher_quizzes'
   | 'teacher_report';
@@ -84,7 +86,10 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const s = params.get('screen') || params.get('subScreen');
       if (s === 'role_select') return 'role_select';
-      if (s === 'teacher_classes' || s === 'classes') return 'teacher_classes';
+      if (s === 'teacher_classes') return 'teacher_classes';
+      if (s === 'student_class' || s === 'classes' || s === 'class') {
+        return (role as string) === 'teacher' ? 'teacher_classes' : 'student_class';
+      }
       if (s === 'teacher_quizzes' || s === 'quizzes') return 'teacher_quizzes';
       if (s === 'teacher_game') return 'teacher_game';
       if (s === 'student_waiting' || s === 'waiting') return 'student_waiting';
@@ -321,7 +326,11 @@ export default function App() {
       classApi.joinClass(joinClassCode)
         .then((res) => {
           haptics.notification('success');
+          localStorage.setItem('lisquiz_student_class_id', res.class_id);
           setAuthFeedback(`🎉 Вы успешно привязаны к классу ${res.name}! Ваши результаты теперь идут в общий зачет.`);
+          if (role === 'student') {
+            setSubScreen('student_class');
+          }
         })
         .catch((e) => console.warn('Join class error:', e));
     }
@@ -466,6 +475,17 @@ export default function App() {
             handleRoleSwitch(newRole);
             setSubScreen(null);
             setTab('home');
+          }}
+        />
+      );
+    }
+    if (subScreen === 'student_class') {
+      return (
+        <StudentClassView
+          onBack={() => setSubScreen(null)}
+          onGoToGrove={() => {
+            setSubScreen(null);
+            setTab('grove');
           }}
         />
       );
@@ -765,7 +785,7 @@ export default function App() {
               }}
               onGoToGrove={() => handleTabChange('grove')}
               onGoToLeaderboard={() => handleTabChange('leaderboard')}
-              onGoToClasses={() => setSubScreen('teacher_classes')}
+              onGoToClasses={() => setSubScreen('student_class')}
               onSwitchToTeacher={() => setSubScreen('role_select')}
               appMode={appMode}
             />
