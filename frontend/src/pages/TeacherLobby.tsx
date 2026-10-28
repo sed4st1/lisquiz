@@ -18,6 +18,8 @@ import { quizStorage, SavedQuiz } from '../services/quizStorage';
 import QRCode from 'qrcode';
 import QuizQuestionEditorModal from '../components/QuizQuestionEditorModal';
 import { LobbyBoardScene, DivisionType } from '../components/LobbyBoardScene';
+import { soundManager } from '../services/soundManager';
+import SoundToggleButton from '../components/SoundToggleButton';
 import { HangingPinSign } from '../components/HangingPinSign';
 import { StudentsCountPill } from '../components/StudentsCountPill';
 import { LobbyStartButton } from '../components/LobbyStartButton';
@@ -145,6 +147,14 @@ export default function TeacherLobby({
       .catch((err) => console.error('Failed to generate real QR code:', err));
   }, [activePin]);
 
+  // Ambient BGM loop for teacher classroom projector lobby
+  useEffect(() => {
+    soundManager.playBgm('grove', true);
+    return () => {
+      soundManager.stopBgm();
+    };
+  }, []);
+
   // 1. Fetch real quizzes from backend DB
   useEffect(() => {
     quizStorage.syncFromDb().then((dbQuizzes) => {
@@ -261,6 +271,7 @@ export default function TeacherLobby({
         handleJoined = (data: any) => {
           if (!isMounted) return;
           haptics.notification('success');
+          soundManager.playKnock();
           setStudents((prev) => {
             const exists = prev.some((s) => s.id === data.player_id);
             if (exists) return prev;
@@ -283,6 +294,8 @@ export default function TeacherLobby({
 
         handleCountdown = (data: any) => {
           if (!isMounted) return;
+          soundManager.stopBgm();
+          soundManager.playKnock();
           const sec = data.countdown_sec || 3;
           setCountdown(sec);
           let cur = sec;
@@ -295,7 +308,10 @@ export default function TeacherLobby({
                 onStartQuiz?.();
               }
             } else {
-              if (isMounted) setCountdown(cur);
+              if (isMounted) {
+                soundManager.playKnock();
+                setCountdown(cur);
+              }
             }
           }, 1000);
         };
@@ -342,10 +358,13 @@ export default function TeacherLobby({
 
   const handleStartGame = () => {
     haptics.notification('success');
+    soundManager.playKnock();
+    soundManager.stopBgm();
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'START_GAME' });
     } else {
       setCountdown(3);
+      soundManager.playKnock();
       let cur = 3;
       const timer = setInterval(() => {
         cur -= 1;
@@ -354,6 +373,7 @@ export default function TeacherLobby({
           setCountdown(null);
           onStartQuiz?.();
         } else {
+          soundManager.playKnock();
           setCountdown(cur);
         }
       }, 1000);
@@ -513,6 +533,11 @@ export default function TeacherLobby({
 
   return (
     <div style={styles.container}>
+      {/* Floating Sound Toggle Button for Teacher Projector */}
+      <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 90 }}>
+        <SoundToggleButton variant="round" size={16} />
+      </div>
+
       {/* Toast Notification */}
       <AnimatePresence>
         {toastMessage && (

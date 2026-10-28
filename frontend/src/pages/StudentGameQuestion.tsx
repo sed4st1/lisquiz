@@ -5,6 +5,8 @@ import 'katex/dist/katex.min.css';
 import { ArrowLeft, CheckCircle2, Clock } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { socketService } from '../services/socketService';
+import { soundManager } from '../services/soundManager';
+import SoundToggleButton from '../components/SoundToggleButton';
 import type { QuizOption } from '../types/quiz';
 
 export interface StudentGameQuestionProps {
@@ -266,6 +268,9 @@ export default function StudentGameQuestion({
           handleTimeUp();
           return 0;
         }
+        if (prev <= 4) {
+          soundManager.playKnock();
+        }
         return prev - 1;
       });
     }, 1000);
@@ -284,6 +289,7 @@ export default function StudentGameQuestion({
     if (selectedOptionId) return; // already chosen
     setSelectedOptionId(optId);
     haptics.impact('medium');
+    soundManager.playTap();
 
     const responseTimeMs = Date.now() - startTimeRef.current;
     const isCorrect = isControlledMode
@@ -312,9 +318,11 @@ export default function StudentGameQuestion({
     // We give a brief 550ms feedback so the tap is physically felt, then move immediately!
     setTimeout(() => {
       if (currentQIndex + 1 < DEFAULT_QUIZ_QUESTIONS.length) {
+        soundManager.playKnock();
         setCurrentQIndex((prev) => prev + 1);
       } else {
         // Last question answered! Transition to waiting state
+        soundManager.playVictory();
         setIsFinishedWaiting(true);
       }
     }, 550);
@@ -376,7 +384,9 @@ export default function StudentGameQuestion({
             </span>
           </div>
 
-          <div style={{ width: 44 }} />
+          <div style={{ width: 44, display: 'flex', justifyContent: 'flex-end', alignItems: 'center' }}>
+            <SoundToggleButton variant="round" size={14} />
+          </div>
         </div>
 
         {/* ========================================================

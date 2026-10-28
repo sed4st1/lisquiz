@@ -4,6 +4,7 @@ import confetti from 'canvas-confetti';
 import { ArrowLeft, CheckCircle2, FileEdit, Trophy } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { socketService } from '../services/socketService';
+import { soundManager } from '../services/soundManager';
 import StudentRedemptionModal from '../components/StudentRedemptionModal';
 
 export interface StudentQuizFinishProps {
@@ -87,6 +88,9 @@ export default function StudentQuizFinish({
     // Disconnect active socket room upon quiz finish
     socketService.disconnect();
 
+    // Play triumphant victory stinger
+    soundManager.playVictory();
+
     // Fire celebratory confetti on mount
     try {
       haptics.notification('success');
@@ -119,6 +123,7 @@ export default function StudentQuizFinish({
     setRedemptionDone(true);
     setCurrentScore((prev) => prev + points);
     haptics.notification('success');
+    soundManager.playCollect();
     try {
       confetti({
         particleCount: 50,

@@ -39,6 +39,7 @@ import { testHarness } from './services/testHarness';
 import { roomApi } from './services/roomApi';
 import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
+import SoundToggleButton from './components/SoundToggleButton';
 
 type TabType = 'home' | 'grove' | 'leaderboard' | 'stats';
 type SubScreenType =
@@ -878,29 +879,32 @@ export default function App() {
           <span style={styles.modeBarVersion}>v2.2</span>
         </div>
 
-        <div style={styles.modeSwitchTabs}>
-          <button
-            onClick={() => handleModeChange('user')}
-            style={{
-              ...styles.modeSwitchBtn,
-              backgroundColor: appMode === 'user' ? '#10B981' : 'transparent',
-              color: appMode === 'user' ? '#FFFFFF' : '#94A3B8',
-              fontWeight: appMode === 'user' ? 800 : 600,
-            }}
-          >
-            👤 Версия для пользователей
-          </button>
-          <button
-            onClick={() => handleModeChange('dev')}
-            style={{
-              ...styles.modeSwitchBtn,
-              backgroundColor: appMode === 'dev' ? '#FF7A00' : 'transparent',
-              color: appMode === 'dev' ? '#FFFFFF' : '#94A3B8',
-              fontWeight: appMode === 'dev' ? 800 : 600,
-            }}
-          >
-            🛠️ Для разработчиков
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <SoundToggleButton variant="pill" />
+          <div style={styles.modeSwitchTabs}>
+            <button
+              onClick={() => handleModeChange('user')}
+              style={{
+                ...styles.modeSwitchBtn,
+                backgroundColor: appMode === 'user' ? '#10B981' : 'transparent',
+                color: appMode === 'user' ? '#FFFFFF' : '#94A3B8',
+                fontWeight: appMode === 'user' ? 800 : 600,
+              }}
+            >
+              👤 Версия для пользователей
+            </button>
+            <button
+              onClick={() => handleModeChange('dev')}
+              style={{
+                ...styles.modeSwitchBtn,
+                backgroundColor: appMode === 'dev' ? '#FF7A00' : 'transparent',
+                color: appMode === 'dev' ? '#FFFFFF' : '#94A3B8',
+                fontWeight: appMode === 'dev' ? 800 : 600,
+              }}
+            >
+              🛠️ Для разработчиков
+            </button>
+          </div>
         </div>
       </div>
 

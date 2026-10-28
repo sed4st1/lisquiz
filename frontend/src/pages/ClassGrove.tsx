@@ -8,6 +8,8 @@ import {
   ArrowLeft,
 } from 'lucide-react';
 import { haptics } from '../services/haptics';
+import { soundManager } from '../services/soundManager';
+import SoundToggleButton from '../components/SoundToggleButton';
 import { MascotPuppet } from '../components/MascotPuppet';
 import { ClassGroveTree, STAGE_NAMES } from '../components/ClassGroveTree';
 import { WaterParticlesCanvas, WaterParticlesCanvasHandle } from '../components/WaterParticlesCanvas';
@@ -100,13 +102,21 @@ export default function ClassGrove({
     loadGroveData();
   }, [loadGroveData]);
 
+  // Ambient BGM for Class Grove
+  useEffect(() => {
+    soundManager.playBgm('grove');
+    return () => {
+      soundManager.stopBgm();
+    };
+  }, []);
+
   // Active tree stage (0..5)
   const activeTreeStage: number = devStageOverride ?? 4;
 
   // Interactive watering action
   const handleWaterTree = async () => {
     if (isWatering) return;
-    haptics.notification('success');
+    soundManager.playWater();
     setIsWatering(true);
     setWaterCount((prev) => prev + 1);
     setPoints((prev) => Math.min(maxPoints, prev + 25));
@@ -137,7 +147,7 @@ export default function ClassGrove({
 
   // Click on mascot Sprint (playful tap reaction)
   const handleSprintClick = () => {
-    haptics.impact('light');
+    soundManager.playTap();
     const adviceList = [
       'Привет! Поливай Дерево каждый день, чтобы наш класс не потерял стрик!',
       'Сбалансированный биом даёт +50% ко всем очкам класса!',
@@ -153,7 +163,7 @@ export default function ClassGrove({
 
   // Click on tree (runic burst and stage explorer)
   const handleTreeClick = () => {
-    haptics.impact('light');
+    soundManager.playTap();
     if (particlesRef.current && sceneRef.current) {
       const rect = sceneRef.current.getBoundingClientRect();
       particlesRef.current.triggerExplosion(rect.width * 0.50, rect.height * 0.45, 28);
@@ -452,6 +462,18 @@ export default function ClassGrove({
         </div>
       </motion.div>
 
+      {/* Top Right: Sound Mute / Unmute Toggle Button */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 56,
+          right: 12,
+          zIndex: 22,
+        }}
+      >
+        <SoundToggleButton variant="round" />
+      </div>
+
       {/* =========================================================================
           4. CENTER: THE SACRED KNOWLEDGE TREE (Animated with Framer Motion)
           Grounded on the meadow grass behind the bottom board
@@ -591,7 +613,7 @@ export default function ClassGrove({
             whileTap={{ scale: 0.85 }}
             onClick={(e) => {
               e.stopPropagation();
-              haptics.impact('light');
+              soundManager.playKnock();
               setDevStageOverride((s) => Math.max(0, (s ?? 4) - 1));
             }}
             disabled={activeTreeStage <= 0}
@@ -622,7 +644,7 @@ export default function ClassGrove({
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => {
-              haptics.impact('light');
+              soundManager.playTap();
               setActiveSheet('stages');
             }}
             style={{
@@ -659,7 +681,7 @@ export default function ClassGrove({
             whileTap={{ scale: 0.85 }}
             onClick={(e) => {
               e.stopPropagation();
-              haptics.impact('light');
+              soundManager.playKnock();
               setDevStageOverride((s) => Math.min(5, (s ?? 4) + 1));
             }}
             disabled={activeTreeStage >= 5}

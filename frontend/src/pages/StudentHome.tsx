@@ -8,6 +8,8 @@ import {
   Check,
 } from 'lucide-react';
 import { haptics } from '../services/haptics';
+import { soundManager } from '../services/soundManager';
+import SoundToggleButton from '../components/SoundToggleButton';
 import { roomApi, JoinRoomResponse } from '../services/roomApi';
 import MascotPuppet from '../components/MascotPuppet';
 
@@ -274,6 +276,7 @@ export default function StudentHome({
   // Mascot tap speech bubble cycle
   const handleMascotTap = () => {
     haptics.impact('light');
+    soundManager.playTap();
     const curIdx = FOX_QUOTES.indexOf(foxBubbleText);
     const nextIdx = (curIdx >= 0 ? curIdx + 1 : 0) % FOX_QUOTES.length;
     setFoxBubbleText(FOX_QUOTES[nextIdx] ?? 'Привет!');
@@ -288,6 +291,7 @@ export default function StudentHome({
     newDigits[index] = char;
     setDigits(newDigits);
     haptics.selection();
+    soundManager.playTap();
     setErrorMsg(null);
 
     if (char && index < 5) {
@@ -317,6 +321,7 @@ export default function StudentHome({
   const handleJoin = async () => {
     if (!canJoin || isJoining) return;
     haptics.notification('success');
+    soundManager.playKnock();
     setIsJoining(true);
     setErrorMsg(null);
 
@@ -324,6 +329,7 @@ export default function StudentHome({
     try {
       const joinData = await roomApi.joinRoom(fullPin, trimmedName, selectedAvatar);
       setIsJoining(false);
+      soundManager.playCorrect();
       onJoinGame?.({
         pin: fullPin,
         joinData,
@@ -332,6 +338,7 @@ export default function StudentHome({
       });
     } catch (err: any) {
       setIsJoining(false);
+      soundManager.playWrong();
       setErrorMsg(err.message || 'Комната с таким кодом не найдена');
     }
   };
@@ -349,6 +356,7 @@ export default function StudentHome({
           whileTap={{ scale: 0.96 }}
           onClick={() => {
             haptics.selection();
+            soundManager.playKnock();
             setIsProfileModalOpen(true);
           }}
           style={styles.studentProfilePill}
@@ -371,12 +379,14 @@ export default function StudentHome({
           </div>
         </motion.div>
 
-        {/* Currency & Daily Streak Status Pills */}
+        {/* Currency & Daily Streak Status Pills + Sound Toggle */}
         <div style={styles.topRightStats}>
+          <SoundToggleButton variant="round" size={14} />
           <motion.div
             whileTap={{ scale: 0.94 }}
             onClick={() => {
               haptics.impact('light');
+              soundManager.playKnock();
               setIsCardsModalOpen(true);
             }}
             style={styles.statPill}
@@ -501,6 +511,7 @@ export default function StudentHome({
             whileTap={{ scale: 0.96, y: 2 }}
             onClick={() => {
               haptics.impact('light');
+              soundManager.playTap();
               setIsQuestsModalOpen(true);
             }}
             style={{
@@ -524,6 +535,7 @@ export default function StudentHome({
             whileTap={{ scale: 0.96, y: 2 }}
             onClick={() => {
               haptics.impact('light');
+              soundManager.playTap();
               onGoToGrove?.();
             }}
             style={{
@@ -547,6 +559,7 @@ export default function StudentHome({
             whileTap={{ scale: 0.96, y: 2 }}
             onClick={() => {
               haptics.impact('light');
+              soundManager.playTap();
               onGoToLeaderboard?.() ?? onGoToGrove?.();
             }}
             style={{
@@ -651,6 +664,7 @@ export default function StudentHome({
                       key={divKey}
                       onClick={() => {
                         haptics.selection();
+                        soundManager.playTap();
                         setDivision(divKey);
                         sessionStorage.setItem('lisquiz_student_division', divKey);
                       }}
@@ -755,6 +769,7 @@ export default function StudentHome({
                         key={av.id}
                         onClick={() => {
                           haptics.selection();
+                          soundManager.playTap();
                           setSelectedAvatar(av.id);
                         }}
                         style={{
@@ -786,6 +801,7 @@ export default function StudentHome({
                 whileTap={{ y: 2 }}
                 onClick={() => {
                   haptics.notification('success');
+                  soundManager.playKnock();
                   setIsProfileModalOpen(false);
                 }}
                 style={styles.gachaPullBtn}
@@ -841,7 +857,10 @@ export default function StudentHome({
               style={styles.modalBox}
             >
               <button
-                onClick={() => setIsQuestsModalOpen(false)}
+                onClick={() => {
+                  soundManager.playKnock();
+                  setIsQuestsModalOpen(false);
+                }}
                 style={styles.modalCloseBtn}
               >
                 <X size={20} color="#64748B" />
@@ -887,7 +906,10 @@ export default function StudentHome({
               </div>
 
               <button
-                onClick={() => setIsQuestsModalOpen(false)}
+                onClick={() => {
+                  soundManager.playKnock();
+                  setIsQuestsModalOpen(false);
+                }}
                 style={{ ...styles.gachaPullBtn, backgroundColor: '#0284C7', borderBottom: '4px solid #0369A1' }}
               >
                 Понятно!
@@ -911,7 +933,10 @@ export default function StudentHome({
               style={styles.modalBox}
             >
               <button
-                onClick={() => setIsCardsModalOpen(false)}
+                onClick={() => {
+                  soundManager.playKnock();
+                  setIsCardsModalOpen(false);
+                }}
                 style={styles.modalCloseBtn}
               >
                 <X size={20} color="#64748B" />
@@ -959,10 +984,12 @@ export default function StudentHome({
                 onClick={() => {
                   if (acorns >= 50) {
                     haptics.notification('success');
+                    soundManager.playCollect();
                     setAcorns((prev) => prev - 50);
                     alert('🎉 Поздравляем! Открыта карта «Золотое Яблоко Ньютона»!');
                   } else {
                     haptics.notification('warning');
+                    soundManager.playWrong();
                     alert('Нужно 50 желудей для открытия пака. Решай викторины!');
                   }
                 }}
