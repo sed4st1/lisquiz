@@ -48,8 +48,15 @@ docs/guide/
 # Databases
 *.db
 *.sqlite3
-backend/data/
+!backend/data/question_bank.db
 
 *.code-workspace
 .mcp.json
 
+# Local FRP PDFs & downloads
+downloads/
+*.pdf
+angl_*.txt
+edsoo_pdf_links.json
+generate_curriculum_catalog.py
+get_pdf_map.py

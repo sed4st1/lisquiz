@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
   Search,
@@ -8,12 +8,17 @@ import {
   Play,
   Trash2,
   CheckCircle2,
+  Check,
+  BookOpen,
+  ChevronRight,
+  Database,
+  GraduationCap,
 } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { roomApi } from '../services/roomApi';
 import { classApi, ClassItem } from '../services/classApi';
 import { quizStorage, SavedQuiz } from '../services/quizStorage';
-import { quizApi } from '../services/quizApi';
+import { quizApi, CurriculumTopicItem } from '../services/quizApi';
 import QuizQuestionEditorModal from '../components/QuizQuestionEditorModal';
 
 export interface TextbookItem {
@@ -34,6 +39,23 @@ export interface ParagraphItem {
   keywords?: string[];
 }
 
+export interface BankTopicItem {
+  subject: string;
+  grade: number;
+  topic: string;
+  display_name: string;
+  count: number;
+}
+
+const FALLBACK_TEXTBOOKS: TextbookItem[] = [
+  { id: 'peryshkin_phys_7', subject: 'Физика', grade: 7, author: 'Пёрышкин А.В.', title: 'Физика 7 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'vilenkin_math_6', subject: 'Математика', grade: 6, author: 'Виленкин Н.Я.', title: 'Математика 6 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'merzlyak_math_6', subject: 'Математика', grade: 6, author: 'Мерзляк А.Г.', title: 'Математика 6 класс', publisher: 'Вентана-Граф', chapters_count: 2 },
+  { id: 'ladyzhenskaya_rus_6', subject: 'Русский язык', grade: 6, author: 'Ладыженская Т.А.', title: 'Русский язык 6 класс', publisher: 'Просвещение', chapters_count: 1 },
+  { id: 'makarychev_alg_7', subject: 'Алгебра', grade: 7, author: 'Макарычев Ю.Н.', title: 'Алгебра 7 класс', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'atanasyan_geom_7_9', subject: 'Геометрия', grade: 7, author: 'Атанасян Л.С.', title: 'Геометрия 7–9 класс', publisher: 'Просвещение', chapters_count: 2 },
+];
+
 export interface TeacherCreateQuizProps {
   onBack?: () => void;
   onQuizCreated?: (roomData?: any) => void;
@@ -50,6 +72,24 @@ export interface SubjectConfig {
   border: string;
   lightBg: string;
 }
+
+export const SUBJECTS = [
+  'Математика',
+  'Русский язык',
+  'Литература',
+  'Окружающий мир',
+  'Физика',
+  'Химия',
+  'Биология',
+  'История',
+  'Обществознание',
+  'География',
+  'Информатика',
+  'Английский язык',
+  'Алгебра',
+  'Геометрия',
+  'Вероятность и статистика',
+];
 
 export const SUBJECT_CONFIGS: Record<string, SubjectConfig> = {
   'Физика': {
@@ -140,6 +180,38 @@ export const SUBJECT_CONFIGS: Record<string, SubjectConfig> = {
     border: '#FECACA',
     lightBg: '#FEF2F2',
   },
+  'Алгебра': {
+    name: 'Алгебра',
+    iconSrc: '/assets/subjects/math.png',
+    gradient: 'linear-gradient(180deg, #38BDF8 0%, #0284C7 100%)',
+    shadow: '0 4px 0 #0369A1',
+    border: '#BAE6FD',
+    lightBg: '#F0F9FF',
+  },
+  'Геометрия': {
+    name: 'Геометрия',
+    iconSrc: '/assets/subjects/math.png',
+    gradient: 'linear-gradient(180deg, #818CF8 0%, #4F46E5 100%)',
+    shadow: '0 4px 0 #3730A3',
+    border: '#C7D2FE',
+    lightBg: '#EEF2FF',
+  },
+  'Вероятность и статистика': {
+    name: 'Вероятность и статистика',
+    iconSrc: '/assets/subjects/math.png',
+    gradient: 'linear-gradient(180deg, #C084FC 0%, #9333EA 100%)',
+    shadow: '0 4px 0 #7E22CE',
+    border: '#E9D5FF',
+    lightBg: '#FAF5FF',
+  },
+  'Окружающий мир': {
+    name: 'Окружающий мир',
+    iconSrc: '/assets/subjects/biology.png',
+    gradient: 'linear-gradient(180deg, #4ADE80 0%, #16A34A 100%)',
+    shadow: '0 4px 0 #15803D',
+    border: '#BBF7D0',
+    lightBg: '#F0FDF4',
+  },
 };
 
 const SUBJECT_KEYS = Object.keys(SUBJECT_CONFIGS);
@@ -147,17 +219,21 @@ const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 const QUESTION_COUNTS = [3, 5, 8, 10];
 
 const TOPIC_PRESETS: Record<string, string[]> = {
-  'Физика': ['Законы Ньютона', 'Кинетическая энергия', 'Давление', 'Сила тяжести'],
-  'Математика': ['Дроби и действия с ними', 'Уравнения и неравенства', 'Проценты', 'Треугольники'],
-  'Литература': ['Пушкин. Стихотворения', 'Мировая литература', 'Русская классика', 'Басни Крылова'],
-  'Русский язык': ['Чередование корней', 'Правописание Н и НН', 'Сложные предложения', 'Причастия'],
-  'Биология': ['Клетка и ткани', 'Животные и растения', 'Фотосинтез', 'Экосистемы'],
-  'География': ['Страны и столицы', 'Географические координаты', 'Материки и океаны'],
-  'Химия': ['Периодическая таблица', 'Химические реакции', 'Оксиды и кислоты'],
-  'История': ['Древняя Русь', 'Реформы Петра I', 'Отечественная война 1812 года'],
-  'Информатика': ['Алгоритмы и циклы', 'Системы счисления', 'Основы Python'],
-  'Обществознание': ['Человек и общество', 'Права и обязанности', 'Экономика семьи'],
-  'Английский язык': ['Present Simple vs Continuous', 'Irregular Verbs', 'Vocabulary: Travel'],
+  'Математика': ['Обыкновенные дроби', 'Линейные уравнения', 'Треугольники', 'Проценты'],
+  'Алгебра': ['Квадратные уравнения', 'Производная функции', 'Тригонометрические уравнения', 'Логарифмы'],
+  'Геометрия': ['Теорема Пифагора', 'Признаки равенства треугольников', 'Многогранники', 'Площадь фигур'],
+  'Вероятность и статистика': ['Классическая вероятность', 'Среднее арифметическое', 'Комбинаторика'],
+  'Физика': ['Законы Ньютона', 'Закон Ома', 'Давление и сила Архимеда', 'Электромагнитная индукция'],
+  'Химия': ['Периодический закон', 'Электролитическая диссоциация', 'Углеводороды', 'Оксиды и кислоты'],
+  'Биология': ['Строение клетки', 'Фотосинтез', 'Законы Менделя', 'Эволюция человека'],
+  'Информатика': ['Системы счисления', 'Алгоритмы на Python', 'Базы данных и SQL', 'Математическая логика'],
+  'Русский язык': ['Чередование корней', 'Сложные предложения', 'Правописание Н и НН', 'Спряжение глаголов'],
+  'Литература': ['Мир сказок', 'Евгений Онегин', 'Война и мир', 'Серебряный век'],
+  'История': ['Древняя Русь', 'Эпоха Петра I', 'Отечественная война 1812 года', 'Великая Отечественная война'],
+  'Обществознание': ['Формы государства', 'Спрос и предложение', 'Конституция РФ', 'Права человека'],
+  'География': ['Географические координаты', 'Природные зоны России', 'Страны мира', 'ТЭК России'],
+  'Английский язык': ['Present Simple', 'Past Simple', 'Passive Voice', 'Conditionals'],
+  'Окружающий мир': ['Времена года', 'Красная книга', 'Строение тела человека', 'Наша Родина Россия'],
 };
 
 export function formatQuestionsCount(count: number): string {
@@ -680,7 +756,7 @@ export default function TeacherCreateQuiz({
   });
 
   // Classes state
-  const [, setClasses] = useState<ClassItem[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
 
   // Saved quizzes state & editor
@@ -704,6 +780,18 @@ export default function TeacherCreateQuiz({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterSubject, setFilterSubject] = useState<string>('Все');
 
+  const [textbooks, setTextbooks] = useState<TextbookItem[]>(FALLBACK_TEXTBOOKS);
+  const [selectedTextbook, setSelectedTextbook] = useState<TextbookItem | null>(null);
+  const [selectedParagraph, setSelectedParagraph] = useState<ParagraphItem | null>(null);
+  const [inspectingTextbook, setInspectingTextbook] = useState<any | null>(null);
+  const [textbookModalStep, setTextbookModalStep] = useState<'books' | 'paragraphs'>('books');
+  const [activeModal, setActiveModal] = useState<'subject' | 'grade' | 'topic' | 'count' | 'textbook' | 'class' | null>(null);
+  const [bankTopics, setBankTopics] = useState<BankTopicItem[]>([]);
+  const [curriculumTopics, setCurriculumTopics] = useState<CurriculumTopicItem[]>([]);
+  const [topicSourceTab, setTopicSourceTab] = useState<'frp' | 'bank'>('frp');
+  const [topicSearchQuery, setTopicSearchQuery] = useState<string>('');
+  const [customTopicInput, setCustomTopicInput] = useState<string>('');
+
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -713,6 +801,29 @@ export default function TeacherCreateQuiz({
       }
     });
 
+    fetch('/api/ml2/textbooks')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.textbooks && d.textbooks.length > 0) {
+          setTextbooks(d.textbooks);
+        }
+      })
+      .catch(() => {});
+
+    fetch('/api/quiz/bank/topics')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d && d.topics && d.topics.length > 0) {
+          setBankTopics(d.topics);
+        }
+      })
+      .catch(() => {});
+
+    quizApi.getCurriculumTopics().then((list) => {
+      if (list && list.length > 0) {
+        setCurriculumTopics(list);
+      }
+    });
     classApi.listClasses()
       .then((list) => {
         if (list && list.length > 0) {
@@ -731,7 +842,213 @@ export default function TeacherCreateQuiz({
       .catch(() => {});
   }, [initialClassId, initialClassName]);
 
-  // Handle generation
+  // Re-fetch curriculum topics if modal opened and list is empty
+  useEffect(() => {
+    if (activeModal === 'topic' && curriculumTopics.length === 0) {
+      quizApi.getCurriculumTopics().then((list) => {
+        if (list && list.length > 0) {
+          setCurriculumTopics(list);
+        }
+      });
+    }
+  }, [activeModal, curriculumTopics.length]);
+
+
+  const isSubjectMatch = (subjA?: string, subjB?: string) => {
+    const a = (subjA || '').trim().toLowerCase();
+    const b = (subjB || '').trim().toLowerCase();
+    if (a === b) return true;
+    if ((a === 'литература' || a === 'литературное чтение') && (b === 'литература' || b === 'литературное чтение')) return true;
+    if ((a === 'математика' || a === 'алгебра' || a === 'геометрия' || a === 'вероятность и статистика') && (b === 'математика' || b === 'алгебра' || b === 'геометрия' || b === 'вероятность и статистика')) return true;
+    if ((a === 'окружающий мир' || a === 'природоведение' || a === 'естествознание') && (b === 'окружающий мир' || b === 'природоведение' || b === 'естествознание')) return true;
+    return false;
+  };
+
+  const filteredCurriculumTopics = React.useMemo(() => {
+    let list = curriculumTopics;
+    if (subject) {
+      list = list.filter((t) => isSubjectMatch(t.subject, subject));
+    }
+    if (grade) {
+      list = list.filter((t) => t.grade === grade);
+    }
+    if (topicSearchQuery.trim()) {
+      const rawQ = topicSearchQuery.toLowerCase();
+      const direct = list.filter(t =>
+        `${t.subject} ${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase().includes(rawQ)
+      );
+      if (direct.length > 0) {
+        return direct;
+      }
+
+      const cleanTokens = rawQ.replace(/[^\w\sа-яё]/gi, ' ').split(/\s+/).filter(Boolean);
+      const stopWords = new Set([
+        'для', 'по', 'в', 'во', 'на', 'о', 'об', 'обо', 'с', 'со', 'и', 'к', 'ко',
+        'из', 'от', 'до', 'за', 'у', 'под', 'над', 'при', 'про',
+        'класс', 'класса', 'классы', 'классу', 'классом', 'кл',
+        'п', 'пп', 'номер', 'урок', 'урока', 'уроку', 'тема', 'теме', 'тему',
+        'тест', 'квиз', 'задание', 'викторина'
+      ]);
+      const subjTokens = new Set(subject ? subject.toLowerCase().split(/\s+/) : []);
+      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t) && !subjTokens.has(t));
+
+      // Если в запросе были только стоп-слова, цифры класса или название выбранного предмета,
+      // сохраняем полный список тем предмета/класса
+      if (meaningfulTokens.length === 0) {
+        return list;
+      }
+
+      const matchToken = (token: string, text: string) => {
+        if (text.includes(token)) return true;
+        if (token.length >= 4) {
+          const stem = token.slice(0, Math.max(4, token.length - 2));
+          return text.includes(stem);
+        }
+        return false;
+      };
+
+      const allMatch = list.filter(t => {
+        const fullText = `${t.subject} ${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
+        return meaningfulTokens.every(token => matchToken(token, fullText));
+      });
+      if (allMatch.length > 0) {
+        return allMatch;
+      }
+      return list.filter(t => {
+        const fullText = `${t.subject} ${t.topic} ${t.section} ${t.description} ${(t.keywords || []).join(' ')}`.toLowerCase();
+        return meaningfulTokens.some(token => matchToken(token, fullText));
+      });
+    }
+    return list;
+  }, [curriculumTopics, subject, grade, topicSearchQuery]);
+
+  const filteredBankTopics = React.useMemo(() => {
+    let list = bankTopics;
+    if (subject) {
+      list = list.filter((t) => isSubjectMatch(t.subject, subject));
+    }
+    if (grade) {
+      if (!topicSearchQuery.trim()) {
+        const sameGrade = list.filter((t) => t.grade === grade);
+        if (sameGrade.length > 0) list = sameGrade;
+      }
+    }
+    if (topicSearchQuery.trim()) {
+      const rawQ = topicSearchQuery.toLowerCase();
+      const direct = list.filter(t =>
+        `${t.subject} ${t.display_name} ${t.topic}`.toLowerCase().includes(rawQ)
+      );
+      if (direct.length > 0) {
+        return direct;
+      }
+
+      const cleanTokens = rawQ.replace(/[^\w\sа-яё]/gi, ' ').split(/\s+/).filter(Boolean);
+      const stopWords = new Set([
+        'для', 'по', 'в', 'во', 'на', 'о', 'об', 'обо', 'с', 'со', 'и', 'к', 'ко',
+        'из', 'от', 'до', 'за', 'у', 'под', 'над', 'при', 'про',
+        'класс', 'класса', 'классы', 'классу', 'классом', 'кл',
+        'п', 'пп', 'номер', 'урок', 'урока', 'уроку', 'тема', 'теме', 'тему',
+        'тест', 'квиз', 'задание', 'викторина'
+      ]);
+      const subjTokens = new Set(subject ? subject.toLowerCase().split(/\s+/) : []);
+      const meaningfulTokens = cleanTokens.filter(t => !stopWords.has(t) && !/^\d+$/.test(t) && !subjTokens.has(t));
+
+      if (meaningfulTokens.length === 0) {
+        return list;
+      }
+
+      const matchToken = (token: string, text: string) => {
+        if (text.includes(token)) return true;
+        if (token.length >= 4) {
+          const stem = token.slice(0, Math.max(4, token.length - 2));
+          return text.includes(stem);
+        }
+        return false;
+      };
+
+      const allMatch = list.filter(t => {
+        const fullText = `${t.subject} ${t.display_name} ${t.topic}`.toLowerCase();
+        return meaningfulTokens.every(token => matchToken(token, fullText));
+      });
+      if (allMatch.length > 0) {
+        return allMatch;
+      }
+      return list.filter(t => {
+        const fullText = `${t.subject} ${t.display_name} ${t.topic}`.toLowerCase();
+        return meaningfulTokens.some(token => matchToken(token, fullText));
+      });
+    }
+    return list;
+  }, [bankTopics, subject, grade, topicSearchQuery]);
+
+  // Auto-switch to FRP tab if Bank tab is active but has 0 topics while FRP has topics
+  useEffect(() => {
+    if (activeModal === 'topic' && topicSourceTab === 'bank' && filteredBankTopics.length === 0 && filteredCurriculumTopics.length > 0) {
+      setTopicSourceTab('frp');
+    }
+  }, [activeModal, topicSourceTab, filteredBankTopics.length, filteredCurriculumTopics.length]);
+
+  const handleSelectTextbookForInspection = async (tb: TextbookItem) => {
+    haptics.selection();
+    setInspectingTextbook(tb);
+    setTextbookModalStep('paragraphs');
+    try {
+      const res = await fetch(`/api/ml2/textbooks/${tb.id}`);
+      if (res.ok) {
+        const full = await res.json();
+        setInspectingTextbook(full);
+      }
+    } catch {}
+  };
+
+  const handleSelectParagraph = (para: ParagraphItem) => {
+    haptics.notification('success');
+    setSelectedTextbook(inspectingTextbook);
+    setSelectedParagraph(para);
+    if (inspectingTextbook?.subject) setSubject(inspectingTextbook.subject);
+    if (inspectingTextbook?.grade) setGrade(inspectingTextbook.grade);
+    setTopic(`§ ${para.num}. ${para.title}`);
+    setActiveModal(null);
+  };
+
+  const handleGenerateQuizWithAI = async () => {
+    haptics.notification('success');
+    setIsGenerating(true);
+
+    try {
+      const isTbValid =
+        selectedTextbook &&
+        selectedParagraph;
+
+      const generated = await quizApi.generateQuiz({
+        subject: selectedTextbook?.subject || subject,
+        grade: selectedTextbook?.grade || grade,
+        topic: selectedParagraph ? `§ ${selectedParagraph.num}. ${selectedParagraph.title}` : topic,
+        question_count: questionCount,
+        textbook_id: isTbValid ? selectedTextbook.id : undefined,
+        paragraph_num: isTbValid ? selectedParagraph.num : undefined,
+      });
+
+      if (generated && generated.questions && generated.questions.length > 0) {
+        try {
+          await quizApi.saveQuiz(generated);
+        } catch (e) {
+          console.warn('Auto-save generated quiz notice:', e);
+        }
+        const updatedList = quizStorage.upsertQuiz(generated);
+        quizStorage.setActiveQuiz(generated.id);
+        setSavedQuizzes(updatedList);
+        setEditingQuiz(generated);
+        setIsEditorOpen(true);
+      }
+    } catch (err: any) {
+      console.error('Failed to generate quiz with AI:', err);
+      alert('Ошибка при генерации теста: ' + (err?.message || 'попробуйте ещё раз'));
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const handleStartGeneration = async () => {
     haptics.notification('success');
     setIsGenerating(true);
@@ -1072,6 +1389,58 @@ export default function TeacherCreateQuiz({
                   ))}
                 </div>
               )}
+
+              {/* Rubricator & Textbooks triggers */}
+              <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.selection();
+                    setActiveModal('topic');
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    backgroundColor: '#FFF5EA',
+                    border: '1.5px solid #FF9126',
+                    color: '#D95800',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <GraduationCap size={15} color="#D95800" />
+                  <span>Рубрикатор ФРП ({curriculumTopics.length || '593 темы'})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.selection();
+                    setTextbookModalStep('books');
+                    setActiveModal('textbook');
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    backgroundColor: '#EFF6FF',
+                    border: '1.5px solid #60A5FA',
+                    color: '#2563EB',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <BookOpen size={14} color="#2563EB" />
+                  <span>Каталог учебников</span>
+                </button>
+              </div>
             </div>
 
             {/* 4. SECTION: ФОТО УЧЕБНИКА */}
@@ -1188,9 +1557,594 @@ export default function TeacherCreateQuiz({
                   {isGenerating ? 'Собираем викторину...' : 'Сгенерировать викторину'}
                 </span>
               </motion.button>
+
+              <button
+                type="button"
+                onClick={handleGenerateQuizWithAI}
+                disabled={isGenerating}
+                style={{
+                  width: '100%',
+                  marginTop: 8,
+                  padding: '10px 16px',
+                  borderRadius: 999,
+                  backgroundColor: '#FFFDF9',
+                  border: '1.5px solid #E5C39E',
+                  color: '#6B4A2F',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                }}
+              >
+                <Edit3 size={15} color="#855F3F" />
+                <span>Сгенерировать и настроить вопросы вручную</span>
+              </button>
             </div>
           </div>
         )}
+
+      {/* Selection Sheets / Modals for FRP 593 topics, textbooks, etc. */}
+      <AnimatePresence>
+        {activeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={styles.modalBackdrop}
+            onClick={() => setActiveModal(null)}
+          >
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+              style={styles.modalSheet}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={styles.modalHeader}>
+                <span style={styles.modalTitle}>
+                  {activeModal === 'class' && 'Выбор класса'}
+                  {activeModal === 'subject' && 'Предмет'}
+                  {activeModal === 'grade' && 'Класс'}
+                  {activeModal === 'topic' && 'Каталог тем ФРП и банка'}
+                  {activeModal === 'count' && 'Количество вопросов'}
+                  {activeModal === 'textbook' && (textbookModalStep === 'books' ? 'Каталог учебников' : 'Выбор параграфа')}
+                </span>
+                <button onClick={() => setActiveModal(null)} style={styles.modalCloseBtn}>
+                  <X size={18} color="#9CA3AF" />
+                </button>
+              </div>
+
+              <div style={styles.modalList}>
+                {/* Modal: Class */}
+                {activeModal === 'class' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <button
+                      onClick={() => {
+                        haptics.selection();
+                        setSelectedClass(null);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: !selectedClass ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: !selectedClass ? '#3B82F6' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: '#FFFFFF', fontWeight: 700 }}>Без привязки к классу</span>
+                      {!selectedClass && <Check size={18} color="#3B82F6" />}
+                    </button>
+
+                    {classes.map((cls) => {
+                      const isSel = selectedClass?.id === cls.id;
+                      return (
+                        <button
+                          key={cls.id}
+                          onClick={() => {
+                            haptics.selection();
+                            setSelectedClass(cls);
+                            setSubject(cls.subject);
+                            setGrade(cls.grade);
+                            setActiveModal(null);
+                          }}
+                          style={{
+                            ...styles.modalOptionBtn,
+                            backgroundColor: isSel ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                            borderColor: isSel ? '#3B82F6' : 'rgba(255, 255, 255, 0.1)',
+                          }}
+                        >
+                          <div>
+                            <span style={{ color: '#FFFFFF', fontWeight: 700, display: 'block' }}>
+                              {cls.name} — {cls.subject}
+                            </span>
+                            <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                              {cls.grade} класс • Код {cls.invite_code}
+                            </span>
+                          </div>
+                          {isSel && <Check size={18} color="#3B82F6" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Modal: Textbooks */}
+                {activeModal === 'textbook' && (
+                  <div>
+                    {textbookModalStep === 'paragraphs' && inspectingTextbook ? (
+                      <div>
+                        <button
+                          onClick={() => setTextbookModalStep('books')}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#9CA3AF',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                            fontWeight: 700,
+                            padding: '4px 0 12px',
+                          }}
+                        >
+                          <ArrowLeft size={16} /> Назад к учебникам
+                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+                          {inspectingTextbook.sections?.map((sec: any, sIdx: number) => (
+                            <div key={sIdx} style={{ marginBottom: 6 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', display: 'block', marginBottom: 4 }}>
+                                {sec.chapter}
+                              </span>
+                              {sec.paragraphs?.map((p: ParagraphItem) => (
+                                <button
+                                  key={p.num}
+                                  onClick={() => handleSelectParagraph(p)}
+                                  style={{ ...styles.modalOptionBtn, marginBottom: 4 }}
+                                >
+                                  <span style={{ color: '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
+                                    § {p.num}. {p.title}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
+                        {textbooks.map((tb) => {
+                          const isSubjectMatch = !subject || tb.subject.toLowerCase() === subject.toLowerCase() ||
+                            (subject === 'Математика' && (tb.subject === 'Алгебра' || tb.subject === 'Геометрия')) ||
+                            (subject === 'Алгебра' && tb.subject === 'Математика') ||
+                            (subject === 'Геометрия' && tb.subject === 'Математика');
+                          return (
+                            <button
+                              key={tb.id}
+                              onClick={() => handleSelectTextbookForInspection(tb)}
+                              style={{
+                                ...styles.modalOptionBtn,
+                                borderColor: isSubjectMatch ? 'rgba(59, 130, 246, 0.45)' : 'rgba(255, 255, 255, 0.1)',
+                                backgroundColor: isSubjectMatch ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                              }}
+                            >
+                              <div style={{ textAlign: 'left' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                  <span style={{ color: '#FFFFFF', fontWeight: 700 }}>
+                                    {tb.title}
+                                  </span>
+                                  <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 6, backgroundColor: '#1E293B', color: '#60A5FA', fontWeight: 800 }}>
+                                    {tb.subject}
+                                  </span>
+                                </div>
+                                <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                  {tb.author} • {tb.grade} класс
+                                </span>
+                              </div>
+                              <ChevronRight size={18} color="#9CA3AF" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Modal: Subject */}
+                {activeModal === 'subject' &&
+                  SUBJECTS.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        haptics.selection();
+                        setSubject(item);
+                        setSelectedTextbook(null);
+                        setSelectedParagraph(null);
+                        const presets = TOPIC_PRESETS[item];
+                        if (presets && presets[0]) setTopic(presets[0]);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: subject === item ? 'rgba(255, 122, 0, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: subject === item ? '#FF7A00' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: subject === item ? '#FF7A00' : '#FFFFFF', fontWeight: 700 }}>
+                        {item}
+                      </span>
+                      {subject === item && <Check size={18} color="#FF7A00" />}
+                    </button>
+                  ))}
+
+                {/* Modal: Grade */}
+                {activeModal === 'grade' &&
+                  GRADES.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        haptics.selection();
+                        setGrade(item);
+                        if (selectedTextbook && selectedTextbook.grade !== item) {
+                          setSelectedTextbook(null);
+                          setSelectedParagraph(null);
+                        }
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: grade === item ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: grade === item ? '#10B981' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: grade === item ? '#34D399' : '#FFFFFF', fontWeight: 700 }}>
+                        {item} класс
+                      </span>
+                      {grade === item && <Check size={18} color="#34D399" />}
+                    </button>
+                  ))}
+
+                {/* Modal: Topic with FRP edsoo.ru & Bank Search */}
+                {activeModal === 'topic' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Live search input */}
+                    <div style={{ position: 'relative', width: '100%' }}>
+                      <Search size={15} color="#9CA3AF" style={{ position: 'absolute', left: 12, top: 11 }} />
+                      <input
+                        type="text"
+                        value={topicSearchQuery}
+                        onChange={(e) => setTopicSearchQuery(e.target.value)}
+                        placeholder="Поиск по темам ФРП (edsoo.ru) и банку..."
+                        style={{
+                          width: '100%',
+                          padding: '8px 34px 8px 34px',
+                          borderRadius: 10,
+                          backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          color: '#FFFFFF',
+                          fontSize: 13,
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                      {topicSearchQuery && (
+                        <button
+                          onClick={() => setTopicSearchQuery('')}
+                          style={{
+                            position: 'absolute',
+                            right: 8,
+                            top: 8,
+                            background: 'none',
+                            border: 'none',
+                            color: '#9CA3AF',
+                            cursor: 'pointer',
+                            padding: 2,
+                          }}
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Source Switcher: FRP edsoo.ru vs Question Bank */}
+                    <div style={{ display: 'flex', gap: 6, backgroundColor: 'rgba(255, 255, 255, 0.04)', padding: 4, borderRadius: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          haptics.selection();
+                          setTopicSourceTab('frp');
+                        }}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          padding: '6px 8px',
+                          borderRadius: 7,
+                          border: 'none',
+                          backgroundColor: topicSourceTab === 'frp' ? '#FF7A00' : 'transparent',
+                          color: '#FFFFFF',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <GraduationCap size={14} />
+                        <span>ФРП edsoo.ru</span>
+                        <span style={{ fontSize: 10, opacity: 0.8, backgroundColor: 'rgba(0, 0, 0, 0.25)', padding: '1px 5px', borderRadius: 4 }}>
+                          {filteredCurriculumTopics.length}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          haptics.selection();
+                          setTopicSourceTab('bank');
+                        }}
+                        style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          padding: '6px 8px',
+                          borderRadius: 7,
+                          border: 'none',
+                          backgroundColor: topicSourceTab === 'bank' ? '#FF7A00' : 'transparent',
+                          color: '#FFFFFF',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Database size={14} />
+                        <span>Банк заданий</span>
+                        <span style={{ fontSize: 10, opacity: 0.8, backgroundColor: 'rgba(0, 0, 0, 0.25)', padding: '1px 5px', borderRadius: 4 }}>
+                          {filteredBankTopics.length}
+                        </span>
+                      </button>
+                    </div>
+
+                    {/* Custom Topic Input */}
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <input
+                        type="text"
+                        value={customTopicInput}
+                        onChange={(e) => setCustomTopicInput(e.target.value)}
+                        placeholder="Или введите свою тему вручную..."
+                        style={{
+                          flex: 1,
+                          padding: '7px 10px',
+                          borderRadius: 8,
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          color: '#FFFFFF',
+                          fontSize: 12,
+                          outline: 'none',
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && customTopicInput.trim()) {
+                            setTopic(customTopicInput.trim());
+                            setActiveModal(null);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customTopicInput.trim()) {
+                            setTopic(customTopicInput.trim());
+                            setActiveModal(null);
+                          }
+                        }}
+                        disabled={!customTopicInput.trim()}
+                        style={{
+                          padding: '7px 12px',
+                          borderRadius: 8,
+                          backgroundColor: customTopicInput.trim() ? '#FF7A00' : 'rgba(255, 255, 255, 0.1)',
+                          border: 'none',
+                          color: '#FFFFFF',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: customTopicInput.trim() ? 'pointer' : 'default',
+                        }}
+                      >
+                        ОК
+                      </button>
+                    </div>
+
+                    {/* Content List based on active tab */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 280, overflowY: 'auto' }}>
+                      {topicSourceTab === 'frp' ? (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Темы по стандарту РФ ({subject}, {grade} класс)
+                            </span>
+                            <span style={{ fontSize: 9, color: '#34D399', fontWeight: 700, backgroundColor: 'rgba(52, 211, 153, 0.12)', padding: '1px 5px', borderRadius: 4 }}>
+                              ФРП Минпросвещения
+                            </span>
+                          </div>
+
+                          {filteredCurriculumTopics.length > 0 ? (
+                            filteredCurriculumTopics.map((ct) => {
+                              const isSel = topic.toLowerCase() === ct.topic.toLowerCase();
+                              return (
+                                <button
+                                  key={ct.id}
+                                  onClick={() => {
+                                    haptics.notification('success');
+                                    setTopic(ct.topic);
+                                    setActiveModal(null);
+                                  }}
+                                  style={{
+                                    ...styles.modalOptionBtn,
+                                    backgroundColor: isSel ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                                    borderColor: isSel ? '#F59E0B' : 'rgba(255, 255, 255, 0.08)',
+                                  }}
+                                >
+                                  <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                      <span style={{ color: isSel ? '#FBBF24' : '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
+                                        {ct.topic}
+                                      </span>
+                                      {ct.has_cas && (
+                                        <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#60A5FA', fontWeight: 800 }}>
+                                          CAS SymPy
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                                      <span style={{ color: '#F59E0B', fontSize: 10, fontWeight: 600 }}>
+                                        {ct.section}
+                                      </span>
+                                    </div>
+                                    <span style={{ color: '#9CA3AF', fontSize: 11, lineHeight: '14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                      {ct.description}
+                                    </span>
+                                  </div>
+                                  {isSel && <Check size={18} color="#FBBF24" style={{ flexShrink: 0, marginLeft: 8 }} />}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div style={{ padding: '16px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                              <span style={{ color: '#9CA3AF', fontSize: 12 }}>
+                                {topicSearchQuery.trim()
+                                  ? `По запросу «${topicSearchQuery}» ничего не найдено в программе ${grade} класса`
+                                  : `В каталоге ФРП для ${subject} (${grade} класс) темы пока не загружены`}
+                              </span>
+                              {topicSearchQuery.trim() && (
+                                <button
+                                  type="button"
+                                  onClick={() => setTopicSearchQuery('')}
+                                  style={{
+                                    padding: '5px 10px',
+                                    borderRadius: 6,
+                                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    color: '#FFFFFF',
+                                    fontSize: 11,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Сбросить поиск
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 2 }}>
+                            Проверенные темы из банка ({filteredBankTopics.length})
+                          </span>
+
+                          {filteredBankTopics.length > 0 ? (
+                            filteredBankTopics.map((bt, idx) => {
+                              const isSel = topic.toLowerCase() === bt.display_name.toLowerCase() || topic.toLowerCase() === bt.topic.toLowerCase();
+                              return (
+                                <button
+                                  key={`${bt.topic}_${bt.grade}_${idx}`}
+                                  onClick={() => {
+                                    haptics.selection();
+                                    setTopic(bt.display_name || bt.topic);
+                                    setGrade(bt.grade);
+                                    setActiveModal(null);
+                                  }}
+                                  style={{
+                                    ...styles.modalOptionBtn,
+                                    backgroundColor: isSel ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                                    borderColor: isSel ? '#F59E0B' : 'rgba(255, 255, 255, 0.08)',
+                                  }}
+                                >
+                                  <div style={{ textAlign: 'left', flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                      <span style={{ color: isSel ? '#FBBF24' : '#FFFFFF', fontWeight: 700, fontSize: 13 }}>
+                                        {bt.display_name || bt.topic}
+                                      </span>
+                                      <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FBBF24', fontWeight: 800 }}>
+                                        {bt.count} зад.
+                                      </span>
+                                    </div>
+                                    <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                      {bt.subject} • {bt.grade} класс
+                                    </span>
+                                  </div>
+                                  {isSel && <Check size={18} color="#FBBF24" style={{ flexShrink: 0, marginLeft: 8 }} />}
+                                </button>
+                              );
+                            })
+                          ) : (
+                            <div style={{ padding: '16px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                              <span style={{ color: '#9CA3AF', fontSize: 12 }}>
+                                В банке заданий пока нет тестов по {subject} ({grade} класс).
+                              </span>
+                              {filteredCurriculumTopics.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    haptics.selection();
+                                    setTopicSourceTab('frp');
+                                  }}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    padding: '7px 12px',
+                                    borderRadius: 8,
+                                    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                                    border: '1px solid #F59E0B',
+                                    color: '#FBBF24',
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <GraduationCap size={14} />
+                                  <span>Показать темы ФРП edsoo.ru ({filteredCurriculumTopics.length})</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal: Count */}
+                {activeModal === 'count' &&
+                  QUESTION_COUNTS.map((item) => (
+                    <button
+                      key={item}
+                      onClick={() => {
+                        haptics.selection();
+                        setQuestionCount(item);
+                        setActiveModal(null);
+                      }}
+                      style={{
+                        ...styles.modalOptionBtn,
+                        backgroundColor: questionCount === item ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                        borderColor: questionCount === item ? '#8B5CF6' : 'rgba(255, 255, 255, 0.1)',
+                      }}
+                    >
+                      <span style={{ color: questionCount === item ? '#A78BFA' : '#FFFFFF', fontWeight: 700 }}>
+                        {item} вопросов
+                      </span>
+                      {questionCount === item && <Check size={18} color="#A78BFA" />}
+                    </button>
+                  ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
         {/* ========================================================
             TAB 2: МОИ ВИКТОРИНЫ (ШАБЛОНЫ)
@@ -1902,5 +2856,60 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '0 20px',
     cursor: 'pointer',
     outline: 'none',
+  },
+  modalBackdrop: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 40,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backdropFilter: 'blur(6px)',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#1E293B',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTop: '1px solid rgba(255, 255, 255, 0.18)',
+    padding: '16px 18px 28px',
+    maxHeight: '85vh',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  modalHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: 800,
+    color: '#FFFFFF',
+  },
+  modalCloseBtn: {
+    background: 'transparent',
+    border: 'none',
+    padding: 6,
+    cursor: 'pointer',
+  },
+  modalList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+    maxHeight: 380,
+    overflowY: 'auto',
+  },
+  modalOptionBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 14px',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    cursor: 'pointer',
+    textAlign: 'left',
   },
 };

@@ -124,6 +124,23 @@ class AIService:
 
         # 2. Если в банке недостаточно вопросов — обращаемся к LLM
         if not questions:
+            # Обогащаем данными ФРП Минпросвещения РФ (edsoo.ru) перед генерацией LLM, если учитель не ввёл свой конспект
+            if not req.source_notes:
+                try:
+                    from .curriculum_catalog import curriculum_service
+                    curriculum_topics = curriculum_service.get_topics(req.subject, req.grade, req.topic)
+                    if curriculum_topics:
+                        matched = next((t for t in curriculum_topics if t.get("topic", "").lower() == req.topic.lower()), curriculum_topics[0])
+                        if matched:
+                            req.source_notes = (
+                                f"Федеральная рабочая программа (ФРП edsoo.ru). "
+                                f"Раздел: '{matched.get('section', '')}'. "
+                                f"Обязательные дидактические единицы урока: {matched.get('description', '')}."
+                            )
+                            logger.info("Обогащен контекст генерации LLM данными ФРП edsoo.ru: %s", req.source_notes)
+                except Exception as ce:
+                    logger.warning("Не удалось обогатить контекст ФРП: %s", ce)
+
             is_gigachat_configured = bool(
                 settings.GIGACHAT_CREDENTIALS or (settings.GIGACHAT_CLIENT_ID and settings.GIGACHAT_CLIENT_SECRET)
             )

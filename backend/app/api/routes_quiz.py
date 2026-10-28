@@ -47,6 +47,21 @@ async def get_bank_topics(
         "topics": topics
     }
 
+@router.get("/curriculum/topics")
+async def get_curriculum_topics(
+    subject: Optional[str] = Query(None, description="Фильтр по предмету"),
+    grade: Optional[int] = Query(None, description="Фильтр по классу"),
+    query: Optional[str] = Query(None, description="Поиск по названию темы или дидактическим единицам")
+):
+    """Получить официальные темы уроков из Федеральных рабочих программ РФ (edsoo.ru)."""
+    from ..services.curriculum_catalog import curriculum_service
+    items = curriculum_service.get_topics(subject=subject, grade=grade, query=query)
+    return {
+        "source": "edsoo.ru (ФРП Минпросвещения РФ)",
+        "total": len(items),
+        "topics": items
+    }
+
 @router.get("/bank/search", response_model=List[Question])
 async def search_bank_questions(
     query: str = Query(..., min_length=1, description="Поисковый запрос (тема или ключевые слова)"),

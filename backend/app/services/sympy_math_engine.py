@@ -27,48 +27,57 @@ class SympyMathEngine:
 
     def generate_frac_mul(self, tier: int = 2) -> Dict[str, Any]:
         """Навык: M6.FRAC.MUL — Умножение и деление обыкновенных дробей"""
-        is_div = random.choice([True, False])
-        
-        # Подбираем сокращающиеся числа для красивого ответа
-        num1 = random.choice([2, 3, 4, 5])
-        den1 = random.choice([6, 7, 8, 9])
-        num2 = random.choice([3, 4, 5, 6])
-        den2 = random.choice([5, 7, 8, 10])
+        for _ in range(25):
+            try:
+                is_div = random.choice([True, False])
+                num1 = random.choice([2, 3, 4, 5])
+                den1 = random.choice([6, 7, 8, 9])
+                num2 = random.choice([3, 4, 5, 6])
+                den2 = random.choice([5, 7, 8, 10])
 
-        f1 = sp.Rational(num1, den1)
-        f2 = sp.Rational(num2, den2)
+                f1 = sp.Rational(num1, den1)
+                f2 = sp.Rational(num2, den2)
 
-        if is_div:
-            stem = f"Вычислите значение частного: {num1}/{den1} : {num2}/{den2}"
-            correct_val = f1 / f2
-            # Мутатор 1: Забыл перевернуть вторую дробь (умножил напрямую)
-            distr_no_flip = f1 * f2
-            # Мутатор 2: Сложил числители и сложил знаменатели
-            distr_add_all = sp.Rational(num1 + num2, den1 + den2)
-            # Мутатор 3: Перевернул не ту дробь (первую вместо второй)
-            distr_flip_first = (sp.Rational(1, 1) / f1) * f2
-        else:
-            stem = f"Вычислите значение произведения: {num1}/{den1} * {num2}/{den2}"
-            correct_val = f1 * f2
-            # Мутатор 1: Сложил числители и знаменатели (MC.FRAC.ADDDEN)
-            distr_no_flip = sp.Rational(num1 + num2, den1 + den2)
-            # Мутатор 2: Разделил вместо умножения
-            distr_add_all = f1 / f2
-            # Мутатор 3: Перевернул одну из дробей
-            distr_flip_first = f1 * (sp.Rational(1, 1) / f2)
+                if is_div:
+                    stem = f"Вычислите значение частного: {num1}/{den1} : {num2}/{den2}"
+                    correct_val = f1 / f2
+                    distr_no_flip = f1 * f2
+                    distr_add_all = sp.Rational(num1 + num2, den1 + den2)
+                    distr_flip_first = (sp.Rational(1, 1) / f1) * f2
+                else:
+                    stem = f"Вычислите значение произведения: {num1}/{den1} * {num2}/{den2}"
+                    correct_val = f1 * f2
+                    distr_no_flip = sp.Rational(num1 + num2, den1 + den2)
+                    distr_add_all = f1 / f2
+                    distr_flip_first = f1 * (sp.Rational(1, 1) / f2)
 
-        options = [
-            {"text": str(correct_val), "misc_id": None, "is_correct": True},
-            {"text": str(distr_no_flip), "misc_id": "MC.FRAC.ADDDEN", "is_correct": False},
-            {"text": str(distr_add_all), "misc_id": "MC.FRAC.ADDDEN", "is_correct": False},
-            {"text": str(distr_flip_first), "misc_id": "MC.EXPR.INV", "is_correct": False},
-        ]
+                options = [
+                    {"text": str(correct_val), "misc_id": None, "is_correct": True},
+                    {"text": str(distr_no_flip), "misc_id": "MC.FRAC.ADDDEN", "is_correct": False},
+                    {"text": str(distr_add_all), "misc_id": "MC.FRAC.ADDDEN", "is_correct": False},
+                    {"text": str(distr_flip_first), "misc_id": "MC.EXPR.INV", "is_correct": False},
+                ]
+                return self._format_and_verify(
+                    skill_id="M6.FRAC.MUL",
+                    stem=stem,
+                    options=options,
+                    tier=tier,
+                    explanation=f"По правилам действий с обыкновенными дробями: правильный ответ {correct_val}."
+                )
+            except ValueError:
+                continue
+
         return self._format_and_verify(
             skill_id="M6.FRAC.MUL",
-            stem=stem,
-            options=options,
+            stem="Вычислите значение произведения: 2/3 * 3/4",
+            options=[
+                {"text": "1/2", "misc_id": None, "is_correct": True},
+                {"text": "5/7", "misc_id": "MC.FRAC.ADDDEN", "is_correct": False},
+                {"text": "8/9", "misc_id": "MC.EXPR.INV", "is_correct": False},
+                {"text": "2/4", "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+            ],
             tier=tier,
-            explanation=f"По правилам действий с обыкновенными дробями: правильный ответ {correct_val}."
+            explanation="2/3 * 3/4 = (2 * 3) / (3 * 4) = 6/12 = 1/2."
         )
 
     def generate_prop_solve(self, tier: int = 2) -> Dict[str, Any]:
@@ -372,6 +381,174 @@ class SympyMathEngine:
             tier=tier,
             explanation=f"Условие плавания: если rho_тела ({rho_body}) < rho_жидкости ({rho_liq}) — всплывает; если rho_тела > rho_жидкости — тонет."
         )
+
+    def generate_linear_eq(self, tier: int = 2) -> Dict[str, Any]:
+        """Линейные уравнения ax + b = c (5-7 класс)"""
+        for _ in range(25):
+            try:
+                a = random.choice([2, 3, 4, 5, 6, 7])
+                x_val = random.choice([2, 3, 4, 5, 6, 7, 8, 9])
+                b = random.choice([-15, -12, -9, -8, -6, -5, -4, -3, 3, 4, 5, 6, 8, 9, 12, 15])
+                c = a * x_val + b
+
+                sign_str = f"+ {b}" if b > 0 else f"- {abs(b)}"
+                stem = f"Решите уравнение: {a}x {sign_str} = {c}"
+
+                correct_str = str(x_val)
+                w1 = str(round((c + b) / a, 1) if (c + b) % a != 0 else (c + b) // a)
+                w2 = str((c - b) * a)
+                w3 = str(x_val + random.choice([-2, -1, 1, 2]))
+
+                options = [
+                    {"text": correct_str, "misc_id": None, "is_correct": True},
+                    {"text": w1, "misc_id": "MC.EQ.SIGN", "is_correct": False},
+                    {"text": w2, "misc_id": "MC.EXPR.INV", "is_correct": False},
+                    {"text": w3, "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+                ]
+                return self._format_and_verify(
+                    skill_id="M6.EQ.LINEAR",
+                    stem=stem,
+                    options=options,
+                    tier=tier,
+                    explanation=f"Переносим слагаемое: {a}x = {c} {'-' if b > 0 else '+'} {abs(b)} = {a * x_val}, затем x = {x_val}."
+                )
+            except ValueError:
+                continue
+
+        return self._format_and_verify(
+            skill_id="M6.EQ.LINEAR",
+            stem="Решите уравнение: 3x + 6 = 21",
+            options=[
+                {"text": "5", "misc_id": None, "is_correct": True},
+                {"text": "9", "misc_id": "MC.EQ.SIGN", "is_correct": False},
+                {"text": "45", "misc_id": "MC.EXPR.INV", "is_correct": False},
+                {"text": "6", "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+            ],
+            tier=tier,
+            explanation="3x = 21 - 6 = 15 => x = 15 / 3 = 5."
+        )
+
+    def generate_frac_add(self, tier: int = 1) -> Dict[str, Any]:
+        """Сложение и вычитание обыкновенных дробей (5-6 класс)"""
+        for _ in range(25):
+            try:
+                den = random.choice([4, 5, 6, 7, 8, 9, 10])
+                num1 = random.randint(1, den - 2)
+                num2 = random.randint(1, den - num1)
+                f1 = sp.Rational(num1, den)
+                f2 = sp.Rational(num2, den)
+                correct_sum = f1 + f2
+
+                stem = f"Вычислите значение суммы дробей: {num1}/{den} + {num2}/{den}"
+                w1 = f"{num1 + num2}/{den + den}"
+                w2 = str(abs(f1 - f2)) if f1 != f2 else f"1/{den}"
+                w3 = f"{num1 + num2 + 1}/{den}"
+
+                options = [
+                    {"text": str(correct_sum), "misc_id": None, "is_correct": True},
+                    {"text": w1, "misc_id": "MC.FRAC.ADDDEN", "is_correct": False},
+                    {"text": w2, "misc_id": "MC.EXPR.INV", "is_correct": False},
+                    {"text": w3, "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+                ]
+                return self._format_and_verify(
+                    skill_id="M5.FRAC.ADD",
+                    stem=stem,
+                    options=options,
+                    tier=tier,
+                    explanation=f"При одинаковых знаменателях складываются числители: ({num1} + {num2}) / {den} = {correct_sum}."
+                )
+            except ValueError:
+                continue
+
+        return self._format_and_verify(
+            skill_id="M5.FRAC.ADD",
+            stem="Вычислите значение суммы дробей: 1/5 + 2/5",
+            options=[
+                {"text": "3/5", "misc_id": None, "is_correct": True},
+                {"text": "3/10", "misc_id": "MC.FRAC.ADDDEN", "is_correct": False},
+                {"text": "1/5", "misc_id": "MC.EXPR.INV", "is_correct": False},
+                {"text": "4/5", "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+            ],
+            tier=tier,
+            explanation="(1 + 2) / 5 = 3/5."
+        )
+
+    def generate_percent(self, tier: int = 1) -> Dict[str, Any]:
+        """Проценты (5-6 класс)"""
+        for _ in range(25):
+            try:
+                pct = random.choice([10, 20, 25, 30, 40, 50, 75])
+                base = random.choice([40, 60, 80, 100, 120, 160, 200, 300, 400, 500])
+                correct_val = (base * pct) // 100
+                stem = f"Найдите {pct}% от числа {base}:"
+
+                w1 = str(correct_val * 10)
+                w2 = str(base - correct_val)
+                w3 = str(correct_val + random.choice([-5, 5, 10]))
+
+                options = [
+                    {"text": str(correct_val), "misc_id": None, "is_correct": True},
+                    {"text": w1, "misc_id": "MC.EXPR.INV", "is_correct": False},
+                    {"text": w2, "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+                    {"text": w3, "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+                ]
+                return self._format_and_verify(
+                    skill_id="M5.PERCENT",
+                    stem=stem,
+                    options=options,
+                    tier=tier,
+                    explanation=f"{pct}% от {base} вычисляется как ({base} * {pct}) / 100 = {correct_val}."
+                )
+            except ValueError:
+                continue
+
+        return self._format_and_verify(
+            skill_id="M5.PERCENT",
+            stem="Найдите 25% от числа 200:",
+            options=[
+                {"text": "50", "misc_id": None, "is_correct": True},
+                {"text": "500", "misc_id": "MC.EXPR.INV", "is_correct": False},
+                {"text": "150", "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+                {"text": "60", "misc_id": "MC.ARITH_OFF1", "is_correct": False},
+            ],
+            tier=tier,
+            explanation="25% от 200 = 200 / 4 = 50."
+        )
+
+    def generate_by_topic_or_subject(
+        self,
+        subject: str,
+        topic: str,
+        grade: int = 5,
+        tier: int = 1
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Генерирует строго верифицированное школьное задание по теме или предмету
+        без малейших галлюцинаций LLM и без вузовской сложности.
+        """
+        top_lower = topic.lower()
+        try:
+            if "дроб" in top_lower or "frac" in top_lower:
+                return random.choice([self.generate_frac_add, self.generate_frac_mul])(tier)
+            elif "пропорц" in top_lower:
+                return self.generate_prop_solve(tier)
+            elif "процент" in top_lower:
+                return self.generate_percent(tier)
+            elif "уравнен" in top_lower:
+                return random.choice([self.generate_linear_eq, self.generate_eq_express])(tier)
+            elif "плотност" in top_lower:
+                return random.choice([self.generate_units_dens, self.generate_dens_def, self.generate_dens_calc])(tier)
+            elif "архимед" in top_lower or "плаван" in top_lower:
+                return random.choice([self.generate_arch_force, self.generate_arch_cond])(tier)
+            elif subject == "Математика":
+                gens = [self.generate_frac_add, self.generate_frac_mul, self.generate_prop_solve, self.generate_linear_eq, self.generate_percent]
+                return random.choice(gens)(tier)
+            elif subject == "Физика":
+                gens = [self.generate_units_dens, self.generate_dens_def, self.generate_dens_calc, self.generate_arch_force, self.generate_arch_cond, self.generate_eq_express]
+                return random.choice(gens)(tier)
+        except Exception as e:
+            logger.warning("Ошибка при генерации через SymPy CAS: %s", e)
+        return None
 
     # =========================================================================
     # 2. ВЕРИФИКАЦИЯ И ФОРМАТИРОВАНИЕ ЗАДАНИЙ
