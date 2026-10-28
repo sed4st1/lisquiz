@@ -99,7 +99,7 @@ export default function StudentRedemptionModal({
         resData = {
           is_recovered: isCorrect,
           points_restored: isCorrect ? potentialPts : 0,
-          status_badge: isCorrect ? `🏆 Ошибка исправлена! +${potentialPts} очков` : '💪 Хорошая попытка! Опыт все равно растет',
+          status_badge: isCorrect ? `Ошибка исправлена! +${potentialPts} очков` : 'Хорошая попытка! Опыт все равно растет',
         };
       }
 
@@ -143,7 +143,7 @@ export default function StudentRedemptionModal({
         <div style={styles.header}>
           <div style={styles.headerLeft}>
             <div style={styles.iconCircle}>
-              <Sparkles size={18} color="#10B981" />
+              <Sparkles size={18} color="#059669" />
             </div>
             <div>
               <h2 style={styles.title}>Работа над ошибками</h2>
@@ -152,7 +152,7 @@ export default function StudentRedemptionModal({
           </div>
 
           <button onClick={onClose} style={styles.closeBtn} title="Закрыть">
-            <X size={20} color="#94A3B8" />
+            <X size={20} color="#7D5A3A" />
           </button>
         </div>
 
@@ -201,7 +201,7 @@ export default function StudentRedemptionModal({
             {/* Pedagogical Hint from Sprint */}
             <div style={styles.hintCard}>
               <div style={styles.hintHeader}>
-                <span style={styles.hintMascot}>🦊 Совет от Спринта</span>
+                <span style={styles.hintMascot}>Совет от Спринта</span>
               </div>
               <p style={styles.hintText}>{quest?.hint || 'Вспомните базовые формулы и правила!'}</p>
             </div>
@@ -224,14 +224,15 @@ export default function StudentRedemptionModal({
                       }}
                       style={{
                         ...styles.optionBtn,
-                        backgroundColor: isSelected ? '#064E3B' : '#1E293B',
-                        border: isSelected ? '2px solid #10B981' : '1.5px solid #334155',
+                        backgroundColor: isSelected ? '#10B981' : '#FFFFFF',
+                        border: isSelected ? '2px solid #059669' : '1.5px solid #E5C39E',
+                        boxShadow: isSelected ? '0 2px 0 #047857' : '0 2px 0 #EAD7C2',
                       }}
                     >
                       <span
                         style={{
                           ...styles.optLetter,
-                          color: isSelected ? '#34D399' : '#94A3B8',
+                          color: isSelected ? '#FFFFFF' : '#8B5A2B',
                         }}
                       >
                         {String.fromCharCode(65 + idx)}
@@ -239,8 +240,8 @@ export default function StudentRedemptionModal({
                       <span
                         style={{
                           ...styles.optText,
-                          color: isSelected ? '#FFFFFF' : '#E2E8F0',
-                          fontWeight: isSelected ? 800 : 600,
+                          color: isSelected ? '#FFFFFF' : '#2B1D0C',
+                          fontWeight: isSelected ? 800 : 700,
                         }}
                       >
                         {opt}
@@ -275,7 +276,7 @@ const styles: Record<string, React.CSSProperties> = {
   backdrop: {
     position: 'fixed',
     inset: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(43, 29, 12, 0.65)',
     zIndex: 120,
     display: 'flex',
     alignItems: 'center',
@@ -287,8 +288,10 @@ const styles: Record<string, React.CSSProperties> = {
   modalCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: '#0F172A',
-    borderRadius: 22,
+    backgroundColor: '#FFFDF9',
+    border: '2.5px solid #E5C39E',
+    boxShadow: '0 8px 32px rgba(74, 46, 24, 0.25)',
+    borderRadius: 24,
     padding: 18,
     boxSizing: 'border-box',
     display: 'flex',
@@ -311,21 +314,21 @@ const styles: Record<string, React.CSSProperties> = {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontSize: 16,
-    fontWeight: 800,
-    color: '#FFFFFF',
+    fontWeight: 900,
+    color: '#4A2E18',
     margin: 0,
   },
   badgeBonus: {
     fontSize: 11,
-    color: '#34D399',
-    fontWeight: 700,
+    color: '#15803D',
+    fontWeight: 800,
   },
   closeBtn: {
     background: 'none',
@@ -346,8 +349,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   loadingText: {
     fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: 600,
+    color: '#7D5A3A',
+    fontWeight: 700,
   },
   body: {
     display: 'flex',
@@ -355,7 +358,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 12,
   },
   hintCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FEF9C3',
+    border: '1.5px solid #FDE047',
     borderRadius: 14,
     padding: '10px 14px',
     display: 'flex',
@@ -369,16 +373,17 @@ const styles: Record<string, React.CSSProperties> = {
   hintMascot: {
     fontSize: 12,
     fontWeight: 800,
-    color: '#F59E0B',
+    color: '#B45309',
   },
   hintText: {
     fontSize: 12,
-    color: '#CBD5E1',
+    color: '#713F12',
     lineHeight: 1.4,
     margin: 0,
   },
   questionCard: {
-    backgroundColor: '#1E293B',
+    backgroundColor: '#FAF5EE',
+    border: '1.5px solid #E5C39E',
     borderRadius: 16,
     padding: 14,
     display: 'flex',
@@ -387,15 +392,15 @@ const styles: Record<string, React.CSSProperties> = {
   },
   qTitle: {
     fontSize: 11,
-    fontWeight: 700,
-    color: '#94A3B8',
+    fontWeight: 800,
+    color: '#8D5422',
     textTransform: 'uppercase',
     letterSpacing: '0.04em',
   },
   qStem: {
     fontSize: 14,
-    fontWeight: 700,
-    color: '#FFFFFF',
+    fontWeight: 800,
+    color: '#2B1D0C',
     lineHeight: 1.4,
     margin: 0,
   },
@@ -405,7 +410,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 8,
   },
   optionBtn: {
-    borderRadius: 12,
+    borderRadius: 14,
     padding: '10px 14px',
     display: 'flex',
     alignItems: 'center',
@@ -413,6 +418,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     textAlign: 'left',
     transition: 'all 0.15s ease',
+    outline: 'none',
   },
   optLetter: {
     fontSize: 13,
@@ -423,28 +429,32 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
   actionBtn: {
-    backgroundColor: '#10B981',
-    border: 'none',
-    borderRadius: 14,
+    background: 'linear-gradient(180deg, #34D399 0%, #10B981 100%)',
+    border: '2.5px solid #A7F3D0',
+    boxShadow: '0 4px 0 #047857, 0 6px 14px rgba(16, 185, 129, 0.25)',
+    borderRadius: 999,
     padding: '12px 16px',
-    fontSize: 14,
-    fontWeight: 800,
+    fontSize: 15,
+    fontWeight: 900,
     color: '#FFFFFF',
     cursor: 'pointer',
     touchAction: 'manipulation',
     marginTop: 4,
+    outline: 'none',
   },
   actionBtnSecondary: {
-    backgroundColor: '#334155',
-    border: 'none',
-    borderRadius: 14,
+    backgroundColor: '#FFFDF9',
+    border: '2px solid #E5C39E',
+    boxShadow: '0 3px 0 #D8BEA3',
+    borderRadius: 999,
     padding: '12px 16px',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 800,
-    color: '#FFFFFF',
+    color: '#4A2E18',
     cursor: 'pointer',
     touchAction: 'manipulation',
     marginTop: 4,
+    outline: 'none',
   },
   resultBox: {
     padding: '20px 10px',
@@ -460,7 +470,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 64,
     height: 64,
     borderRadius: '50%',
-    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -469,7 +479,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 64,
     height: 64,
     borderRadius: '50%',
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -477,25 +487,26 @@ const styles: Record<string, React.CSSProperties> = {
   successTitle: {
     fontSize: 20,
     fontWeight: 900,
-    color: '#FFFFFF',
+    color: '#15803D',
     margin: 0,
   },
   retryTitle: {
     fontSize: 18,
-    fontWeight: 800,
-    color: '#FFFFFF',
+    fontWeight: 900,
+    color: '#A16207',
     margin: 0,
   },
   restoredPointsText: {
     fontSize: 16,
     fontWeight: 900,
-    color: '#34D399',
+    color: '#15803D',
   },
   resultDesc: {
-    fontSize: 12.5,
-    color: '#94A3B8',
+    fontSize: 13,
+    color: '#6A4A28',
     lineHeight: 1.4,
     maxWidth: 280,
     margin: 0,
+    fontWeight: 600,
   },
 };

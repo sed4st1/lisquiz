@@ -365,16 +365,54 @@ button, input, select, a, [role="button"] {
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.14);
 }
 
+/* ===== Desktop Shell Wrapper & Mode Switcher ===== */
+.desktop-shell-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+
+.mode-switcher-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 780px;
+  margin: 10px auto 8px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(13, 20, 36, 0.90);
+  border: 1.5px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+  z-index: 50;
+}
+
+@media (max-width: 640px) {
+  .mode-switcher-bar {
+    max-width: 95%;
+    margin: 6px auto;
+    padding: 4px 10px;
+  }
+}
+
 /* ===== Desktop Layout with Outside Dev Sidebar ===== */
 .desktop-layout {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   gap: 24px;
   width: 100%;
   max-width: 780px;
   margin: 0 auto;
   position: relative;
+  flex: 1;
 }
 
 .dev-sidebar {

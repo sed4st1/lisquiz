@@ -1,10 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ArrowRight, BookOpen, User } from 'lucide-react';
+import {
+  X,
+  ArrowRight,
+  BookOpen,
+  User,
+  Check,
+} from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { roomApi, JoinRoomResponse } from '../services/roomApi';
 import MascotPuppet from '../components/MascotPuppet';
-import DynamicClassTree from '../components/DynamicClassTree';
 
 export interface JoinRoomPayload {
   pin: string;
@@ -22,13 +27,104 @@ export interface StudentHomeProps {
   groveHealth?: number;
 }
 
-const AVATARS = [
-  { id: 'fox_smart', label: '🦊 Лис Спринт' },
-  { id: 'owl', label: '🦉 Сова' },
-  { id: 'raccoon', label: '🦝 Енот' },
-  { id: 'bear', label: '🐻 Медведь' },
-  { id: 'hedgehog', label: '🦔 Ёжик' },
-  { id: 'bunny', label: '🐰 Зайчик' },
+export type DivisionType = 'sprout_keepers' | 'forest_guardians' | 'council_of_groves';
+
+export const DIVISION_META: Record<
+  DivisionType,
+  {
+    id: DivisionType;
+    title: string;
+    badge: string;
+    color: string;
+    lightBg: string;
+    border: string;
+    frame: string;
+    role: string;
+    bonus: string;
+    tier: string;
+    description: string;
+    aspectRatio: number;
+    avatarTop: string;
+    avatarWidth: string;
+    currentXp: number;
+    nextTierXp: number;
+  }
+> = {
+  sprout_keepers: {
+    id: 'sprout_keepers',
+    title: 'Хранители Ростков',
+    badge: '🌱',
+    color: '#059669',
+    lightBg: '#ECFDF5',
+    border: '#A7F3D0',
+    frame: '/assets/frames/frame_sprout_keepers.png',
+    role: '💧 Добытчик Воды',
+    bonus: '+15% к поливу Рощи',
+    tier: 'Бронзовый дивизион',
+    description: 'Начальная ступень. Полив корней и базовая подготовка по предметам.',
+    aspectRatio: 574 / 540,
+    avatarTop: '49.2%',
+    avatarWidth: '64%',
+    currentXp: 380,
+    nextTierXp: 600,
+  },
+  forest_guardians: {
+    id: 'forest_guardians',
+    title: 'Стражи Леса',
+    badge: '🛡️',
+    color: '#0284C7',
+    lightBg: '#F0F9FF',
+    border: '#BAE6FD',
+    frame: '/assets/frames/frame_forest_guardians.png',
+    role: '🌿 Поставщик Гумуса',
+    bonus: '+25% к очкам класса',
+    tier: 'Серебряный дивизион',
+    description: 'Опытные защитники биома. Помогают классу преодолевать барьер Либиха.',
+    aspectRatio: 599 / 540,
+    avatarTop: '56.5%',
+    avatarWidth: '62%',
+    currentXp: 860,
+    nextTierXp: 1200,
+  },
+  council_of_groves: {
+    id: 'council_of_groves',
+    title: 'Совет Дубрав',
+    badge: '👑',
+    color: '#D97706',
+    lightBg: '#FFFBEB',
+    border: '#FDE68A',
+    frame: '/assets/frames/frame_council_of_groves.png',
+    role: '☀️ Поставщик Солнца',
+    bonus: '+35% к очкам Рощи',
+    tier: 'Золотой дивизион • Элита',
+    description: 'Высшая лига знатоков. Решение сложнейших заданий и олимпиадных квестов.',
+    aspectRatio: 639 / 533,
+    avatarTop: '56.0%',
+    avatarWidth: '62%',
+    currentXp: 1420,
+    nextTierXp: 2000,
+  },
+};
+
+export const AVATAR_MAP: Record<string, string> = {
+  fox_smart: '/assets/classes/v2/avatar_fox.png',
+  fox: '/assets/classes/v2/avatar_fox.png',
+  owl: '/assets/avatars/students/owl.png',
+  raccoon: '/assets/avatars/students/raccoon.png',
+  bear: '/assets/avatars/students/bear.png',
+  hedgehog: '/assets/avatars/students/hedgehog.png',
+  bunny: '/assets/avatars/students/bunny.png',
+  squirrel: '/assets/avatars/students/squirrel.png',
+};
+
+export const AVATARS = [
+  { id: 'fox_smart', label: 'Лис', emoji: '🦊', img: '/assets/classes/v2/avatar_fox.png' },
+  { id: 'owl', label: 'Сова', emoji: '🦉', img: '/assets/avatars/students/owl.png' },
+  { id: 'raccoon', label: 'Енот', emoji: '🦝', img: '/assets/avatars/students/raccoon.png' },
+  { id: 'bear', label: 'Медведь', emoji: '🐻', img: '/assets/avatars/students/bear.png' },
+  { id: 'hedgehog', label: 'Ёжик', emoji: '🦔', img: '/assets/avatars/students/hedgehog.png' },
+  { id: 'bunny', label: 'Зайчик', emoji: '🐰', img: '/assets/avatars/students/bunny.png' },
+  { id: 'squirrel', label: 'Белка', emoji: '🐿️', img: '/assets/avatars/students/squirrel.png' },
 ];
 
 const FOX_QUOTES = [
@@ -39,46 +135,132 @@ const FOX_QUOTES = [
   'Введи PIN с доски учителя прямо на карточке, и начнём! 🎮',
 ];
 
+interface FramedAvatarProps {
+  avatarKey: string;
+  division: DivisionType;
+  size?: number;
+  glow?: boolean;
+}
+
+export const FramedAvatar: React.FC<FramedAvatarProps> = ({
+  avatarKey,
+  division,
+  size = 40,
+  glow = false,
+}) => {
+  const meta = DIVISION_META[division] || DIVISION_META.forest_guardians;
+  const height = Math.round(size * meta.aspectRatio);
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: size,
+        height: height,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {/* Layer 1: Circular Avatar Masked Image */}
+      <div
+        style={{
+          position: 'absolute',
+          left: '49%',
+          top: meta.avatarTop,
+          transform: 'translate(-50%, -50%)',
+          width: meta.avatarWidth,
+          aspectRatio: '1 / 1',
+          borderRadius: '50%',
+          overflow: 'hidden',
+          backgroundColor: '#FFF7ED',
+          zIndex: 1,
+          boxShadow: glow ? `0 0 18px ${meta.color}66` : 'none',
+        }}
+      >
+        <img
+          src={AVATAR_MAP[avatarKey] || AVATAR_MAP.fox_smart}
+          alt=""
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+          draggable={false}
+        />
+      </div>
+
+      {/* Layer 2: Division Frame Placed Over Avatar Hole */}
+      <img
+        src={meta.frame}
+        alt={meta.title}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          pointerEvents: 'none',
+          zIndex: 2,
+          filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.16))',
+        }}
+        draggable={false}
+      />
+    </div>
+  );
+};
+
 export default function StudentHome({
   onJoinGame,
   onGoToGrove,
   onGoToLeaderboard,
-  onSwitchToTeacher,
-  groveStage = 5,
-  groveHealth = 95,
 }: StudentHomeProps) {
-  // Tree stage interactive inspection (1 to 6)
-  const [treeStage, setTreeStage] = useState<number>(() => {
+  // Profile & Division state
+  const [division, setDivision] = useState<DivisionType>(() => {
     try {
-      const params = new URLSearchParams(window.location.search);
-      const q = parseInt(params.get('stage') || '', 10);
-      if (q >= 1 && q <= 6) return q;
+      const saved = sessionStorage.getItem('lisquiz_student_division') as DivisionType;
+      if (saved && ['sprout_keepers', 'forest_guardians', 'council_of_groves'].includes(saved)) {
+        return saved;
+      }
     } catch {}
-    return groveStage || 5;
+    return 'forest_guardians';
   });
 
+  const [studentName, setStudentName] = useState<string>(() => {
+    try {
+      const saved = sessionStorage.getItem('lisquiz_student_name');
+      if (saved) return saved;
+      const pool = ['Иван К', 'Анна С', 'Михаил В', 'София М', 'Даниил Р', 'Алиса Т', 'Максим Д'];
+      const chosen = pool[Math.floor(Math.random() * pool.length)] ?? 'Анна С';
+      sessionStorage.setItem('lisquiz_student_name', chosen);
+      return chosen;
+    } catch {
+      return 'Анна С';
+    }
+  });
+
+  const [selectedAvatar, setSelectedAvatar] = useState('fox_smart');
+
   // Modal states
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isQuestsModalOpen, setIsQuestsModalOpen] = useState(false);
-  const [isNameModalOpen, setIsNameModalOpen] = useState(false);
   const [isCardsModalOpen, setIsCardsModalOpen] = useState(false);
 
   // Economy state
   const [acorns, setAcorns] = useState(128);
 
   // PIN inputs directly on hero card
-  const [digits, setDigits] = useState<string[]>(['', '', '', '', '', '']);
-  const [selectedAvatar, setSelectedAvatar] = useState('fox_smart');
-  const [studentName, setStudentName] = useState<string>(() => {
+  const [digits, setDigits] = useState<string[]>(() => {
     try {
-      const saved = sessionStorage.getItem('lisquiz_student_name');
-      if (saved) return saved;
-      const pool = ['Иван К', 'Анна С', 'Михаил В', 'София М', 'Даниил Р', 'Алиса Т', 'Максим Д'];
-      const chosen = pool[Math.floor(Math.random() * pool.length)] ?? 'Иван К';
-      sessionStorage.setItem('lisquiz_student_name', chosen);
-      return chosen;
-    } catch {
-      return 'Иван К';
-    }
+      const params = new URLSearchParams(window.location.search);
+      const p = (params.get('pin') || '').replace(/\D/g, '').slice(0, 6);
+      if (p.length > 0) {
+        return Array.from({ length: 6 }, (_, i) => p[i] || '');
+      }
+    } catch {}
+    return ['', '', '', '', '', ''];
   });
 
   const [isJoining, setIsJoining] = useState(false);
@@ -153,85 +335,64 @@ export default function StudentHome({
     }
   };
 
+  const activeDivision = DIVISION_META[division] || DIVISION_META.forest_guardians;
+
   return (
     <div style={styles.container}>
       {/* ========================================================
-          1. TOP APP BAR (CURRENCY, STAGE SWITCHER, TEACHER SHORTCUT)
+          1. TOP APP BAR: PROFILE PILL (WITH DIVISION FRAME) + ACORNS / STREAK
          ======================================================== */}
       <header style={styles.topBar}>
-        {/* Student Profile Pill (opens edit name & avatar modal) */}
+        {/* Student Profile Pill (Click to open rich Profile & Division Modal) */}
         <motion.div
           whileTap={{ scale: 0.96 }}
           onClick={() => {
             haptics.selection();
-            setIsNameModalOpen(true);
+            setIsProfileModalOpen(true);
           }}
           style={styles.studentProfilePill}
-          title="Нажмите, чтобы изменить имя или аватар"
+          title="Открыть профиль и дивизион"
         >
-          <span style={styles.studentProfileAvatar}>
-            {AVATARS.find((a) => a.id === selectedAvatar)?.label.split(' ')[0] || '🦊'}
-          </span>
-          <span style={styles.studentProfileName}>{studentName}</span>
-          <span style={styles.studentProfilePencil}>✎</span>
+          {/* Mini Avatar wearing the division frame */}
+          <FramedAvatar
+            avatarKey={selectedAvatar}
+            division={division}
+            size={36}
+          />
+          <div style={styles.profilePillInfo}>
+            <div style={styles.studentProfileNameRow}>
+              <span style={styles.studentProfileName}>{studentName}</span>
+              <span style={styles.studentProfilePencil}>✎</span>
+            </div>
+            <span style={{ ...styles.studentProfileDivisionBadge, color: activeDivision.color }}>
+              {activeDivision.badge} {activeDivision.title}
+            </span>
+          </div>
         </motion.div>
 
-        {/* Tree Stage Switcher Pill (Stage 1 to 6) */}
-        <div style={styles.stageSwitcherPill} title="Переключить стадию Древа (1..6)">
-          <span style={styles.stageSwitcherLabel}>Древо:</span>
-          {[1, 2, 3, 4, 5, 6].map((s) => (
-            <button
-              key={s}
-              onClick={(e) => {
-                e.stopPropagation();
-                haptics.selection();
-                setTreeStage(s);
-              }}
-              style={{
-                ...styles.stageDotBtn,
-                backgroundColor: treeStage === s ? '#10B981' : '#FFFFFF',
-                color: treeStage === s ? '#FFFFFF' : '#475569',
-                borderColor: treeStage === s ? '#059669' : '#E2E8F0',
-                fontWeight: treeStage === s ? 900 : 700,
-              }}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-
-        {/* Right Status: Subtle Teacher switcher shortcut */}
-        <div style={styles.topRightGroup}>
-          {onSwitchToTeacher && (
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={() => {
-                haptics.selection();
-                onSwitchToTeacher();
-              }}
-              style={styles.teacherSwitchBtn}
-              title="Режим учителя"
-            >
-              Учитель
-            </motion.button>
-          )}
+        {/* Currency & Daily Streak Status Pills */}
+        <div style={styles.topRightStats}>
+          <motion.div
+            whileTap={{ scale: 0.94 }}
+            onClick={() => {
+              haptics.impact('light');
+              setIsCardsModalOpen(true);
+            }}
+            style={styles.statPill}
+            title="Баланс желудей (нажмите, чтобы открыть паки карточек)"
+          >
+            <span style={styles.statPillIcon}>🌰</span>
+            <span style={styles.statPillValue}>{acorns}</span>
+          </motion.div>
+          <div style={styles.statPill} title="Ударный режим: 5 дней">
+            <span style={styles.statPillIcon}>🔥</span>
+            <span style={styles.statPillValue}>5</span>
+          </div>
         </div>
       </header>
 
       {/* ========================================================
-          2. DYNAMIC CLASS TREE (Tied to Class Grove stage 1..6)
-             Overlaid naturally on the hill in top-right overlooking river
-         ======================================================== */}
-      <DynamicClassTree
-        stage={treeStage}
-        health={groveHealth}
-        classNameTitle="5А класс"
-        onStageChange={setTreeStage}
-        onClick={onGoToGrove}
-      />
-
-      {/* ========================================================
-          3. SCENIC MEADOW SECTION: SPRINT MASCOT + HERO CARD WITH PIN
+          2. SCENIC MEADOW SECTION: SPRINT MASCOT + HERO CARD WITH PIN
              Left: Fox sitting on the meadow path (firmly on the ground!)
              Right: User's Clay Frame with Direct PIN Input & Join CTA
          ======================================================== */}
@@ -328,7 +489,7 @@ export default function StudentHome({
       </section>
 
       {/* ========================================================
-          4. LOWER INTERFACE GROUP (3 Feature Cards)
+          3. LOWER INTERFACE GROUP (3 Feature Cards)
              Anchored comfortably at bottom
          ======================================================== */}
       <div style={styles.lowerGroup}>
@@ -406,6 +567,237 @@ export default function StudentHome({
       </div>
 
       {/* ========================================================
+          4. RICH STUDENT PROFILE & DIVISION MODAL
+         ======================================================== */}
+      <AnimatePresence>
+        {isProfileModalOpen && (
+          <div style={styles.modalOverlay}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              style={styles.profileModalBox}
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setIsProfileModalOpen(false)}
+                style={styles.modalCloseBtn}
+                title="Закрыть"
+              >
+                <X size={20} color="#64748B" />
+              </button>
+
+              {/* Modal Header */}
+              <div style={styles.profileHeader}>
+                <h2 style={styles.profileModalTitle}>Профиль исследователя</h2>
+                <p style={styles.profileModalSub}>Твоя статистика и дивизион в Роще 5А класса</p>
+              </div>
+
+              {/* Hero Avatar with Division Frame */}
+              <div style={styles.profileHeroSection}>
+                <div style={{ ...styles.avatarGlowWrap, borderColor: activeDivision.color }}>
+                  <FramedAvatar
+                    avatarKey={selectedAvatar}
+                    division={division}
+                    size={114}
+                    glow={true}
+                  />
+                </div>
+
+                <div style={styles.profileHeroInfo}>
+                  <div style={{ ...styles.divisionBadgeLarge, backgroundColor: activeDivision.lightBg, borderColor: activeDivision.border }}>
+                    <span style={{ fontSize: 16 }}>{activeDivision.badge}</span>
+                    <span style={{ ...styles.divisionBadgeTitle, color: activeDivision.color }}>
+                      {activeDivision.title}
+                    </span>
+                    <span style={styles.divisionTierText}>• {activeDivision.tier}</span>
+                  </div>
+
+                  <div style={styles.roleBenefitPill}>
+                    <span style={styles.roleBenefitRole}>{activeDivision.role}</span>
+                    <span style={styles.roleBenefitBonus}>{activeDivision.bonus}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Division Level Progress Bar */}
+              <div style={styles.xpProgressSection}>
+                <div style={styles.xpProgressHeader}>
+                  <span style={styles.xpProgressLabel}>Прогресс дивизиона</span>
+                  <span style={styles.xpProgressVal}>
+                    {activeDivision.currentXp} / {activeDivision.nextTierXp} XP
+                  </span>
+                </div>
+                <div style={styles.xpTrack}>
+                  <div
+                    style={{
+                      ...styles.xpBarFill,
+                      width: `${Math.min(100, (activeDivision.currentXp / activeDivision.nextTierXp) * 100)}%`,
+                      backgroundColor: activeDivision.color,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Division Switcher (3 Tabs) */}
+              <div style={styles.divisionSwitchRow}>
+                {(['sprout_keepers', 'forest_guardians', 'council_of_groves'] as DivisionType[]).map((divKey) => {
+                  const dMeta = DIVISION_META[divKey];
+                  const isSelected = division === divKey;
+                  return (
+                    <button
+                      key={divKey}
+                      onClick={() => {
+                        haptics.selection();
+                        setDivision(divKey);
+                        sessionStorage.setItem('lisquiz_student_division', divKey);
+                      }}
+                      style={{
+                        ...styles.divisionTabBtn,
+                        backgroundColor: isSelected ? dMeta.color : '#FFFFFF',
+                        borderColor: isSelected ? dMeta.color : '#E2E8F0',
+                        color: isSelected ? '#FFFFFF' : '#475569',
+                      }}
+                    >
+                      <span>{dMeta.badge}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800 }}>{dMeta.title.split(' ')[0]}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Bento Statistics Grid (6 key indicators) */}
+              <div style={styles.statsBentoGrid}>
+                {/* 1. Acorns */}
+                <div style={styles.statBentoCard}>
+                  <div style={styles.statBentoTop}>
+                    <span style={{ fontSize: 18 }}>🌰</span>
+                    <span style={styles.statBentoLabel}>Жёлуди</span>
+                  </div>
+                  <span style={styles.statBentoVal}>{acorns}</span>
+                </div>
+
+                {/* 2. Total XP */}
+                <div style={styles.statBentoCard}>
+                  <div style={styles.statBentoTop}>
+                    <span style={{ fontSize: 18 }}>⚡</span>
+                    <span style={styles.statBentoLabel}>Опыт (XP)</span>
+                  </div>
+                  <span style={styles.statBentoVal}>1,420</span>
+                </div>
+
+                {/* 3. Daily Streak */}
+                <div style={styles.statBentoCard}>
+                  <div style={styles.statBentoTop}>
+                    <span style={{ fontSize: 18 }}>🔥</span>
+                    <span style={styles.statBentoLabel}>Серия</span>
+                  </div>
+                  <span style={styles.statBentoVal}>5 дней</span>
+                </div>
+
+                {/* 4. Accuracy */}
+                <div style={styles.statBentoCard}>
+                  <div style={styles.statBentoTop}>
+                    <span style={{ fontSize: 18 }}>🎯</span>
+                    <span style={styles.statBentoLabel}>Точность</span>
+                  </div>
+                  <span style={styles.statBentoVal}>92%</span>
+                </div>
+
+                {/* 5. Quizzes Completed */}
+                <div style={styles.statBentoCard}>
+                  <div style={styles.statBentoTop}>
+                    <span style={{ fontSize: 18 }}>📚</span>
+                    <span style={styles.statBentoLabel}>Викторин</span>
+                  </div>
+                  <span style={styles.statBentoVal}>14</span>
+                </div>
+
+                {/* 6. Class Rank */}
+                <div style={styles.statBentoCard}>
+                  <div style={styles.statBentoTop}>
+                    <span style={{ fontSize: 18 }}>🏆</span>
+                    <span style={styles.statBentoLabel}>Ранг</span>
+                  </div>
+                  <span style={styles.statBentoVal}>#3 в классе</span>
+                </div>
+              </div>
+
+              {/* Name & Avatar Customization Section */}
+              <div style={styles.editSectionCard}>
+                <div style={styles.editSectionHeader}>
+                  <User size={15} color="#FF7A00" />
+                  <span style={styles.editSectionTitle}>Настройки персонажа</span>
+                </div>
+
+                {/* Name Input */}
+                <div style={{ marginBottom: 12 }}>
+                  <input
+                    type="text"
+                    value={studentName}
+                    onChange={(e) => {
+                      setStudentName(e.target.value);
+                      sessionStorage.setItem('lisquiz_student_name', e.target.value);
+                    }}
+                    placeholder="Введи своё имя..."
+                    style={styles.nameInput}
+                  />
+                </div>
+
+                {/* Avatar Picker Row */}
+                <div style={styles.avatarPickerRow}>
+                  {AVATARS.map((av) => {
+                    const isSelected = selectedAvatar === av.id;
+                    return (
+                      <button
+                        key={av.id}
+                        onClick={() => {
+                          haptics.selection();
+                          setSelectedAvatar(av.id);
+                        }}
+                        style={{
+                          ...styles.avatarBtn,
+                          borderColor: isSelected ? '#FF7A00' : '#E2E8F0',
+                          backgroundColor: isSelected ? '#FFF7ED' : '#FFFFFF',
+                          transform: isSelected ? 'scale(1.08)' : 'scale(1)',
+                        }}
+                        title={av.label}
+                      >
+                        <img
+                          src={av.img}
+                          alt={av.label}
+                          style={{
+                            width: 26,
+                            height: 26,
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Tactile Close Button */}
+              <motion.button
+                whileTap={{ y: 2 }}
+                onClick={() => {
+                  haptics.notification('success');
+                  setIsProfileModalOpen(false);
+                }}
+                style={styles.gachaPullBtn}
+              >
+                <Check size={18} strokeWidth={3} />
+                <span>Сохранить профиль</span>
+              </motion.button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================
           5. QUESTS & PRACTICE MODAL ("ЗАДАНИЯ")
          ======================================================== */}
       <AnimatePresence>
@@ -476,80 +868,7 @@ export default function StudentHome({
       </AnimatePresence>
 
       {/* ========================================================
-          6. STUDENT NAME / AVATAR MODAL
-         ======================================================== */}
-      <AnimatePresence>
-        {isNameModalOpen && (
-          <div style={styles.modalOverlay}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              style={styles.modalBox}
-            >
-              <button
-                onClick={() => setIsNameModalOpen(false)}
-                style={styles.modalCloseBtn}
-              >
-                <X size={20} color="#64748B" />
-              </button>
-
-              <div style={styles.modalHeader}>
-                <div style={styles.modalIconWrap}>
-                  <User size={24} color="#FF7A00" />
-                </div>
-                <div>
-                  <h2 style={styles.modalTitle}>Имя ученика</h2>
-                  <p style={styles.modalSub}>Как тебя называть на экране викторины</p>
-                </div>
-              </div>
-
-              <div style={{ margin: '14px 0 16px' }}>
-                <input
-                  type="text"
-                  value={studentName}
-                  onChange={(e) => {
-                    setStudentName(e.target.value);
-                    sessionStorage.setItem('lisquiz_student_name', e.target.value);
-                  }}
-                  placeholder="Введи своё имя..."
-                  style={styles.nameInput}
-                />
-              </div>
-
-              <div style={styles.avatarPickerRow}>
-                {AVATARS.map((av) => (
-                  <button
-                    key={av.id}
-                    onClick={() => {
-                      haptics.selection();
-                      setSelectedAvatar(av.id);
-                    }}
-                    style={{
-                      ...styles.avatarBtn,
-                      borderColor: selectedAvatar === av.id ? '#FF7A00' : '#E2E8F0',
-                      backgroundColor: selectedAvatar === av.id ? '#FFF7ED' : '#FFFFFF',
-                    }}
-                  >
-                    {av.label.split(' ')[0]}
-                  </button>
-                ))}
-              </div>
-
-              <button
-                onClick={() => setIsNameModalOpen(false)}
-                style={styles.gachaPullBtn}
-              >
-                Сохранить
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* ========================================================
-          7. KNOWLEDGE CARDS GACHA MODAL
+          6. KNOWLEDGE CARDS GACHA MODAL
          ======================================================== */}
       <AnimatePresence>
         {isCardsModalOpen && (
@@ -657,90 +976,83 @@ const styles: Record<string, React.CSSProperties> = {
     width: '100%',
     zIndex: 10,
     paddingTop: 2,
-    gap: 6,
+    gap: 8,
   },
   studentProfilePill: {
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     backgroundColor: '#FFFDF2',
     border: '2px solid #F3EEDB',
     borderBottom: '4px solid #E5DBC7',
     borderRadius: 9999,
-    padding: '4px 12px 4px 8px',
+    padding: '3px 12px 3px 6px',
     boxShadow: '0 4px 14px rgba(28, 41, 61, 0.10)',
     cursor: 'pointer',
     userSelect: 'none',
     flexShrink: 0,
   },
-  studentProfileAvatar: {
-    fontSize: 20,
-    lineHeight: 1,
-    filter: 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12))',
+  profilePillInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    lineHeight: 1.1,
+  },
+  studentProfileNameRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 3,
   },
   studentProfileName: {
     fontFamily: "'Comfortaa', 'Nunito', sans-serif",
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: 900,
     color: '#1E293B',
-    maxWidth: 90,
+    maxWidth: 95,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   studentProfilePencil: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#94A3B8',
-    marginLeft: 1,
   },
-  stageSwitcherPill: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(255, 253, 242, 0.95)',
-    border: '1.5px solid #F3EEDB',
-    borderBottom: '3px solid #E5DBC7',
-    borderRadius: 9999,
-    padding: '3px 8px',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-  },
-  stageSwitcherLabel: {
+  studentProfileDivisionBadge: {
     fontFamily: "'Nunito', sans-serif",
-    fontSize: 10.5,
+    fontSize: 10,
     fontWeight: 800,
-    color: '#64748B',
-    marginRight: 2,
+    marginTop: 1,
+    whiteSpace: 'nowrap',
   },
-  stageDotBtn: {
-    width: 22,
-    height: 22,
-    borderRadius: 9999,
-    border: '1px solid #E2E8F0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 11,
-    cursor: 'pointer',
-    padding: 0,
-    transition: 'all 0.15s ease',
-  },
-  topRightGroup: {
+  topRightStats: {
     display: 'flex',
     alignItems: 'center',
     gap: 6,
     flexShrink: 0,
   },
-  teacherSwitchBtn: {
+  statPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: '#FFFDF2',
-    border: '2px solid #F3EEDB',
+    border: '1.5px solid #F3EEDB',
     borderBottom: '3px solid #E5DBC7',
     borderRadius: 9999,
-    padding: '5px 11px',
-    fontSize: 11.5,
-    fontWeight: 800,
-    color: '#64748B',
-    cursor: 'pointer',
+    padding: '4px 9px',
     boxShadow: '0 2px 6px rgba(0, 0, 0, 0.06)',
+    cursor: 'pointer',
+    userSelect: 'none',
+  },
+  statPillIcon: {
+    fontSize: 13,
+    lineHeight: 1,
+  },
+  statPillValue: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 12.5,
+    fontWeight: 900,
+    color: '#1E293B',
+    fontVariantNumeric: 'tabular-nums',
   },
 
   // 2. Scenic Meadow Section: Fox + Main Card
@@ -996,12 +1308,26 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'fixed',
     inset: 0,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
-    backdropFilter: 'blur(4px)',
+    backdropFilter: 'blur(5px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 16,
+    padding: 14,
     zIndex: 100,
+  },
+  profileModalBox: {
+    position: 'relative',
+    width: '100%',
+    maxWidth: 390,
+    maxHeight: '90vh',
+    overflowY: 'auto',
+    backgroundColor: '#FFFDF2',
+    border: '3px solid #FFFDF2',
+    borderBottom: '8px solid #E5DBC7',
+    borderRadius: 28,
+    padding: '22px 18px 20px',
+    boxShadow: '0 24px 48px rgba(0, 0, 0, 0.30)',
+    boxSizing: 'border-box',
   },
   modalBox: {
     position: 'relative',
@@ -1028,7 +1354,243 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
+    zIndex: 2,
   },
+  profileHeader: {
+    textAlign: 'center',
+    marginBottom: 14,
+    paddingRight: 24,
+  },
+  profileModalTitle: {
+    fontFamily: "'Comfortaa', 'Nunito', cursive, sans-serif",
+    fontSize: 19,
+    fontWeight: 900,
+    color: '#1E293B',
+    margin: '0 0 3px',
+  },
+  profileModalSub: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 11.5,
+    fontWeight: 700,
+    color: '#64748B',
+    margin: 0,
+  },
+
+  // Profile Hero
+  profileHeroSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    margin: '8px 0 14px',
+  },
+  avatarGlowWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+    borderRadius: '50%',
+  },
+  profileHeroInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 6,
+  },
+  divisionBadgeLarge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    border: '1.5px solid',
+    borderRadius: 9999,
+    padding: '4px 12px',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+  },
+  divisionBadgeTitle: {
+    fontFamily: "'Comfortaa', 'Nunito', sans-serif",
+    fontSize: 13,
+    fontWeight: 900,
+  },
+  divisionTierText: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: '#64748B',
+  },
+  roleBenefitPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    border: '1px solid #E2E8F0',
+    borderRadius: 8,
+    padding: '4px 10px',
+  },
+  roleBenefitRole: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 11,
+    fontWeight: 800,
+    color: '#334155',
+  },
+  roleBenefitBonus: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 11,
+    fontWeight: 900,
+    color: '#10B981',
+  },
+
+  // XP Progress
+  xpProgressSection: {
+    backgroundColor: '#FFFFFF',
+    border: '1.5px solid #F1F5F9',
+    borderRadius: 14,
+    padding: '10px 12px',
+    marginBottom: 12,
+  },
+  xpProgressHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  xpProgressLabel: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 11,
+    fontWeight: 800,
+    color: '#64748B',
+  },
+  xpProgressVal: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 11,
+    fontWeight: 900,
+    color: '#1E293B',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  xpTrack: {
+    width: '100%',
+    height: 8,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 9999,
+    overflow: 'hidden',
+  },
+  xpBarFill: {
+    height: '100%',
+    borderRadius: 9999,
+    transition: 'width 0.3s ease',
+  },
+
+  // Division Switcher Tabs
+  divisionSwitchRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 6,
+    marginBottom: 14,
+  },
+  divisionTabBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    padding: '8px 4px',
+    borderRadius: 12,
+    border: '1.5px solid',
+    cursor: 'pointer',
+    userSelect: 'none',
+    transition: 'all 0.15s ease',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.04)',
+  },
+
+  // Bento Stats
+  statsBentoGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 6,
+    marginBottom: 14,
+  },
+  statBentoCard: {
+    backgroundColor: '#FFFFFF',
+    border: '1.5px solid #F1F5F9',
+    borderBottom: '3px solid #E2E8F0',
+    borderRadius: 14,
+    padding: '8px 6px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+  },
+  statBentoTop: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 3,
+    marginBottom: 2,
+  },
+  statBentoLabel: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#64748B',
+  },
+  statBentoVal: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 13,
+    fontWeight: 900,
+    color: '#1E293B',
+    fontVariantNumeric: 'tabular-nums',
+  },
+
+  // Edit Section
+  editSectionCard: {
+    backgroundColor: '#FFFFFF',
+    border: '1.5px solid #F1F5F9',
+    borderRadius: 14,
+    padding: '12px',
+    marginBottom: 16,
+  },
+  editSectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  editSectionTitle: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 11.5,
+    fontWeight: 800,
+    color: '#334155',
+  },
+  nameInput: {
+    width: '100%',
+    padding: '9px 12px',
+    borderRadius: 10,
+    border: '1.5px solid #E2E8F0',
+    borderBottom: '2.5px solid #CBD5E1',
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#1E293B',
+    boxSizing: 'border-box',
+    outline: 'none',
+    backgroundColor: '#F8FAFC',
+  },
+  avatarPickerRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    gap: 4,
+  },
+  avatarBtn: {
+    flex: 1,
+    height: 38,
+    borderRadius: 10,
+    border: '2px solid #E2E8F0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    padding: 0,
+    transition: 'all 0.15s ease',
+  },
+
   modalHeader: {
     display: 'flex',
     alignItems: 'center',
@@ -1100,38 +1662,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 900,
     color: '#D97706',
-  },
-
-  // Student name input
-  nameInput: {
-    width: '100%',
-    padding: '10px 14px',
-    borderRadius: 14,
-    border: '2px solid #E2E8F0',
-    borderBottom: '3px solid #CBD5E1',
-    fontFamily: "'Nunito', sans-serif",
-    fontSize: 15,
-    fontWeight: 800,
-    color: '#1E293B',
-    boxSizing: 'border-box',
-    outline: 'none',
-  },
-  avatarPickerRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 18,
-  },
-  avatarBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    border: '2px solid #E2E8F0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 20,
-    cursor: 'pointer',
   },
 
   // Gacha showcase

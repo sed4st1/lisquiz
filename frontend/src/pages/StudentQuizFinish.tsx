@@ -1,16 +1,7 @@
-import React, { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import {
-  Crown,
-  Trophy,
-  Sparkles,
-  CheckCircle2,
-  XCircle,
-  Target,
-  ArrowRight,
-} from 'lucide-react';
-import { TactileButton } from '../components/TactileButton';
+import { ArrowLeft, CheckCircle2, FileEdit, Trophy } from 'lucide-react';
 import { haptics } from '../services/haptics';
 import { socketService } from '../services/socketService';
 import StudentRedemptionModal from '../components/StudentRedemptionModal';
@@ -33,6 +24,7 @@ export interface StudentQuizFinishProps {
   wrongCount?: number;
   totalQuestions?: number;
   onGoToLeaderboard: (earnedPoints?: number, rank?: number) => void;
+  onBackToHome?: () => void;
 }
 
 const AVATAR_MAP: Record<string, string> = {
@@ -45,89 +37,97 @@ const AVATAR_MAP: Record<string, string> = {
   fox_smart: '/assets/avatars/students/raccoon.png',
 };
 
+export const getStudentAvatarSrc = (avatar?: string): string => {
+  if (avatar && AVATAR_MAP[avatar]) return AVATAR_MAP[avatar]!;
+  return AVATAR_MAP.raccoon || '/assets/avatars/students/raccoon.png';
+};
+
 export default function StudentQuizFinish({
   playerId,
-  playerName,
-  playerAvatar,
+  playerName = 'Артём К',
+  playerAvatar = 'raccoon',
   topPlayers = [],
-  myScore = 850,
+  myScore = 750,
   myRank: myRankProp,
-  correctCount = 3,
-  wrongCount = 0,
-  totalQuestions = 3,
+  correctCount = 4,
+  wrongCount = 1,
+  totalQuestions = 5,
   onGoToLeaderboard,
+  onBackToHome,
 }: StudentQuizFinishProps) {
-  const [autoExitSeconds, setAutoExitSeconds] = React.useState(12);
-  const [currentScore, setCurrentScore] = React.useState(myScore);
-  const [isRedemptionOpen, setIsRedemptionOpen] = React.useState(false);
-  const [redemptionDone, setRedemptionDone] = React.useState(false);
-  const [restoredPoints, setRestoredPoints] = React.useState(0);
+  const [currentScore, setCurrentScore] = useState<number>(myScore);
+  const [isRedemptionOpen, setIsRedemptionOpen] = useState<boolean>(false);
+  const [redemptionDone, setRedemptionDone] = useState<boolean>(false);
+  const [restoredPoints, setRestoredPoints] = useState<number>(0);
 
-  useEffect(() => {
-    // Немедленно разрываем связь с завершенной комнатой, чтобы ученик не висел в сети
-    socketService.disconnect();
+  // Animated counters
+  const [displayScore, setDisplayScore] = useState<number>(0);
+  const [displayTop1, setDisplayTop1] = useState<number>(0);
+  const [displayTop2, setDisplayTop2] = useState<number>(0);
+  const [displayTop3, setDisplayTop3] = useState<number>(0);
 
-    if (isRedemptionOpen) return; // Пауза таймера при открытой работе над ошибками
-
-    const exitTimer = setInterval(() => {
-      setAutoExitSeconds((prev) => {
-        if (prev <= 1) {
-          clearInterval(exitTimer);
-          onGoToLeaderboard(currentScore, myRankProp);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(exitTimer);
-  }, [currentScore, myRankProp, onGoToLeaderboard, isRedemptionOpen]);
-
-  useEffect(() => {
-    haptics.notification('success');
-    // Multi-stage confetti celebration
-    try {
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#34D399', '#FBBF24', '#60A5FA', '#F472B6'],
-      });
-      setTimeout(() => {
-        confetti({
-          particleCount: 50,
-          angle: 60,
-          spread: 55,
-          origin: { x: 0 },
-          colors: ['#F59E0B', '#10B981'],
-        });
-        confetti({
-          particleCount: 50,
-          angle: 120,
-          spread: 55,
-          origin: { x: 1 },
-          colors: ['#3B82F6', '#10B981'],
-        });
-      }, 350);
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const getAvatarSrc = (avatar?: string) => {
-    return AVATAR_MAP[avatar || ''] || AVATAR_MAP[playerAvatar] || AVATAR_MAP.raccoon;
-  };
-
-  // Determine top 3 or fallback
-  const resolvedTopPlayers = topPlayers.length > 0
+  // Default mock top players if none supplied from server
+  const resolvedTop = topPlayers.length >= 3
     ? topPlayers
     : [
-        { rank: 1, id: playerId || 'me', name: playerName, avatar: playerAvatar, score: myScore },
+        { rank: 1, id: 'p1', name: 'Егор Петров', avatar: 'raccoon', score: 980 },
+        { rank: 2, id: 'p2', name: 'София Иванова', avatar: 'owl', score: 920 },
+        { rank: 3, id: 'p3', name: 'Максим Соколов', avatar: 'hedgehog', score: 870 },
       ];
 
-  const top1 = resolvedTopPlayers[0];
-  const top2 = resolvedTopPlayers[1];
-  const top3 = resolvedTopPlayers[2];
+  const top1 = resolvedTop[0] || { rank: 1, name: 'Егор Петров', avatar: 'raccoon', score: 980 };
+  const top2 = resolvedTop[1] || { rank: 2, name: 'София Иванова', avatar: 'owl', score: 920 };
+  const top3 = resolvedTop[2] || { rank: 3, name: 'Максим Соколов', avatar: 'hedgehog', score: 870 };
+
+  const effectiveRank = myRankProp ?? 4;
+  const accuracyPercent = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 80;
+  const waterDropsCount = Math.max(40, Math.round(currentScore * 0.16));
+
+  useEffect(() => {
+    // Disconnect active socket room upon quiz finish
+    socketService.disconnect();
+
+    // Fire celebratory confetti on mount
+    try {
+      haptics.notification('success');
+      confetti({
+        particleCount: 65,
+        spread: 60,
+        origin: { y: 0.5 },
+        colors: ['#F59E0B', '#10B981', '#3B82F6', '#EF4444'],
+      });
+    } catch {}
+
+    // Number counting up animation
+    const durationMs = 900;
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      const progress = Math.min(1, (Date.now() - startTime) / durationMs);
+      const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+      setDisplayScore(Math.round(currentScore * ease));
+      setDisplayTop1(Math.round(top1.score * ease));
+      setDisplayTop2(Math.round(top2.score * ease));
+      setDisplayTop3(Math.round(top3.score * ease));
+      if (progress >= 1) clearInterval(interval);
+    }, 25);
+
+    return () => clearInterval(interval);
+  }, [currentScore, top1.score, top2.score, top3.score]);
+
+  const handlePointsRestored = (points: number) => {
+    setRestoredPoints(points);
+    setRedemptionDone(true);
+    setCurrentScore((prev) => prev + points);
+    haptics.notification('success');
+    try {
+      confetti({
+        particleCount: 50,
+        spread: 50,
+        origin: { y: 0.7 },
+        colors: ['#10B981', '#F59E0B'],
+      });
+    } catch {}
+  };
 
   const isMe = (p?: { id?: string; name?: string }) => {
     if (!p) return false;
@@ -135,530 +135,665 @@ export default function StudentQuizFinish({
     return p.name?.trim().toLowerCase() === playerName?.trim().toLowerCase();
   };
 
-  // Точный расчет реального места ученика
-  const myRank = myRankProp ?? (() => {
-    const found = resolvedTopPlayers.find(
-      (p) =>
-        (playerId && p.id === playerId) ||
-        (p.name && p.name.trim().toLowerCase() === playerName.trim().toLowerCase()) ||
-        p.id === 'me'
-    );
-    if (found && typeof found.rank === 'number') return found.rank;
-    const higherScoreCount = resolvedTopPlayers.filter((p) => (p.score || 0) > myScore).length;
-    return higherScoreCount + 1;
-  })();
-
-  const wrongCountResolved = Math.max(wrongCount || 0, totalQuestions - correctCount);
-  const accuracy = totalQuestions > 0 ? Math.round(((correctCount || 0) / totalQuestions) * 100) : 0;
-
   return (
-    <div style={styles.container}>
-      {/* Header */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={styles.header}
-      >
-        <div style={styles.headerTitleRow}>
-          <Sparkles size={20} color="#FBBF24" />
-          <h1 style={styles.headerTitle}>Викторина завершена!</h1>
-          <Sparkles size={20} color="#FBBF24" />
-        </div>
-        <p style={styles.headerSub}>Отличная работа всего класса в Роще знаний!</p>
-      </motion.div>
+    <div style={styles.viewport}>
+      <div style={styles.container}>
+        {/* ========================================================
+            HEADER BAR: Back Button + Hanging Signboard
+           ======================================================== */}
+        <div style={styles.headerBar}>
+          {onBackToHome ? (
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+              onClick={() => {
+                haptics.impact('light');
+                onBackToHome();
+              }}
+              style={styles.roundBackBtn}
+              title="Назад"
+            >
+              <ArrowLeft size={22} color="#4A2E18" strokeWidth={2.5} />
+            </motion.button>
+          ) : (
+            <div style={{ width: 44 }} />
+          )}
 
-      {/* Podium Top-3 (Identical styling to StudentLeaderboard) */}
-      <motion.div
-        initial={{ scale: 0.92, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: 'spring', stiffness: 350, damping: 24, delay: 0.1 }}
-        style={styles.podiumWrapper}
-      >
-        <div style={styles.podiumContainer}>
-          {/* 2nd Place */}
-          {top2 && (
-            <div style={styles.podiumColumn}>
-              <div style={styles.podiumAvatarEmerald}>
+          <div style={styles.hangingSignWrapper}>
+            <img
+              src="/assets/leaderboard/sign_itogi.png"
+              alt="Итоги викторины"
+              style={styles.hangingSignImg}
+            />
+          </div>
+
+          <div style={{ width: 44 }} />
+        </div>
+
+        {/* ========================================================
+            PODIUM SCENE: 3 Blocks + Laurel Frames + Standing Fox
+           ======================================================== */}
+        <div style={styles.podiumStage}>
+          {/* Wooden Podium Blocks (1, 2, 3) + Anchored Winners */}
+          <motion.div
+            initial={{ scaleY: 0.3, x: '-50%', y: 60, opacity: 0 }}
+            animate={{ scaleY: 1, x: '-50%', y: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 220, damping: 18, delay: 0.15 }}
+            style={styles.podiumBlockWrapper}
+          >
+            <img
+              src="/assets/leaderboard/podium_empty.png"
+              alt="Пьедестал"
+              style={styles.podiumBlockImg}
+            />
+
+            {/* 2nd Place: Silver Laurel Frame + Avatar */}
+            <motion.div
+              initial={{ scale: 0, x: '-50%', y: -25, opacity: 0 }}
+              animate={{ scale: 1, x: '-50%', y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.35 }}
+              style={styles.top2Slot}
+            >
+              <div style={styles.avatarCropCircle}>
                 <img
-                  src={getAvatarSrc(top2.avatar)}
+                  src={getStudentAvatarSrc(top2.avatar)}
                   alt={top2.name}
                   style={styles.avatarImg}
                 />
               </div>
-              <span style={{ ...styles.podiumName, ...(isMe(top2) ? { color: '#6EE7B7', fontWeight: 900 } : {}) }}>
-                {top2.name}{isMe(top2) && ' (Ты)'}
-              </span>
-              <span style={styles.podiumScore}>{top2.score} б</span>
-              <div style={{ ...styles.podiumBlock, ...styles.podiumSilver, height: 65 }}>
-                <span style={styles.podiumMedal}>🥈 2</span>
-              </div>
-            </div>
-          )}
-
-          {/* 1st Place MVP with Crown */}
-          {top1 && (
-            <div style={styles.podiumColumn}>
-              <Crown size={22} color="#F59E0B" style={{ marginBottom: 2 }} />
-              <div style={styles.podiumAvatarGold}>
+              <img
+                src="/assets/leaderboard/frame_silver.png"
+                alt="2 место"
+                style={styles.frameImg}
+              />
+              {/* Tactile Carved Wooden Score Frame */}
+              <div style={styles.woodenScoreCapsule}>
                 <img
-                  src={getAvatarSrc(top1.avatar)}
+                  src="/assets/leaderboard/acorn_gold.png"
+                  alt=""
+                  style={styles.capsuleAcornImg}
+                />
+                <span style={styles.capsuleScoreText}>+{displayTop2}</span>
+              </div>
+              <span style={styles.studentNameLabel}>
+                {top2.name.split(' ')[0]}{isMe(top2) && ' (Ты)'}
+              </span>
+            </motion.div>
+
+            {/* 1st Place: Gold Laurel Frame + Avatar */}
+            <motion.div
+              initial={{ scale: 0, x: '-50%', y: -30, opacity: 0 }}
+              animate={{ scale: 1, x: '-50%', y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.5 }}
+              style={styles.top1Slot}
+            >
+              <div style={{ ...styles.avatarCropCircle, width: 62, height: 62, top: 8 }}>
+                <img
+                  src={getStudentAvatarSrc(top1.avatar)}
                   alt={top1.name}
                   style={styles.avatarImg}
                 />
               </div>
-              <span style={{ ...styles.podiumName, fontWeight: 900, color: '#FCD34D' }}>
-                {top1.name}{isMe(top1) && ' (Ты)'}
-              </span>
-              <span style={{ ...styles.podiumScore, color: '#FBBF24' }}>
-                {top1.score} б
-              </span>
-              <div style={{ ...styles.podiumBlock, ...styles.podiumGold, height: 90 }}>
-                <span style={{ ...styles.podiumMedal, fontSize: 13.5 }}>👑 1</span>
-              </div>
-            </div>
-          )}
-
-          {/* 3rd Place */}
-          {top3 && (
-            <div style={styles.podiumColumn}>
-              <div style={styles.podiumAvatarEmerald}>
+              <img
+                src="/assets/leaderboard/frame_gold.png"
+                alt="1 место"
+                style={styles.frameImg}
+              />
+              {/* Tactile Carved Wooden Score Frame */}
+              <div style={{ ...styles.woodenScoreCapsule, padding: '3px 10px 3px 6px' }}>
                 <img
-                  src={getAvatarSrc(top3.avatar)}
+                  src="/assets/leaderboard/acorn_gold.png"
+                  alt=""
+                  style={{ width: 15, height: 19, objectFit: 'contain' }}
+                />
+                <span style={{ ...styles.capsuleScoreText, fontSize: 13.5 }}>
+                  +{displayTop1}
+                </span>
+              </div>
+              <span style={{ ...styles.studentNameLabel, fontWeight: 900, color: '#3D2411' }}>
+                {top1.name.split(' ')[0]}{isMe(top1) && ' (Ты)'}
+              </span>
+            </motion.div>
+
+            {/* 3rd Place: Bronze Laurel Frame + Avatar */}
+            <motion.div
+              initial={{ scale: 0, x: '-50%', y: -25, opacity: 0 }}
+              animate={{ scale: 1, x: '-50%', y: 0, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.65 }}
+              style={styles.top3Slot}
+            >
+              <div style={styles.avatarCropCircle}>
+                <img
+                  src={getStudentAvatarSrc(top3.avatar)}
                   alt={top3.name}
                   style={styles.avatarImg}
                 />
               </div>
-              <span style={{ ...styles.podiumName, color: '#34D399', fontWeight: 800, ...(isMe(top3) ? { color: '#6EE7B7', fontWeight: 900 } : {}) }}>
-                {top3.name}{isMe(top3) && ' (Ты)'}
-              </span>
-              <span style={styles.podiumScore}>{top3.score} б</span>
-              <div style={{ ...styles.podiumBlock, ...styles.podiumBronze, height: 50 }}>
-                <span style={styles.podiumMedal}>🥉 3</span>
+              <img
+                src="/assets/leaderboard/frame_bronze.png"
+                alt="3 место"
+                style={styles.frameImg}
+              />
+              {/* Tactile Carved Wooden Score Frame */}
+              <div style={styles.woodenScoreCapsule}>
+                <img
+                  src="/assets/leaderboard/acorn_gold.png"
+                  alt=""
+                  style={styles.capsuleAcornImg}
+                />
+                <span style={styles.capsuleScoreText}>+{displayTop3}</span>
               </div>
-            </div>
-          )}
-        </div>
-      </motion.div>
-
-      {/* Personal Result Summary Card */}
-      <motion.div
-        initial={{ y: 12, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        style={styles.personalCard}
-      >
-        <div style={styles.personalCardTop}>
-          <div
-            style={{
-              ...styles.myRankCircle,
-              ...(myRank === 1
-                ? { backgroundColor: '#78350F', borderColor: '#FCD34D', color: '#FCD34D' }
-                : myRank === 2
-                ? { backgroundColor: '#1E293B', borderColor: '#CBD5E1', color: '#E2E8F0' }
-                : myRank === 3
-                ? { backgroundColor: '#854D0E', borderColor: '#F59E0B', color: '#FCD34D' }
-                : { backgroundColor: '#064E3B', borderColor: '#34D399', color: '#34D399' }),
-            }}
-          >
-            #{myRank}
-          </div>
-          <div style={styles.personalInfoCol}>
-            <span style={styles.personalTitle}>Твой результат</span>
-            <span style={styles.personalSub}>
-              {myRank === 1
-                ? '👑 Потрясающе! 1-е место в викторине!'
-                : myRank <= 3
-                ? `🎉 Отлично! ${myRank}-е место в топе призёров!`
-                : `👍 ${myRank}-е место. Хорошая командная игра!`}
-            </span>
-          </div>
-          <div style={styles.scorePill}>
-            <Trophy size={14} color="#FBBF24" />
-            <span>{currentScore} б</span>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div style={styles.statsGrid}>
-          <div style={styles.statBox}>
-            <div style={styles.statIconRow}>
-              <CheckCircle2 size={15} color="#34D399" />
-              <span style={styles.statLabel}>Верных</span>
-            </div>
-            <span style={{ ...styles.statVal, color: '#34D399' }}>
-              {correctCount} из {totalQuestions}
-            </span>
-          </div>
-
-          <div style={styles.statBox}>
-            <div style={styles.statIconRow}>
-              <XCircle size={15} color={wrongCountResolved > 0 ? '#EF4444' : '#94A3B8'} />
-              <span style={styles.statLabel}>Ошибок</span>
-            </div>
-            <span style={{ ...styles.statVal, color: wrongCountResolved > 0 ? '#EF4444' : '#E2E8F0' }}>
-              {wrongCountResolved}
-            </span>
-          </div>
-
-          <div style={styles.statBox}>
-            <div style={styles.statIconRow}>
-              <Target size={15} color="#60A5FA" />
-              <span style={styles.statLabel}>Точность</span>
-            </div>
-            <span style={{ ...styles.statVal, color: '#60A5FA' }}>
-              {accuracy}%
-            </span>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Redemption: Работа над ошибками (+60% баллов) */}
-      {!redemptionDone ? (
-        <motion.div
-          initial={{ scale: 0.96, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.25 }}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            padding: '14px 16px',
-            borderRadius: 14,
-            backgroundColor: 'rgba(16, 185, 129, 0.12)',
-            border: '1px solid rgba(16, 185, 129, 0.35)',
-            gap: 10,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Sparkles size={18} color="#34D399" />
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF' }}>
-                Работа над ошибками
+              <span style={styles.studentNameLabel}>
+                {top3.name.split(' ')[0]}{isMe(top3) && ' (Ты)'}
               </span>
-            </div>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#34D399', backgroundColor: 'rgba(16, 185, 129, 0.2)', padding: '2px 8px', borderRadius: 999 }}>
-              +60% возврат баллов
-            </span>
-          </div>
-          <p style={{ margin: 0, fontSize: 12, color: '#CBD5E1', lineHeight: '1.4' }}>
-            Решите 1 задачу с подсказкой, закрепите правило и верните до 60% потерянных очков в рейтинг класса!
-          </p>
-          <TactileButton
-            theme="green"
-            size="md"
-            fullWidth
-            onClick={() => {
-              haptics.impact('medium');
-              setIsRedemptionOpen(true);
-            }}
-            iconBefore={<Sparkles size={16} />}
+            </motion.div>
+          </motion.div>
+
+          {/* Mascot Sprint with Golden Acorn stepping out from right */}
+          <motion.div
+            initial={{ x: 100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 190, damping: 20, delay: 0.75 }}
+            style={styles.mascotHolder}
           >
-            Исправить ошибку (+60% баллов)
-          </TactileButton>
-        </motion.div>
-      ) : (
+            <motion.div
+              animate={{
+                rotate: [0, 1.2, 0, -1, 0],
+                scale: [1, 1.018, 1, 1.012, 1],
+              }}
+              transition={{
+                repeat: Infinity,
+                duration: 4.2,
+                ease: 'easeInOut',
+              }}
+              style={{
+                width: '100%',
+                height: '100%',
+                transformOrigin: 'bottom center',
+              }}
+            >
+              <img
+                src="/assets/leaderboard/sprint_with_acorn.png"
+                alt="Спринт"
+                style={styles.mascotImg}
+              />
+            </motion.div>
+          </motion.div>
+        </div>
+
+        {/* ========================================================
+            BENTO CARD: "Твой результат" (Rank, Acorns, Accuracy, Drops)
+           ======================================================== */}
         <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '12px 14px',
-            borderRadius: 14,
-            backgroundColor: 'rgba(16, 185, 129, 0.22)',
-            border: '1px solid #10B981',
-          }}
+          initial={{ y: 25, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.35, delay: 0.95 }}
+          style={styles.bentoCard}
         >
-          <CheckCircle2 size={20} color="#34D399" />
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: 13, fontWeight: 800, color: '#FFFFFF' }}>
-              Ошибка исправлена!
-            </span>
-            <span style={{ fontSize: 11, color: '#34D399', fontWeight: 600 }}>
-              +{restoredPoints} очков успешно добавлены к вашему результату
-            </span>
+          {/* Left Avatar & Rank Badge */}
+          <div style={styles.bentoAvatarCol}>
+            <div style={styles.bentoAvatarRing}>
+              <img
+                src={getStudentAvatarSrc(playerAvatar)}
+                alt={playerName}
+                style={styles.bentoAvatarImg}
+              />
+            </div>
+            <div style={styles.bentoRankBadge}>
+              <span>{effectiveRank} место</span>
+            </div>
+          </div>
+
+          <div style={styles.bentoDivider} />
+
+          {/* Right 3 Stat Columns */}
+          <div style={styles.bentoStatsRow}>
+            {/* Stat 1: Acorns / Score */}
+            <div style={styles.bentoStatItem}>
+              <img
+                src="/assets/leaderboard/acorn_gold.png"
+                alt="Очки"
+                style={styles.bentoStatIcon}
+              />
+              <span style={styles.bentoStatValue}>+{displayScore}</span>
+              <span style={styles.bentoStatLabel}>очков</span>
+            </div>
+
+            {/* Stat 2: Accuracy */}
+            <div style={styles.bentoStatItem}>
+              <div style={styles.checkIconWrapper}>
+                <CheckCircle2 size={24} color="#15803D" strokeWidth={2.8} />
+              </div>
+              <span style={styles.bentoStatLabel}>Точность</span>
+              <span style={styles.bentoStatValue}>{accuracyPercent}%</span>
+            </div>
+
+            {/* Stat 3: Water Drops for Grove */}
+            <div style={styles.bentoStatItem}>
+              <img
+                src="/assets/leaderboard/water_drop.png"
+                alt="Капли"
+                style={{ ...styles.bentoStatIcon, width: 22, height: 28 }}
+              />
+              <span style={styles.bentoStatValue}>+{waterDropsCount}</span>
+              <span style={styles.bentoStatLabel}>капель</span>
+            </div>
           </div>
         </motion.div>
-      )}
 
-      {/* Exit Button: Directly to class leaderboard */}
-      <motion.div
-        initial={{ y: 12, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.3 }}
-        style={styles.actionArea}
-      >
-        <TactileButton
-          theme="orange"
-          size="lg"
-          fullWidth
-          onClick={() => {
-            haptics.impact('medium');
-            onGoToLeaderboard(currentScore, myRank);
-          }}
-          iconAfter={<ArrowRight size={18} />}
-        >
-          {autoExitSeconds > 0 ? `Перейти в рейтинг класса (${autoExitSeconds}с)` : 'Перейти в рейтинг класса'}
-        </TactileButton>
-        <span style={styles.actionHint}>
-          {autoExitSeconds > 0 ? `Автоматический переход в класс через ${autoExitSeconds}с` : 'Завершение...'}
-        </span>
-      </motion.div>
+        {/* Restored Points Notification Badge */}
+        {redemptionDone && restoredPoints > 0 && (
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            style={styles.restoredPointsBanner}
+          >
+            <span>Ошибки исправлены! Возвращено +{restoredPoints} очков</span>
+          </motion.div>
+        )}
 
-      {/* Student Redemption Modal */}
-      <StudentRedemptionModal
-        isOpen={isRedemptionOpen}
-        onClose={() => setIsRedemptionOpen(false)}
-        studentId={playerId || 'std_student'}
-        basePoints={750}
-        onPointsRestored={(pts) => {
-          setRestoredPoints(pts);
-          setCurrentScore((prev) => prev + pts);
-          setRedemptionDone(true);
-          setIsRedemptionOpen(false);
-          haptics.notification('success');
-        }}
-      />
+        {/* ========================================================
+            TACTILE ACTION BUTTONS (Redemption & Class Leaderboard)
+           ======================================================== */}
+        <div style={styles.actionsContainer}>
+          {/* Button 1: "Работа над ошибками" (shown if had mistakes) */}
+          {wrongCount > 0 && !redemptionDone && (
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={() => {
+                haptics.impact('medium');
+                setIsRedemptionOpen(true);
+              }}
+              style={styles.amberBtn}
+            >
+              <FileEdit size={22} color="#854D0E" strokeWidth={2.5} />
+              <span>Работа над ошибками</span>
+            </motion.button>
+          )}
+
+          {/* Button 2: "Рейтинг класса" */}
+          <motion.button
+            type="button"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => {
+              haptics.notification('success');
+              onGoToLeaderboard(currentScore, effectiveRank);
+            }}
+            style={styles.emeraldBtn}
+          >
+            <Trophy size={22} color="#FFFFFF" strokeWidth={2.5} />
+            <span>Рейтинг класса</span>
+          </motion.button>
+        </div>
+
+        {/* Redemption Round Modal */}
+        <StudentRedemptionModal
+          isOpen={isRedemptionOpen}
+          onClose={() => setIsRedemptionOpen(false)}
+          studentId={playerId || 'std_ivan'}
+          basePoints={750}
+          onPointsRestored={handlePointsRestored}
+        />
+      </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  viewport: {
+    minHeight: '100vh',
+    width: '100%',
+    backgroundColor: '#FFF9F0',
+    display: 'flex',
+    justifyContent: 'center',
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    boxSizing: 'border-box',
+    overflowX: 'hidden',
+  },
   container: {
+    width: '100%',
+    maxWidth: 440,
+    minHeight: '100vh',
+    padding: '14px 14px 24px',
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    position: 'relative',
+    justifyContent: 'space-between',
+  },
+  headerBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
     width: '100%',
-    minHeight: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    backgroundImage: "url('/assets/backgrounds/quiz_bg_clean.png')",
-    backgroundPosition: 'center top',
-    backgroundSize: 'cover',
-    backgroundRepeat: 'no-repeat',
-    padding: '16px 14px 24px',
-    boxSizing: 'border-box',
-    overflowY: 'auto',
-    gap: 14,
+    minHeight: 82,
+    marginTop: -18,
+    marginBottom: 0,
   },
-  header: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    width: '100%',
-  },
-  headerTitleRow: {
+  roundBackBtn: {
+    position: 'absolute',
+    left: 0,
+    top: 10,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 999,
+    backgroundColor: '#FFFDF9',
+    border: '2px solid #E5C39E',
+    boxShadow: '0 3px 0 #D8BEA3, 0 4px 10px rgba(120, 80, 40, 0.1)',
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'center',
+    cursor: 'pointer',
+    outline: 'none',
+    padding: 0,
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: 900,
-    color: '#FFFFFF',
-    margin: 0,
-    letterSpacing: '-0.3px',
-  },
-  headerSub: {
-    fontSize: 12,
-    color: '#CBD5E1',
-    margin: '3px 0 0',
-    fontWeight: 600,
-  },
-  podiumWrapper: {
+  hangingSignWrapper: {
     display: 'flex',
-    flexDirection: 'column',
-    width: '100%',
-    backgroundColor: 'rgba(14, 30, 58, 0.88)',
-    border: '1.5px solid rgba(255, 255, 255, 0.16)',
-    borderRadius: 22,
-    padding: '14px 10px 10px',
-    backdropFilter: 'blur(16px)',
-    boxShadow: '0 12px 30px rgba(0, 0, 0, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 250,
+    height: 86,
   },
-  podiumContainer: {
+  hangingSignImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+    pointerEvents: 'none',
+  },
+  podiumStage: {
+    position: 'relative',
+    width: '100%',
+    height: 310,
+    marginTop: 6,
     display: 'flex',
     alignItems: 'flex-end',
     justifyContent: 'center',
-    gap: 8,
-    width: '100%',
   },
-  podiumColumn: {
+  podiumBlockWrapper: {
+    position: 'absolute',
+    bottom: 2,
+    left: '50%',
+    width: 326,
+    aspectRatio: '438 / 275',
+    zIndex: 2,
+    transformOrigin: 'bottom center',
+  },
+  podiumBlockImg: {
+    width: '100%',
+    height: '100%',
+    display: 'block',
+    pointerEvents: 'none',
+  },
+  top1Slot: {
+    position: 'absolute',
+    bottom: '91%',
+    left: '49.7%',
+    width: 96,
+    height: 82,
+    zIndex: 3,
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
-    flex: 1,
-    maxWidth: 96,
+    justifyContent: 'center',
   },
-  podiumAvatarEmerald: {
-    width: 44,
-    height: 44,
-    borderRadius: '50%',
-    backgroundColor: '#064E3B',
-    border: '2px solid #34D399',
+  top2Slot: {
+    position: 'absolute',
+    bottom: '71%',
+    left: '16.7%',
+    width: 82,
+    height: 72,
+    zIndex: 3,
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    marginBottom: 4,
-    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.3)',
   },
-  podiumAvatarGold: {
+  top3Slot: {
+    position: 'absolute',
+    bottom: '65.5%',
+    left: '82.2%',
+    width: 82,
+    height: 72,
+    zIndex: 3,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarCropCircle: {
+    position: 'absolute',
+    top: 6,
     width: 52,
     height: 52,
-    borderRadius: '50%',
-    backgroundColor: '#78350F',
-    border: '2.5px solid #FCD34D',
+    borderRadius: 999,
+    overflow: 'hidden',
+    backgroundColor: '#EBF4FE',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    marginBottom: 4,
-    boxShadow: '0 0 16px rgba(251, 191, 36, 0.5)',
+    zIndex: 1,
   },
   avatarImg: {
-    width: '88%',
-    height: '88%',
+    width: '100%',
+    height: '100%',
     objectFit: 'contain',
   },
-  podiumName: {
-    fontSize: 11.5,
-    color: '#FFFFFF',
-    fontWeight: 700,
-    textAlign: 'center',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    maxWidth: 82,
-  },
-  podiumScore: {
-    fontSize: 11.5,
-    fontWeight: 800,
-    color: '#E2E8F0',
-    marginBottom: 5,
-  },
-  podiumBlock: {
+  frameImg: {
+    position: 'relative',
     width: '100%',
-    borderRadius: '12px 12px 4px 4px',
+    height: '100%',
+    objectFit: 'contain',
+    zIndex: 2,
+    pointerEvents: 'none',
+  },
+  woodenScoreCapsule: {
+    position: 'absolute',
+    bottom: -6,
+    zIndex: 5,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    boxSizing: 'border-box',
-    boxShadow: 'inset 0 2px 4px rgba(255, 255, 255, 0.2)',
-  },
-  podiumGold: {
-    backgroundColor: '#B45309',
-    borderTop: '2px solid #FCD34D',
-  },
-  podiumSilver: {
-    backgroundColor: '#334155',
-    borderTop: '2px solid #CBD5E1',
-  },
-  podiumBronze: {
-    backgroundColor: '#854D0E',
-    borderTop: '2px solid #F59E0B',
-  },
-  podiumMedal: {
-    fontSize: 12.5,
-    fontWeight: 900,
-    color: '#FFFFFF',
-  },
-  personalCard: {
-    backgroundColor: 'rgba(14, 30, 58, 0.92)',
-    border: '1.5px solid rgba(255, 255, 255, 0.16)',
-    borderRadius: 22,
-    padding: '14px 16px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    backdropFilter: 'blur(16px)',
-  },
-  personalCardTop: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-  },
-  myRankCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: '50%',
-    backgroundColor: '#064E3B',
-    border: '2px solid #34D399',
-    color: '#34D399',
-    fontSize: 15,
-    fontWeight: 900,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    boxShadow: '0 0 10px rgba(52, 211, 153, 0.4)',
-  },
-  personalInfoCol: {
-    display: 'flex',
-    flexDirection: 'column',
-    flex: 1,
-  },
-  personalTitle: {
-    fontSize: 14,
-    fontWeight: 800,
-    color: '#FFFFFF',
-  },
-  personalSub: {
-    fontSize: 11.5,
-    color: '#94A3B8',
-    fontWeight: 600,
-  },
-  scorePill: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#1E293B',
+    gap: 4,
+    background: 'linear-gradient(180deg, #FFE8B8 0%, #F5C775 100%)',
+    border: '2px solid #C4823F',
+    boxShadow: '0 3px 0 #874C1E, 0 4px 8px rgba(100, 50, 10, 0.25)',
     borderRadius: 999,
-    padding: '5px 10px',
-    color: '#FBBF24',
+    padding: '2px 8px 3px 5px',
+    whiteSpace: 'nowrap',
+  },
+  capsuleAcornImg: {
+    width: 14,
+    height: 18,
+    objectFit: 'contain',
+    display: 'block',
+  },
+  capsuleScoreText: {
+    fontSize: 12.5,
+    fontWeight: 900,
+    color: '#4A2800',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1,
+    textShadow: '0 1px 0 rgba(255, 255, 255, 0.5)',
+  },
+  studentNameLabel: {
+    position: 'absolute',
+    top: -16,
+    fontSize: 11.5,
+    fontWeight: 800,
+    color: '#4A2E18',
+    backgroundColor: '#FFFDF9',
+    border: '1.5px solid #E5C39E',
+    borderRadius: 999,
+    padding: '1px 8px',
+    boxShadow: '0 2px 0 #D8BEA3',
+    whiteSpace: 'nowrap',
+    zIndex: 5,
+  },
+  mascotHolder: {
+    position: 'absolute',
+    right: -4,
+    bottom: 0,
+    width: 90,
+    height: 130,
+    zIndex: 4,
+    pointerEvents: 'none',
+  },
+  mascotImg: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'contain',
+    display: 'block',
+  },
+  bentoCard: {
+    width: '100%',
+    backgroundColor: '#FFFDF9',
+    border: '2.5px solid #E5C39E',
+    boxShadow: '0 4px 0 #D8BEA3, 0 8px 18px rgba(130, 80, 30, 0.08)',
+    borderRadius: 24,
+    padding: '16px 16px',
+    boxSizing: 'border-box',
+    display: 'flex',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  bentoAvatarCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    position: 'relative',
+    flexShrink: 0,
+    width: 72,
+  },
+  bentoAvatarRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 999,
+    backgroundColor: '#FFE9D4',
+    border: '2.5px solid #E5C39E',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  bentoAvatarImg: {
+    width: '90%',
+    height: '90%',
+    objectFit: 'contain',
+  },
+  bentoRankBadge: {
+    position: 'absolute',
+    bottom: -8,
+    backgroundColor: '#6A3C16',
+    border: '1.5px solid #8D5422',
+    boxShadow: '0 2px 0 #4A280B',
+    borderRadius: 999,
+    padding: '2px 10px',
+    fontSize: 11,
+    fontWeight: 900,
+    color: '#FFF8F0',
+    whiteSpace: 'nowrap',
+  },
+  bentoDivider: {
+    width: 1.5,
+    height: 52,
+    backgroundColor: '#EED9C4',
+    margin: '0 12px',
+  },
+  bentoStatsRow: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  bentoStatItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  bentoStatIcon: {
+    width: 26,
+    height: 26,
+    objectFit: 'contain',
+  },
+  checkIconWrapper: {
+    width: 26,
+    height: 26,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bentoStatValue: {
+    fontSize: 16.5,
+    fontWeight: 900,
+    color: '#2B1D0C',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.1,
+  },
+  bentoStatLabel: {
+    fontSize: 11,
+    fontWeight: 700,
+    color: '#7D5A3A',
+    lineHeight: 1,
+  },
+  restoredPointsBanner: {
+    width: '100%',
+    backgroundColor: '#DCFCE7',
+    border: '1.5px solid #86EFAC',
+    borderRadius: 14,
+    padding: '8px 12px',
+    textAlign: 'center',
     fontSize: 12.5,
     fontWeight: 800,
-    border: '1px solid rgba(251, 191, 36, 0.3)',
+    color: '#15803D',
+    marginBottom: 8,
+    boxSizing: 'border-box',
   },
-  statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 8,
-  },
-  statBox: {
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
-    borderRadius: 12,
-    padding: '8px 10px',
+  actionsContainer: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-    border: '1px solid rgba(255, 255, 255, 0.08)',
+    gap: 10,
+    width: '100%',
   },
-  statIconRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: 700,
-  },
-  statVal: {
-    fontSize: 13,
+  amberBtn: {
+    width: '100%',
+    height: 54,
+    borderRadius: 999,
+    background: 'linear-gradient(180deg, #FDE047 0%, #EAB308 100%)',
+    border: '2.5px solid #FEF08A',
+    boxShadow: '0 5px 0 #A16207, 0 8px 18px rgba(234, 179, 8, 0.3)',
+    color: '#713F12',
+    fontSize: 16,
     fontWeight: 900,
-  },
-  actionArea: {
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 4,
+    justifyContent: 'center',
+    gap: 10,
+    cursor: 'pointer',
+    outline: 'none',
   },
-  actionHint: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: 600,
-    textAlign: 'center',
+  emeraldBtn: {
+    width: '100%',
+    height: 54,
+    borderRadius: 999,
+    background: 'linear-gradient(180deg, #34D399 0%, #10B981 100%)',
+    border: '2.5px solid #A7F3D0',
+    boxShadow: '0 5px 0 #047857, 0 8px 18px rgba(16, 185, 129, 0.3)',
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 900,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    cursor: 'pointer',
+    outline: 'none',
   },
 };

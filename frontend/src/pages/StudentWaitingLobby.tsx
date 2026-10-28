@@ -1,42 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Users, Sparkles, Clock, LogOut } from 'lucide-react';
+import { Hourglass, X, Copy, Check } from 'lucide-react';
+import QRCode from 'qrcode';
 import { socketService } from '../services/socketService';
+import { roomApi } from '../services/roomApi';
 import { haptics } from '../services/haptics';
+import { LobbyBoardScene, LobbyStudent } from '../components/LobbyBoardScene';
+import { HangingPinSign } from '../components/HangingPinSign';
+import { StudentsCountPill } from '../components/StudentsCountPill';
 
 interface StudentWaitingLobbyProps {
   roomCode: string;
   playerName: string;
   playerAvatar: string;
+  subject?: string;
+  grade?: number;
   onGameStart: () => void;
   onLeaveRoom: () => void;
 }
-
-const AVATAR_MAP: Record<string, string> = {
-  bear: '/assets/avatars/students/bear.png',
-  bunny: '/assets/avatars/students/bunny.png',
-  hedgehog: '/assets/avatars/students/hedgehog.png',
-  owl: '/assets/avatars/students/owl.png',
-  raccoon: '/assets/avatars/students/raccoon.png',
-  squirrel: '/assets/avatars/students/squirrel.png',
-  fox_smart: '/assets/avatars/students/raccoon.png',
-};
 
 export default function StudentWaitingLobby({
   roomCode,
   playerName,
   playerAvatar,
+  subject = 'Математика',
+  grade = 7,
   onGameStart,
   onLeaveRoom,
 }: StudentWaitingLobbyProps) {
-  const [players, setPlayers] = useState<Array<{ id: string; name: string; avatar: string }>>(() => {
+  const [roomSubject, setRoomSubject] = useState<string>(subject);
+  const [roomGrade, setRoomGrade] = useState<number>(grade);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [gameJoinUrl, setGameJoinUrl] = useState<string>('');
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const [players, setPlayers] = useState<LobbyStudent[]>(() => {
     const cached = socketService.getLastSyncState();
     if (cached && cached.players) {
-      return Object.values(cached.players).map((p: any) => ({
+      const list = Object.values(cached.players).map((p: any) => ({
         id: p.id,
         name: p.name,
         avatar: p.avatar,
+        division: p.division,
       }));
+      if (list.length > 0) return list;
     }
     return [{ id: 'me', name: playerName, avatar: playerAvatar }];
   });
@@ -46,8 +54,18 @@ export default function StudentWaitingLobby({
     let isMounted = true;
 
     // Listen for room updates
+    if (roomCode) {
+      roomApi.getRoomInfo(roomCode).then((info: any) => {
+        if (!isMounted || !info) return;
+        if (info.subject) setRoomSubject(info.subject);
+        if (info.grade) setRoomGrade(info.grade);
+      }).catch(() => {});
+    }
+
     const handleSync = (data: any) => {
       if (!isMounted) return;
+      if (data?.subject) setRoomSubject(data.subject);
+      if (data?.grade) setRoomGrade(data.grade);
       if (data?.status === 'finished') {
         socketService.disconnect();
         onLeaveRoom();
@@ -58,11 +76,17 @@ export default function StudentWaitingLobby({
         return;
       }
       if (data && data.players) {
-        const list = Object.values(data.players).map((p: any) => ({
+        const list: LobbyStudent[] = Object.values(data.players).map((p: any) => ({
           id: p.id,
           name: p.name,
           avatar: p.avatar,
+          division: p.division,
         }));
+        // Ensure student is in list
+        const hasMe = list.some((p) => p.name === playerName);
+        if (!hasMe && playerName) {
+          list.unshift({ id: 'me', name: playerName, avatar: playerAvatar });
+        }
         setPlayers(list);
       }
     };
@@ -72,7 +96,7 @@ export default function StudentWaitingLobby({
       haptics.notification('success');
       setPlayers((prev) => {
         if (prev.some((p) => p.id === data.player_id)) return prev;
-        return [...prev, { id: data.player_id, name: data.name, avatar: data.avatar }];
+        return [...prev, { id: data.player_id, name: data.name, avatar: data.avatar, division: data.division }];
       });
     };
 
@@ -101,212 +125,256 @@ export default function StudentWaitingLobby({
       }, 1000);
     };
 
-    const handleKickOrExit = () => {
-      if (!isMounted) return;
-      socketService.disconnect();
-      onLeaveRoom();
-    };
-
-    const handleDisconnect = (data: any) => {
-      if (!isMounted) return;
-      if (data?.code === 4004 || data?.code === 4001 || data?.code === 1006) {
-        socketService.disconnect();
-        onLeaveRoom();
-      }
-    };
-
-    socketService.on('SYNC_STATE', handleSync);
+    socketService.on('ROOM_SYNC', handleSync);
     socketService.on('PLAYER_JOINED', handlePlayerJoined);
     socketService.on('PLAYER_LEFT', handlePlayerLeft);
     socketService.on('COUNTDOWN_START', handleCountdownStart);
-    socketService.on('QUESTION_START', onGameStart);
-    socketService.on('GAME_FINISHED', handleKickOrExit);
-    socketService.on('DISCONNECT', handleDisconnect);
-    socketService.on('KICKED', handleKickOrExit);
-    socketService.on('ROOM_CLOSED', handleKickOrExit);
-    socketService.on('TEACHER_LEFT', handleKickOrExit);
-
-    // Initial sync
-    const cached = socketService.getLastSyncState();
-    if (cached && cached.players) {
-      handleSync(cached);
-    }
-    if (socketService.isConnected()) {
-      socketService.send('GET_SYNC');
-    }
-
-    // Auto-detect if room ceases to exist or finished + periodic sync
-    const roomPollInterval = setInterval(async () => {
-      if (!isMounted) return;
-      try {
-        const res = await fetch(`/api/rooms/${roomCode}`);
-        if (!res.ok) {
-          clearInterval(roomPollInterval);
-          socketService.disconnect();
-          onLeaveRoom();
-          return;
-        }
-        const info = await res.json();
-        if (info && info.status === 'finished') {
-          clearInterval(roomPollInterval);
-          socketService.disconnect();
-          onLeaveRoom();
-          return;
-        }
-        if (info && (info.status === 'question' || info.status === 'countdown')) {
-          onGameStart();
-          return;
-        }
-        if (socketService.isConnected()) {
-          socketService.send('GET_SYNC');
-        }
-      } catch {
-        // network exception, keep retry
-      }
-    }, 2500);
 
     return () => {
       isMounted = false;
-      clearInterval(roomPollInterval);
-      socketService.off('SYNC_STATE', handleSync);
+      socketService.off('ROOM_SYNC', handleSync);
       socketService.off('PLAYER_JOINED', handlePlayerJoined);
       socketService.off('PLAYER_LEFT', handlePlayerLeft);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
-      socketService.off('QUESTION_START', onGameStart);
-      socketService.off('GAME_FINISHED', handleKickOrExit);
-      socketService.off('DISCONNECT', handleDisconnect);
-      socketService.off('KICKED', handleKickOrExit);
-      socketService.off('ROOM_CLOSED', handleKickOrExit);
-      socketService.off('TEACHER_LEFT', handleKickOrExit);
     };
-  }, [onGameStart]);
+  }, [playerName, playerAvatar, onGameStart, onLeaveRoom]);
 
-  const getAvatarSrc = (av: string) => {
-    if (av.startsWith('/')) return av;
-    return AVATAR_MAP[av] || AVATAR_MAP.raccoon;
+  // Generate real, scannable QR code matching game visual aesthetic
+  useEffect(() => {
+    const pin = roomCode || '482915';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://lisquiz.ru';
+    const url = `${origin}/?pin=${pin}`;
+    setGameJoinUrl(url);
+
+    QRCode.toDataURL(url, {
+      width: 280,
+      margin: 1,
+      color: {
+        dark: '#4A2306',
+        light: '#FFFDF7',
+      },
+      errorCorrectionLevel: 'Q',
+    })
+      .then((dataUri) => setQrDataUrl(dataUri))
+      .catch((err) => console.error('Failed to generate QR code:', err));
+  }, [roomCode]);
+
+  const handleCopyLink = () => {
+    if (!gameJoinUrl) return;
+    haptics.notification('success');
+    navigator.clipboard?.writeText(gameJoinUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2200);
   };
 
-  const handleLeave = () => {
-    haptics.impact('light');
-    try {
-      socketService.send('LEAVE_ROOM', { room_code: roomCode });
-    } catch {}
-    socketService.disconnect();
-    onLeaveRoom();
-  };
+  // Identify my student ID in the list
+  const myPlayer = players.find((p) => p.name === playerName || p.id === 'me');
+  const myId = myPlayer?.id || 'me';
 
   return (
     <div style={styles.container}>
-      {/* Top Header */}
-      <header style={styles.header}>
-        <div style={styles.headerLeft}>
-          <span style={styles.roomTag}>Комната: {roomCode}</span>
-        </div>
+      {/* 1. Hanging Wooden PIN Sign (with integrated back/leave button and title) */}
+      <div style={{ width: '100%', maxWidth: 540, display: 'flex', justifyContent: 'center', marginTop: 8, marginBottom: 10 }}>
+        <HangingPinSign
+          pin={roomCode}
+          subject={roomSubject}
+          grade={roomGrade}
+          onBack={onLeaveRoom}
+          onOpenQr={() => setIsQrModalOpen(true)}
+        />
+      </div>
 
-        <button onClick={handleLeave} style={styles.leaveBtn} title="Выйти из комнаты">
-          <LogOut size={16} color="#94A3B8" />
-          <span>Выйти</span>
-        </button>
-      </header>
+      {/* 2. Wooden Students Count Pill */}
+      <div style={{ width: '100%', maxWidth: 380, display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+        <StudentsCountPill count={players.length} max={25} />
+      </div>
 
-      {/* Hero Welcome Card */}
+      {/* 3. Center Scene: Mossy Stump + Animated Sprint + 12-Slot Board */}
+      <div style={{ position: 'relative', width: '100%', maxWidth: 680, marginBottom: 14 }}>
+        <LobbyBoardScene
+          students={players}
+          maxSlots={12}
+          currentStudentId={myId}
+          isTeacher={false}
+        />
+      </div>
+
+      {/* 4. Cozy Waiting Card for Students */}
       <motion.div
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        style={styles.heroCard}
+        initial={{ y: 16, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        style={styles.waitingCard}
       >
-        <div style={styles.avatarWrap}>
-          <img
-            src={getAvatarSrc(playerAvatar)}
-            alt={playerName}
-            style={styles.heroAvatarImg}
+        <div style={styles.pulseIndicator}>
+          <motion.div
+            animate={{ scale: [1, 1.4, 1], opacity: [0.7, 0.2, 0.7] }}
+            transition={{ repeat: Infinity, duration: 2, ease: 'easeInOut' }}
+            style={styles.pulseDot}
           />
+          <Hourglass size={18} color="#D97706" />
         </div>
 
-        <h2 style={styles.heroTitle}>Ты в игре, {playerName}!</h2>
-        <p style={styles.heroSub}>
-          Учитель скоро запустит викторину. Приготовься отвечать быстро и точно!
-        </p>
-
-        <div style={styles.statusPill}>
-          <Clock size={15} color="#34D399" />
-          <span>Ожидание старта учителем</span>
+        <div>
+          <div style={styles.waitingTitle}>Учитель скоро начнёт викторину!</div>
+          <div style={styles.waitingDesc}>
+            Приготовьтесь отвечать на вопросы быстрее всех
+          </div>
         </div>
       </motion.div>
 
-      {/* Classmates Grid */}
-      <div style={styles.classmatesSection}>
-        <div style={styles.sectionHeader}>
-          <div style={styles.sectionTitleRow}>
-            <Users size={16} color="#F59E0B" />
-            <span style={styles.sectionTitle}>Твои одноклассники в комнате</span>
-          </div>
-          <span style={styles.countBadge}>{players.length || 1} в игре</span>
+      {/* 5. Countdown Fullscreen Overlay */}
+      {countdown !== null && (
+        <div style={styles.countdownOverlay}>
+          <motion.div
+            key={countdown}
+            initial={{ scale: 0.2, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 1.5, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 500, damping: 20 }}
+            style={styles.countdownNumber}
+          >
+            {countdown}
+          </motion.div>
+          <span style={styles.countdownLabel}>Приготовьтесь!</span>
         </div>
+      )}
 
-        <div style={styles.playersGrid}>
-          {players.map((p) => {
-            const isMe = p.name === playerName;
-            return (
-              <motion.div
-                key={p.id}
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                style={{
-                  ...styles.playerItem,
-                  backgroundColor: isMe ? '#064E3B' : '#1E293B',
-                }}
-              >
-                <div style={styles.playerAvatarCircle}>
-                  <img
-                    src={getAvatarSrc(p.avatar)}
-                    alt={p.name}
-                    style={styles.playerAvatarImg}
-                  />
-                </div>
-                <span
-                  style={{
-                    ...styles.playerName,
-                    color: isMe ? '#34D399' : '#FFFFFF',
-                    fontWeight: isMe ? 800 : 600,
-                  }}
-                >
-                  {p.name} {isMe ? '(Ты)' : ''}
-                </span>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Mascot Sprint Tip */}
-      <div style={styles.tipCard}>
-        <Sparkles size={16} color="#F59E0B" style={{ flexShrink: 0 }} />
-        <span style={styles.tipText}>
-          Подсказка Спринта: чем быстрее и точнее ты отвечаешь, тем больше очков принесешь в копилку Рощи класса!
-        </span>
-      </div>
-
-      {/* Countdown Overlay */}
+      {/* QR Code Modal */}
       <AnimatePresence>
-        {countdown !== null && (
+        {isQrModalOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={styles.countdownOverlay}
+            style={styles.modalBackdrop}
+            onClick={() => setIsQrModalOpen(false)}
           >
             <motion.div
-              key={countdown}
-              initial={{ scale: 0.3, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 1.4, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 20 }}
-              style={styles.countdownNumber}
+              initial={{ scale: 0.9, y: 14 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9 }}
+              style={styles.qrModalCard}
+              onClick={(e) => e.stopPropagation()}
             >
-              {countdown}
+              <div style={styles.qrModalHeader}>
+                <h3 style={styles.qrModalTitle}>Подключение по QR</h3>
+                <button
+                  type="button"
+                  onClick={() => setIsQrModalOpen(false)}
+                  style={styles.closeBtn}
+                >
+                  <X size={18} color="#5C3317" />
+                </button>
+              </div>
+
+              {/* Real Scannable QR Code */}
+              <div style={styles.qrBox}>
+                {qrDataUrl ? (
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <img
+                      src={qrDataUrl}
+                      alt="Game QR Code"
+                      style={{
+                        width: 210,
+                        height: 210,
+                        display: 'block',
+                        borderRadius: 12,
+                      }}
+                    />
+                    {/* Centered Oak Acorn Emblem Badge */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        width: 44,
+                        height: 44,
+                        backgroundColor: '#FFFDF7',
+                        borderRadius: '50%',
+                        border: '2.5px solid #4A2306',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 3px 8px rgba(74, 35, 6, 0.25)',
+                      }}
+                    >
+                      <img
+                        src="/assets/icons/acorn.png"
+                        alt="Acorn"
+                        style={{ width: 24, height: 24, objectFit: 'contain' }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ width: 210, height: 210, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontSize: 13, color: '#78350F' }}>Генерация QR-кода...</span>
+                  </div>
+                )}
+              </div>
+
+              <div style={styles.qrPinDisplay}>
+                PIN: <strong>{roomCode ? `${roomCode.slice(0, 3)} ${roomCode.slice(3, 6)}` : '482 915'}</strong>
+              </div>
+
+              {/* Direct Game Join Link with Copy Button */}
+              <div
+                style={{
+                  width: '100%',
+                  backgroundColor: '#FDF6E2',
+                  border: '1.5px solid #D97706',
+                  borderRadius: 14,
+                  padding: '8px 12px',
+                  marginBottom: 12,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 8,
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: '#78350F',
+                    fontFamily: 'monospace',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    textAlign: 'left',
+                    flex: 1,
+                  }}
+                >
+                  {gameJoinUrl}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  style={{
+                    border: 'none',
+                    backgroundColor: copiedLink ? '#10B981' : '#FF7A00',
+                    color: '#FFF',
+                    borderRadius: 8,
+                    padding: '4px 8px',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    flexShrink: 0,
+                    transition: 'background-color 0.2s ease',
+                  }}
+                >
+                  {copiedLink ? <Check size={12} strokeWidth={3} /> : <Copy size={12} />}
+                  <span>{copiedLink ? 'Скопировано' : 'Копировать'}</span>
+                </button>
+              </div>
+
+              <p style={styles.qrInstructions}>
+                Покажите QR-код однокласснику или отправьте ссылку, чтобы он присоединился к уроку
+              </p>
             </motion.div>
-            <span style={styles.countdownLabel}>Внимание, старт!</span>
           </motion.div>
         )}
       </AnimatePresence>
@@ -321,189 +389,190 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100%',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: 'transparent',
-    padding: '14px 16px 80px',
+    alignItems: 'center',
+    padding: '10px 14px 40px',
     boxSizing: 'border-box',
-    gap: 14,
     overflowY: 'auto',
     overflowX: 'hidden',
+    backgroundColor: '#FAF5EE',
   },
-  header: {
+  topNavBar: {
+    width: '100%',
+    maxWidth: 680,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+    zIndex: 10,
+  },
+  leaveButton: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 14px',
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    border: '1.5px solid rgba(220, 38, 38, 0.25)',
+    color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: 'pointer',
+    outline: 'none',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+  },
+  titleCapsule: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '6px 14px',
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    border: '1.5px solid rgba(160, 110, 60, 0.22)',
+    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+  },
+  titleText: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: '#5C3317',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  waitingCard: {
+    width: '100%',
+    maxWidth: 440,
+    display: 'flex',
+    alignItems: 'center',
+    gap: 14,
+    padding: '14px 18px',
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    border: '1.5px solid rgba(160, 110, 60, 0.22)',
+    boxShadow: '0 6px 20px rgba(0, 0, 0, 0.06)',
+    marginTop: 6,
+  },
+  pulseIndicator: {
+    position: 'relative',
+    width: 40,
+    height: 40,
+    borderRadius: '50%',
+    backgroundColor: '#FEF3C7',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  pulseDot: {
+    position: 'absolute',
+    width: '100%',
+    height: '100%',
+    borderRadius: '50%',
+    backgroundColor: '#F59E0B',
+  },
+  waitingTitle: {
+    fontSize: 14,
+    fontWeight: 800,
+    color: '#5C3317',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  waitingDesc: {
+    fontSize: 12,
+    color: '#78350F',
+    opacity: 0.8,
+    marginTop: 2,
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+  },
+  countdownOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(250, 245, 238, 0.95)',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+  },
+  countdownNumber: {
+    fontFamily: "'SF Mono', 'Fira Code', monospace",
+    fontSize: '110px',
+    fontWeight: 900,
+    color: '#FF7A00',
+    textShadow: '0 8px 24px rgba(255, 122, 0, 0.4)',
+  },
+  countdownLabel: {
+    fontSize: 22,
+    fontWeight: 800,
+    color: '#5C3317',
+    marginTop: 10,
+    letterSpacing: '0.05em',
+  },
+  modalBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backdropFilter: 'blur(3px)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+    padding: 16,
+  },
+  qrModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: '22px',
+    maxWidth: 320,
+    width: '100%',
+    boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+    textAlign: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  qrModalHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+    marginBottom: 16,
   },
-  headerLeft: {
-    display: 'flex',
-    alignItems: 'center',
-  },
-  roomTag: {
-    fontSize: 13,
+  qrModalTitle: {
+    fontSize: 16,
     fontWeight: 800,
-    color: '#FCD34D',
-    backgroundColor: '#1E293B',
-    borderRadius: 999,
-    padding: '4px 12px',
+    color: '#5C3317',
+    margin: 0,
   },
-  leaveBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#1E293B',
+  closeBtn: {
+    background: 'none',
     border: 'none',
-    borderRadius: 999,
-    padding: '6px 12px',
-    color: '#94A3B8',
-    fontSize: 12,
-    fontWeight: 700,
     cursor: 'pointer',
-  },
-  heroCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    backgroundColor: '#1E293B',
-    borderRadius: 22,
-    padding: '20px 16px',
-    gap: 10,
-  },
-  avatarWrap: {
-    width: 68,
-    height: 68,
-    borderRadius: '50%',
-    backgroundColor: '#0F172A',
-    border: '2.5px solid #10B981',
+    padding: 4,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
-  heroAvatarImg: {
-    width: '85%',
-    height: '85%',
-    objectFit: 'contain',
+  qrBox: {
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: '#FAF5EE',
+    border: '2px solid rgba(160, 110, 60, 0.2)',
+    marginBottom: 14,
   },
-  heroTitle: {
+  qrPinDisplay: {
     fontSize: 18,
-    fontWeight: 900,
-    color: '#FFFFFF',
-    margin: 0,
+    fontWeight: 800,
+    color: '#5C3317',
+    marginBottom: 8,
   },
-  heroSub: {
+  qrInstructions: {
     fontSize: 12,
-    color: '#94A3B8',
+    color: '#78350F',
+    margin: 0,
     lineHeight: 1.4,
-    maxWidth: 280,
-    margin: 0,
-  },
-  statusPill: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#064E3B',
-    borderRadius: 999,
-    padding: '5px 14px',
-    fontSize: 12,
-    fontWeight: 800,
-    color: '#6EE7B7',
-    marginTop: 4,
-  },
-  classmatesSection: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 10,
-  },
-  sectionHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sectionTitleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-  },
-  sectionTitle: {
-    fontSize: 12.5,
-    fontWeight: 800,
-    color: '#FFFFFF',
-  },
-  countBadge: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontWeight: 700,
-  },
-  playersGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: 8,
-  },
-  playerItem: {
-    borderRadius: 14,
-    padding: '8px 6px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 4,
-  },
-  playerAvatarCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: '50%',
-    backgroundColor: '#0F172A',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  playerAvatarImg: {
-    width: '80%',
-    height: '80%',
-    objectFit: 'contain',
-  },
-  playerName: {
-    fontSize: 10.5,
-    textAlign: 'center',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    maxWidth: 80,
-  },
-  tipCard: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#1E293B',
-    borderRadius: 14,
-    padding: '10px 14px',
-  },
-  tipText: {
-    fontSize: 11.5,
-    color: '#CBD5E1',
-    lineHeight: 1.35,
-    fontWeight: 500,
-  },
-  countdownOverlay: {
-    position: 'fixed',
-    inset: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    zIndex: 200,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-  },
-  countdownNumber: {
-    fontSize: 88,
-    fontWeight: 900,
-    color: '#FCD34D',
-    lineHeight: 1,
-  },
-  countdownLabel: {
-    fontSize: 18,
-    fontWeight: 800,
-    color: '#FFFFFF',
+    opacity: 0.85,
   },
 };

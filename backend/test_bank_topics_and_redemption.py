@@ -1,9 +1,20 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
-from backend.app.main import app
-from backend.app.services.bank_service import bank_service
-from backend.app.services.ai_service import AIService
-from backend.app.models.schemas import QuizCreateRequest
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent))
+
+try:
+    from backend.app.main import app
+    from backend.app.services.bank_service import bank_service
+    from backend.app.services.ai_service import AIService
+    from backend.app.models.schemas import QuizCreateRequest
+except ImportError:
+    from app.main import app
+    from app.services.bank_service import bank_service
+    from app.services.ai_service import AIService
+    from app.models.schemas import QuizCreateRequest
 
 @pytest.mark.asyncio
 async def test_bank_topics_endpoint():

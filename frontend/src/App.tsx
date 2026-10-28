@@ -33,6 +33,7 @@ import StudentRoundWait from './pages/StudentRoundWait';
 import StudentQuizFinish from './pages/StudentQuizFinish';
 import SleepScreen from './pages/SleepScreen';
 import TeacherClassManagement from './pages/TeacherClassManagement';
+import RoleSelectScreen from './pages/RoleSelectScreen';
 import { classApi } from './services/classApi';
 import { testHarness } from './services/testHarness';
 import { roomApi } from './services/roomApi';
@@ -42,6 +43,7 @@ import { socketService } from './services/socketService';
 type TabType = 'home' | 'grove' | 'leaderboard' | 'stats';
 type SubScreenType =
   | null
+  | 'role_select'
   | 'student_waiting'
   | 'student_game'
   | 'teacher_game'
@@ -49,15 +51,79 @@ type SubScreenType =
   | 'feedback_wrong'
   | 'student_round_wait'
   | 'student_quiz_finish'
+  | 'student_leaderboard'
   | 'sleep_screen'
   | 'teacher_classes'
-  | 'teacher_quizzes';
+  | 'teacher_quizzes'
+  | 'teacher_report';
 
 export default function App() {
-  const [role, setRole] = useState<'teacher' | 'student'>('student');
-  const [tab, setTab] = useState<TabType>('home');
-  const [subScreen, setSubScreen] = useState<SubScreenType>(null);
+  const [role, setRole] = useState<'teacher' | 'student'>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const r = params.get('role');
+      const s = params.get('screen') || params.get('subScreen');
+      if (r === 'teacher' || s === 'teacher_classes' || s === 'teacher_quizzes' || s === 'teacher_game' || s === 'teacher_waiting' || s === 'teacher_report' || s === 'stats') return 'teacher';
+    } catch {}
+    return 'student';
+  });
+  const [tab, setTab] = useState<TabType>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('screen') || params.get('subScreen') || params.get('tab');
+      if (s === 'teacher_report' || s === 'stats') return 'stats';
+      if (s === 'grove') return 'grove';
+      if (s === 'leaderboard' || s === 'teacher_lobby' || s === 'teacher_waiting' || s === 'lobby') return 'leaderboard';
+    } catch {}
+    return 'home';
+  });
+  const [subScreen, setSubScreen] = useState<SubScreenType>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const s = params.get('screen') || params.get('subScreen');
+      if (s === 'role_select') return 'role_select';
+      if (s === 'teacher_classes' || s === 'classes') return 'teacher_classes';
+      if (s === 'teacher_quizzes' || s === 'quizzes') return 'teacher_quizzes';
+      if (s === 'teacher_game') return 'teacher_game';
+      if (s === 'student_waiting' || s === 'waiting') return 'student_waiting';
+      if (s === 'student_game' || s === 'game') return 'student_game';
+      if (s === 'student_round_wait' || s === 'wait') return 'student_round_wait';
+      if (s === 'student_quiz_finish' || s === 'finish') return 'student_quiz_finish';
+      if (s === 'student_leaderboard' || s === 'leaderboard') return 'student_leaderboard';
+    } catch {}
+    return null;
+  });
   const [isMobileDevOpen, setIsMobileDevOpen] = useState(false);
+
+  // App mode: 'user' (production-clean) or 'dev' (tools, shortcuts, mocks)
+  type AppMode = 'user' | 'dev';
+  const [appMode, setAppMode] = useState<AppMode>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get('mode');
+      if (m === 'dev' || m === 'developer' || params.has('dev')) return 'dev';
+      if (m === 'user') return 'user';
+      const saved = localStorage.getItem('lisquiz_app_mode') as AppMode;
+      if (saved === 'dev' || saved === 'user') return saved;
+    } catch {}
+    return 'user';
+  });
+
+  const handleModeChange = (newMode: AppMode) => {
+    haptics.selection();
+    setAppMode(newMode);
+    try {
+      localStorage.setItem('lisquiz_app_mode', newMode);
+      const url = new URL(window.location.href);
+      if (newMode === 'dev') {
+        url.searchParams.set('mode', 'dev');
+      } else {
+        url.searchParams.delete('mode');
+        url.searchParams.delete('dev');
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch {}
+  };
 
   // Auth & user state
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => authService.getCachedUser());
@@ -66,7 +132,13 @@ export default function App() {
   const [authFeedback, setAuthFeedback] = useState<string | null>(null);
 
   // Live session state
-  const [activePin, setActivePin] = useState<string>('');
+  const [activePin, setActivePin] = useState<string>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('pin') || '';
+    } catch {}
+    return '';
+  });
   const [teacherToken, setTeacherToken] = useState<string>('');
   const [studentPlayerId, setStudentPlayerId] = useState<string>('');
   const [studentName, setStudentName] = useState<string>(() => authService.getCachedUser()?.display_name || 'Иван К');
@@ -363,6 +435,19 @@ export default function App() {
 
   // Render content according to active Tab & Role
   const renderTabContent = () => {
+    if (subScreen === 'role_select') {
+      return (
+        <RoleSelectScreen
+          currentRole={role}
+          onClose={() => setSubScreen(null)}
+          onSelectRole={(newRole) => {
+            handleRoleSwitch(newRole);
+            setSubScreen(null);
+            setTab('home');
+          }}
+        />
+      );
+    }
     if (subScreen === 'teacher_classes') {
       return (
         <TeacherClassManagement
@@ -411,6 +496,8 @@ export default function App() {
           roomCode={activePin}
           playerName={studentName}
           playerAvatar={studentAvatar}
+          subject={quizSubject}
+          grade={quizGrade}
           onGameStart={() => setSubScreen('student_game')}
           onLeaveRoom={() => {
             socketService.disconnect();
@@ -586,18 +673,35 @@ export default function App() {
           playerName={studentName}
           playerAvatar={studentAvatar}
           topPlayers={quizFinishData?.top_players || []}
-          myScore={quizFinishData?.myScore || personalAnswerResult?.total_score || 850}
+          myScore={quizFinishData?.myScore || personalAnswerResult?.total_score || 750}
           myRank={quizFinishData?.myRank}
-          correctCount={quizFinishData?.correctCount ?? 3}
-          wrongCount={quizFinishData?.wrongCount ?? 0}
-          totalQuestions={quizFinishData?.totalQuestions ?? 3}
+          correctCount={quizFinishData?.correctCount ?? 4}
+          wrongCount={quizFinishData?.wrongCount ?? 1}
+          totalQuestions={quizFinishData?.totalQuestions ?? 5}
           onGoToLeaderboard={(earnedPoints, rank) => {
             socketService.disconnect();
             setActivePin('');
             setLeaderboardBoostPoints(earnedPoints || quizFinishData?.myScore || 150);
             setLeaderboardBoostRank(rank || quizFinishData?.myRank || null);
-            setSubScreen(null);
-            setTab('leaderboard');
+            setSubScreen('student_leaderboard');
+          }}
+          onBackToHome={() => setSubScreen(null)}
+        />
+      );
+    }
+    if (subScreen === 'student_leaderboard') {
+      return (
+        <StudentLeaderboard
+          boostPoints={leaderboardBoostPoints}
+          boostRank={leaderboardBoostRank}
+          currentStudentName={studentName || 'Артём К'}
+          currentStudentAvatar={studentAvatar || 'raccoon'}
+          currentScore={quizFinishData?.myScore || 750}
+          currentRank={quizFinishData?.myRank || 4}
+          onBack={() => setSubScreen('student_quiz_finish')}
+          onClearBoost={() => {
+            setLeaderboardBoostPoints(null);
+            setLeaderboardBoostRank(null);
           }}
         />
       );
@@ -636,7 +740,7 @@ export default function App() {
               }}
               onGoToGrove={() => setTab('grove')}
               onGoToLeaderboard={() => setTab('leaderboard')}
-              onSwitchToTeacher={() => handleRoleSwitch('teacher')}
+              onSwitchToTeacher={() => setSubScreen('role_select')}
             />
           );
         case 'grove':
@@ -652,6 +756,10 @@ export default function App() {
             <StudentLeaderboard
               boostPoints={leaderboardBoostPoints}
               boostRank={leaderboardBoostRank}
+              currentStudentName={studentName || 'Артём К'}
+              currentStudentAvatar={studentAvatar || 'raccoon'}
+              currentScore={quizFinishData?.myScore || 750}
+              currentRank={quizFinishData?.myRank || 4}
               onClearBoost={() => {
                 setLeaderboardBoostPoints(null);
                 setLeaderboardBoostRank(null);
@@ -669,6 +777,10 @@ export default function App() {
         case 'home':
           return (
             <TeacherHomeScreen
+              onCreateQuiz={() => {
+                haptics.impact('medium');
+                setSubScreen('teacher_quizzes');
+              }}
               onOpenClasses={() => {
                 haptics.impact('medium');
                 setSubScreen('teacher_classes');
@@ -676,6 +788,10 @@ export default function App() {
               onOpenQuizzes={() => {
                 haptics.impact('medium');
                 setSubScreen('teacher_quizzes');
+              }}
+              onSwitchRole={() => {
+                haptics.impact('light');
+                setSubScreen('role_select');
               }}
             />
           );
@@ -733,28 +849,71 @@ export default function App() {
     return null;
   };
 
+  const isStatsTab = tab === 'stats' || subScreen === 'teacher_report';
+
   const activeBg = (tab === 'home' && !subScreen)
     ? "url('/assets/backgrounds/main_menu_clean.png')"
     : (tab === 'grove' && !subScreen)
     ? "url('/assets/backgrounds/grove_bg_clean.png')"
+    : isStatsTab
+    ? 'radial-gradient(#F5EBD7 1px, transparent 1px)'
     : "url('/assets/backgrounds/quiz_bg_clean.png')";
 
+  const showTopHeader = (tab as string) !== 'home' && (tab as string) !== 'leaderboard' && !isStatsTab && (role as string) !== 'student' && !subScreen;
+  const showBottomDock = !subScreen && (tab as string) !== 'home' && (tab as string) !== 'leaderboard' && !isStatsTab && (role as string) !== 'student';
+
   return (
-    <div className="desktop-layout">
-      {/* ========================================================
-          MOBILE PHONE FRAME (Authentic Sferum / MAX experience)
-         ======================================================== */}
-      <div
+    <div className="desktop-shell-wrapper">
+      {/* Top Mode Header: User vs Developer mode switcher */}
+      <div className="mode-switcher-bar">
+        <div style={styles.modeBarBrand}>
+          <span style={{ fontSize: 18 }}>🦊</span>
+          <span style={styles.modeBarTitle}>Лисквиз</span>
+          <span style={styles.modeBarVersion}>v2.2</span>
+        </div>
+
+        <div style={styles.modeSwitchTabs}>
+          <button
+            onClick={() => handleModeChange('user')}
+            style={{
+              ...styles.modeSwitchBtn,
+              backgroundColor: appMode === 'user' ? '#10B981' : 'transparent',
+              color: appMode === 'user' ? '#FFFFFF' : '#94A3B8',
+              fontWeight: appMode === 'user' ? 800 : 600,
+            }}
+          >
+            👤 Версия для пользователей
+          </button>
+          <button
+            onClick={() => handleModeChange('dev')}
+            style={{
+              ...styles.modeSwitchBtn,
+              backgroundColor: appMode === 'dev' ? '#FF7A00' : 'transparent',
+              color: appMode === 'dev' ? '#FFFFFF' : '#94A3B8',
+              fontWeight: appMode === 'dev' ? 800 : 600,
+            }}
+          >
+            🛠️ Для разработчиков
+          </button>
+        </div>
+      </div>
+
+      <div className="desktop-layout">
+        {/* ========================================================
+            MOBILE PHONE FRAME (Authentic Sferum / MAX experience)
+           ======================================================== */}
+        <div
         className="app-container"
         style={{
+          backgroundColor: isStatsTab ? '#FAF4E8' : '#0B132B',
           backgroundImage: activeBg,
           backgroundPosition: 'center top',
-          backgroundSize: 'cover',
-          backgroundRepeat: 'no-repeat',
+          backgroundSize: isStatsTab ? '24px 24px' : 'cover',
+          backgroundRepeat: isStatsTab ? 'repeat' : 'no-repeat',
         }}
       >
-        {/* Mobile Top App Bar: Grove Stats + Role Switch (hidden on home tab where StudentHome has its own header) */}
-        {tab !== 'home' && (
+        {/* Mobile Top App Bar: Grove Stats + Role Switch (hidden on home, leaderboard, all student screens, and any subscreen) */}
+        {showTopHeader && (
           <header style={styles.topHeader}>
           <div style={styles.topStatsGroup}>
             <div style={styles.topStatPill} title="Стрик 5 дней">
@@ -959,9 +1118,9 @@ export default function App() {
 
         {/* ========================================================
             TELEGRAM FLOATING CAPSULE NAVIGATION DOCK (Icon only)
-            Hidden on home screen where the 3D tablets handle navigation
+            Hidden on home, leaderboard, all student screens, and all subscreens
            ======================================================== */}
-        {!subScreen && tab !== 'home' && (
+        {showBottomDock && (
           <div style={styles.dockWrapper}>
             <nav style={styles.bottomNavDock}>
               {/* Tab 1: Домой */}
@@ -1032,7 +1191,7 @@ export default function App() {
 
               {/* Tab 4: Статистика / Отчёт (Teacher only) */}
               {role === 'teacher' && (() => {
-                const isActive = tab === 'stats' && !subScreen;
+                const isActive = (tab as string) === 'stats' && !subScreen;
                 return (
                   <button
                     onClick={() => handleTabChange('stats')}
@@ -1058,8 +1217,10 @@ export default function App() {
 
       {/* ========================================================
           DESKTOP DEV TOOLS SIDEBAR (Outside mobile screen)
+          Only rendered in Developer mode
          ======================================================== */}
-      <aside className="dev-sidebar">
+      {appMode === 'dev' && (
+        <aside className="dev-sidebar">
         <div style={styles.devHeader}>
           <Wrench size={16} color="#FF7A00" />
           <span style={styles.devTitle}>Кнопки для разработчиков</span>
@@ -1218,6 +1379,15 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => {
+              setSubScreen('role_select');
+            }}
+            style={{ ...styles.devBtn, borderColor: '#F59E0B', color: '#FDE68A' }}
+          >
+            🎭 Выбор роли (Новый экран)
+          </button>
+
+          <button
             onClick={() => setAuthModalOpen(true)}
             style={{ ...styles.devBtn, borderColor: 'rgba(16, 185, 129, 0.4)', color: '#6EE7B7' }}
           >
@@ -1285,18 +1455,21 @@ export default function App() {
           </button>
         </div>
       </aside>
+      )}
 
       {/* Floating Toggle for Dev tools on small mobile screens */}
-      <button
-        className="mobile-dev-toggle"
-        onClick={() => setIsMobileDevOpen((prev) => !prev)}
-        title="Кнопки для разработчиков"
-      >
-        <Wrench size={18} color="#FFFFFF" />
-      </button>
+      {appMode === 'dev' && (
+        <button
+          className="mobile-dev-toggle"
+          onClick={() => setIsMobileDevOpen((prev) => !prev)}
+          title="Кнопки для разработчиков"
+        >
+          <Wrench size={18} color="#FFFFFF" />
+        </button>
+      )}
 
       {/* Mobile Dev Drawer */}
-      {isMobileDevOpen && (
+      {appMode === 'dev' && isMobileDevOpen && (
         <div className="mobile-dev-drawer">
           <div style={styles.mobileDevDrawerHeader}>
             <span style={{ fontWeight: 800, fontSize: 13, color: '#FF7A00' }}>
@@ -1426,6 +1599,15 @@ export default function App() {
             </button>
             <button
               onClick={() => {
+                setSubScreen('role_select');
+                setIsMobileDevOpen(false);
+              }}
+              style={{ ...styles.mobileDevBtn, color: '#FDE68A' }}
+            >
+              🎭 Выбор роли
+            </button>
+            <button
+              onClick={() => {
                 setAuthModalOpen(true);
                 setIsMobileDevOpen(false);
               }}
@@ -1445,11 +1627,54 @@ export default function App() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
+  modeBarBrand: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+  },
+  modeBarTitle: {
+    fontFamily: "'Comfortaa', 'Nunito', cursive, sans-serif",
+    fontSize: 15,
+    fontWeight: 900,
+    color: '#F8FAFC',
+    letterSpacing: '-0.3px',
+  },
+  modeBarVersion: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 10,
+    fontWeight: 800,
+    color: '#10B981',
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    border: '1px solid rgba(16, 185, 129, 0.3)',
+    borderRadius: 6,
+    padding: '1px 6px',
+  },
+  modeSwitchTabs: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    padding: 3,
+    borderRadius: 9999,
+  },
+  modeSwitchBtn: {
+    fontFamily: "'Nunito', sans-serif",
+    fontSize: 11.5,
+    borderRadius: 9999,
+    padding: '5px 12px',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 5,
+  },
   topHeader: {
     display: 'flex',
     justifyContent: 'space-between',

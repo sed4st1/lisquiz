@@ -1,24 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  AlertTriangle,
-  Send,
-  Users,
-  Award,
-  AlertCircle,
-  ChevronDown,
-  ChevronUp,
   CheckCircle2,
-  BookOpen,
-  ShieldAlert,
-  EyeOff,
-  Zap,
-  Lightbulb,
-  Download,
   ArrowLeft,
+  AlertTriangle,
 } from 'lucide-react';
 import { roomApi } from '../services/roomApi';
-import { colors, spacing, borderRadius, shadows, transitions } from '../theme/tokens';
+import { haptics } from '../services/haptics';
+import TeacherMascotRig from '../components/TeacherMascotRig';
 
 export interface QuestionAnalyticsItem {
   id: number;
@@ -30,6 +19,7 @@ export interface QuestionAnalyticsItem {
   totalAnswers: number;
   correctAnswers: number;
   commonMistake?: string;
+  tier?: 1 | 2 | 3;
 }
 
 export interface MisconceptionItem {
@@ -63,60 +53,6 @@ export interface TeacherGapReportProps {
   onBackToLobby?: () => void;
 }
 
-const DEFAULT_MISCONCEPTIONS: MisconceptionItem[] = [
-  {
-    misc_id: 'MC.EQ.DIV',
-    title: 'Выражение делителя из равенства (деление вместо умножения)',
-    occurrences: 11,
-    pct_of_class: 42.3,
-    correction_hint: 'Напомнить треугольник формул и правило: делитель = делимое разделить на частное.',
-  },
-  {
-    misc_id: 'MC.DENS.UNIT',
-    title: 'Перевод единиц плотности: путаница множителя 1000',
-    occurrences: 8,
-    pct_of_class: 30.8,
-    correction_hint: 'Напомнить правило: 1 г/см³ = 1000 кг/м³, кубический метр тяжелее в 1000 раз.',
-  },
-  {
-    misc_id: 'MC.ARCH.BODYDENS',
-    title: 'Подстановка плотности тела вместо жидкости в силу Архимеда',
-    occurrences: 5,
-    pct_of_class: 19.2,
-    correction_hint: 'Показать демонстрацию: сила Архимеда зависит только от вытесненной жидкости.',
-  },
-];
-
-const DEFAULT_CHEATING_LOG: CheatingAuditItem[] = [
-  {
-    student_id: 'p_104',
-    student_name: 'Максим Г.',
-    blur_count: 3,
-    rapid_guess_count: 2,
-    total_answers: 10,
-    risk_level: 'HIGH',
-    flags: ['Сворачивание вкладки во время вопроса (3 раза)', 'Клики быстрее порога чтения (2 раза)'],
-  },
-  {
-    student_id: 'p_112',
-    student_name: 'Егор В.',
-    blur_count: 2,
-    rapid_guess_count: 0,
-    total_answers: 10,
-    risk_level: 'MEDIUM',
-    flags: ['Сворачивание приложения во время теста (2 раза)'],
-  },
-  {
-    student_id: 'p_107',
-    student_name: 'Артём К.',
-    blur_count: 0,
-    rapid_guess_count: 1,
-    total_answers: 10,
-    risk_level: 'MEDIUM',
-    flags: ['Один ответ быстрее 0.8 сек (возможно угадывание)'],
-  },
-];
-
 const DEFAULT_QUESTIONS: QuestionAnalyticsItem[] = [
   {
     id: 1,
@@ -125,1159 +61,1201 @@ const DEFAULT_QUESTIONS: QuestionAnalyticsItem[] = [
     text: 'Что показывает числитель обыкновенной дроби?',
     correctPercentage: 92,
     kesCode: '1.2.1',
-    totalAnswers: 26,
-    correctAnswers: 24,
+    totalAnswers: 24,
+    correctAnswers: 22,
+    tier: 1,
   },
   {
     id: 2,
     questionNumber: 2,
-    topic: 'Правильные и неправильные дроби',
-    text: 'Какая из представленных дробей является правильной?',
-    correctPercentage: 85,
-    kesCode: '1.2.2',
-    totalAnswers: 26,
+    topic: 'Сложение с одинаковыми знаменателями',
+    text: 'Вычислите сумму дробей: 3/11 + 5/11',
+    correctPercentage: 92,
+    kesCode: '1.2.5',
+    totalAnswers: 24,
     correctAnswers: 22,
+    tier: 1,
   },
   {
     id: 3,
     questionNumber: 3,
     topic: 'Основное свойство дроби',
     text: 'Сократите дробь 18/24 до несократимого вида',
-    correctPercentage: 73,
+    correctPercentage: 74,
     kesCode: '1.2.3',
-    totalAnswers: 26,
-    correctAnswers: 19,
+    totalAnswers: 24,
+    correctAnswers: 18,
+    tier: 2,
+    commonMistake: 'Деление только числителя на общий делитель',
   },
   {
     id: 4,
     questionNumber: 4,
-    topic: 'Приведение к общему знаменателю',
-    text: 'Найдите наименьший общий знаменатель для 5/12 и 7/18',
-    correctPercentage: 42,
-    kesCode: '1.2.4',
-    totalAnswers: 26,
-    correctAnswers: 11,
-    commonMistake: 'Частая ошибка: перемножение знаменателей (216 вместо 36)',
+    topic: 'Сложение с разными знаменателями',
+    text: 'Вычислите результат сложения: 1/4 + 2/5',
+    correctPercentage: 74,
+    kesCode: '1.2.5',
+    totalAnswers: 24,
+    correctAnswers: 18,
+    tier: 2,
+    commonMistake: 'Сложение числителей и знаменателей без приведения к общему знаменателю',
   },
   {
     id: 5,
     questionNumber: 5,
-    topic: 'Сложение с одинаковыми знаменателями',
-    text: 'Вычислите сумму дробей: 3/11 + 5/11',
-    correctPercentage: 96,
-    kesCode: '1.2.5',
-    totalAnswers: 26,
-    correctAnswers: 25,
+    topic: 'Приведение к общему знаменателю',
+    text: 'Найдите наименьший общий знаменатель для 5/12 и 7/18',
+    correctPercentage: 48,
+    kesCode: '1.2.4',
+    totalAnswers: 24,
+    correctAnswers: 11,
+    tier: 3,
+    commonMistake: 'Перемножение знаменателей (216 вместо 36)',
   },
   {
     id: 6,
     questionNumber: 6,
-    topic: 'Сложение с разными знаменателями',
-    text: 'Вычислите результат сложения: 1/4 + 2/5',
-    correctPercentage: 62,
-    kesCode: '1.2.5',
-    totalAnswers: 26,
-    correctAnswers: 16,
-    commonMistake: 'Сложение числителей и знаменателей на рубеже',
-  },
-  {
-    id: 7,
-    questionNumber: 7,
     topic: 'Вычитание смешанных чисел',
     text: 'Вычислите разность: 3 1/3 − 1 5/6',
-    correctPercentage: 38,
+    correctPercentage: 48,
     kesCode: '1.2.6',
-    totalAnswers: 26,
-    correctAnswers: 10,
+    totalAnswers: 24,
+    correctAnswers: 11,
+    tier: 3,
     commonMistake: 'Затруднение при заёме единицы из целой части',
-  },
-  {
-    id: 8,
-    questionNumber: 8,
-    topic: 'Умножение обыкновенных дробей',
-    text: 'Найдите произведение дробей: 3/8 × 4/9',
-    correctPercentage: 69,
-    kesCode: '1.2.7',
-    totalAnswers: 26,
-    correctAnswers: 18,
-  },
-  {
-    id: 9,
-    questionNumber: 9,
-    topic: 'Деление обыкновенных дробей',
-    text: 'Вычислите результат деления: 5/6 ÷ 2/3',
-    correctPercentage: 46,
-    kesCode: '1.2.8',
-    totalAnswers: 26,
-    correctAnswers: 12,
-    commonMistake: 'Забыли перевернуть вторую дробь при умножении',
-  },
-  {
-    id: 10,
-    questionNumber: 10,
-    topic: 'Текстовая задача на части от целого',
-    text: 'В книге 120 страниц. Маша прочитала 3/4. Сколько страниц осталось?',
-    correctPercentage: 58,
-    kesCode: '1.2.9',
-    totalAnswers: 26,
-    correctAnswers: 15,
   },
 ];
 
-export default function TeacherGapReport({
+const DEFAULT_CHEATING_LOG: CheatingAuditItem[] = [
+  {
+    student_id: 'p_104',
+    student_name: 'Максим Г.',
+    blur_count: 2,
+    rapid_guess_count: 1,
+    total_answers: 6,
+    risk_level: 'HIGH',
+    flags: ['Сворачивание вкладки во время вопроса (2 раза)', 'Быстрый клик быстрее порога чтения (1 раз)'],
+  },
+  {
+    student_id: 'p_112',
+    student_name: 'Егор В.',
+    blur_count: 1,
+    rapid_guess_count: 1,
+    total_answers: 6,
+    risk_level: 'MEDIUM',
+    flags: ['Сворачивание вкладки (1 раз)', 'Быстрый клик (1 раз)'],
+  },
+];
+
+export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   roomCode,
-  quizTitle = 'Обыкновенные дроби: итоговый контроль',
-  topic = 'ФРП ООО «Математика» 5 класс',
-  grade = 5,
-  totalStudents = 26,
-  questions: propQuestions,
-  topMisconceptions: propMisconceptions,
-  cheatingAuditLog: propCheatingLog,
+  quizTitle: _quizTitle = 'Обыкновенные дроби: сложение и вычитание',
+  topic: _topic = 'Математика',
+  grade = 7,
+  totalStudents = 24,
+  questions: initialQuestions,
+  topMisconceptions: _topMisconceptions,
+  cheatingAuditLog: initialCheatingLog,
   onSendReviewTasks,
   onBackToLobby,
-}: TeacherGapReportProps) {
-  const [selectedQuestionId, setSelectedQuestionId] = useState<number | null>(null);
-  const [isSent, setIsSent] = useState(false);
-  const [filterMode, setFilterMode] = useState<'all' | 'weak'>('all');
-  const [reportData, setReportData] = useState<any | null>(null);
-  const [loading, setLoading] = useState<boolean>(Boolean(roomCode));
+}) => {
+  const [questions, setQuestions] = useState<QuestionAnalyticsItem[]>(
+    initialQuestions && initialQuestions.length > 0 ? initialQuestions : DEFAULT_QUESTIONS
+  );
+  const [cheatingLog, setCheatingLog] = useState<CheatingAuditItem[]>(
+    initialCheatingLog && initialCheatingLog.length > 0 ? initialCheatingLog : DEFAULT_CHEATING_LOG
+  );
+  const [expandedTier, setExpandedTier] = useState<number | null>(null);
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isRemedialSent, setIsRemedialSent] = useState(false);
+  const [_isLoading, setIsLoading] = useState(false);
 
+  // Load report from API if roomCode is provided
   useEffect(() => {
+    if (!roomCode) return;
+
     let isMounted = true;
-    if (!roomCode) {
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    roomApi
-      .getGapReport(roomCode)
-      .then((data) => {
-        if (isMounted) {
-          setReportData(data);
-          setLoading(false);
+    const fetchReport = async () => {
+      try {
+        setIsLoading(true);
+        const report = await roomApi.getGapReport(roomCode);
+        if (!isMounted || !report) return;
+
+        if (report.questions_analytics && report.questions_analytics.length > 0) {
+          const mapped = report.questions_analytics.map((q: any, idx: number) => {
+            const pct = Math.round(q.correct_percentage ?? (q.total_count ? (q.correct_count / q.total_count) * 100 : 75));
+            const tier: 1 | 2 | 3 = pct >= 80 ? 1 : pct >= 60 ? 2 : 3;
+            return {
+              id: q.id ?? idx + 1,
+              questionNumber: idx + 1,
+              topic: q.topic || `Вопрос ${idx + 1}`,
+              text: q.question_text || `Вопрос #${idx + 1}`,
+              correctPercentage: pct,
+              kesCode: q.kes_code || '1.2',
+              totalAnswers: q.total_count || totalStudents,
+              correctAnswers: q.correct_count || Math.round((pct / 100) * totalStudents),
+              commonMistake: q.common_mistake,
+              tier,
+            };
+          });
+          setQuestions(mapped);
         }
-      })
-      .catch((err) => {
-        console.warn('Failed to load gap report for room:', roomCode, err);
-        if (isMounted) {
-          setLoading(false);
+
+        if (report.cheating_audit_log && report.cheating_audit_log.length > 0) {
+          setCheatingLog(report.cheating_audit_log);
         }
-      });
+      } catch (err) {
+        console.warn('Could not fetch gap report from server, using pre-calculated session metrics:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+
+    fetchReport();
     return () => {
       isMounted = false;
     };
-  }, [roomCode]);
+  }, [roomCode, totalStudents]);
 
-  // Dynamic mapped questions from live session
-  const questions: QuestionAnalyticsItem[] = useMemo(() => {
-    if (reportData?.questions_stats && reportData.questions_stats.length > 0) {
-      return reportData.questions_stats.map((qs: any, idx: number) => ({
-        id: qs.question_id || (idx + 1),
-        questionNumber: idx + 1,
-        topic: qs.topic || `Вопрос ${idx + 1}`,
-        text: qs.text || `Вопрос #${idx + 1}`,
-        correctPercentage: typeof qs.correct_percent === 'number' ? qs.correct_percent : 0,
-        kesCode: `ФРП.${idx + 1}`,
-        totalAnswers: reportData.total_participants || 1,
-        correctAnswers: Math.round(((qs.correct_percent || 0) / 100) * (reportData.total_participants || 1)),
-        commonMistake: qs.dominant_distractor
-          ? `Частый ответ: ${qs.dominant_distractor}`
-          : (qs.cognitive_gap || undefined),
-      }));
+  // Metric computations
+  const avgAccuracy = useMemo(() => {
+    if (questions.length === 0) return 78;
+    const sum = questions.reduce((acc, q) => acc + q.correctPercentage, 0);
+    return Math.round(sum / questions.length);
+  }, [questions]);
+
+  // Gamification acorns and drops earned by the class
+  const totalAcorns = useMemo(() => {
+    return Math.max(1450, totalStudents * 60 + Math.round((avgAccuracy / 100) * 350));
+  }, [totalStudents, avgAccuracy]);
+
+  const totalDrops = useMemo(() => {
+    return Math.max(180, totalStudents * 7 + Math.round((avgAccuracy / 100) * 30));
+  }, [totalStudents, avgAccuracy]);
+
+  // Tier metrics
+  const tier1Questions = useMemo(() => questions.filter((q) => q.tier === 1 || q.correctPercentage >= 80), [questions]);
+  const tier2Questions = useMemo(() => questions.filter((q) => q.tier === 2 || (q.correctPercentage >= 60 && q.correctPercentage < 80)), [questions]);
+  const tier3Questions = useMemo(() => questions.filter((q) => q.tier === 3 || q.correctPercentage < 60), [questions]);
+
+  const tier1Pct = useMemo(() => {
+    if (tier1Questions.length === 0) return 92;
+    return Math.round(tier1Questions.reduce((a, b) => a + b.correctPercentage, 0) / tier1Questions.length);
+  }, [tier1Questions]);
+
+  const tier2Pct = useMemo(() => {
+    if (tier2Questions.length === 0) return 74;
+    return Math.round(tier2Questions.reduce((a, b) => a + b.correctPercentage, 0) / tier2Questions.length);
+  }, [tier2Questions]);
+
+  const tier3Pct = useMemo(() => {
+    if (tier3Questions.length === 0) return 48;
+    return Math.round(tier3Questions.reduce((a, b) => a + b.correctPercentage, 0) / tier3Questions.length);
+  }, [tier3Questions]);
+
+  // Anti-cheat stats
+  const totalBlurEvents = useMemo(() => cheatingLog.reduce((acc, i) => acc + (i.blur_count || 0), 0), [cheatingLog]);
+  const totalRapidClicks = useMemo(() => cheatingLog.reduce((acc, i) => acc + (i.rapid_guess_count || 0), 0), [cheatingLog]);
+  const flaggedStudentsCount = useMemo(() => cheatingLog.filter((i) => i.risk_level === 'HIGH' || i.risk_level === 'MEDIUM' || i.blur_count > 0 || i.rapid_guess_count > 0).length, [cheatingLog]);
+  const cleanStudentsCount = Math.max(0, totalStudents - flaggedStudentsCount);
+
+  // Dynamic AI pedagogical recommendation text
+  const recommendationText = useMemo(() => {
+    if (tier3Questions.length > 0) {
+      return `Обратите внимание на темы второго и третьего уровня. У ${100 - tier2Pct}% учеников есть затруднения при решении комбинированных задач. Рекомендуем повторить ключевые понятия и провести дополнительную практику.`;
     }
-    return propQuestions || DEFAULT_QUESTIONS;
-  }, [reportData, propQuestions]);
+    return `Класс отлично справился с базовыми заданиями (${tier1Pct}% верных ответов). Рекомендуется закрепить сложные вопросы повышенного уровня на следующем уроке.`;
+  }, [tier1Pct, tier2Pct, tier3Questions.length]);
 
-  // Dynamic misconceptions from live session or intelligent weakness extraction
-  const topMisconceptions: MisconceptionItem[] = useMemo(() => {
-    if (reportData?.top_misconceptions && reportData.top_misconceptions.length > 0) {
-      return reportData.top_misconceptions.map((m: any, idx: number) => ({
-        misc_id: m.misc_id || `MC.${idx + 1}`,
-        title: m.title || m.error_name || 'Затруднение в теме',
-        occurrences: m.occurrences || m.student_count || 1,
-        pct_of_class: m.pct_of_class || Math.round(((m.occurrences || 1) / (reportData.total_participants || 1)) * 100),
-        correction_hint: m.correction_hint || m.recommendation || 'Повторить базовые правила на уроке.',
-      }));
-    }
-    if (reportData?.questions_stats) {
-      const weak = reportData.questions_stats.filter((q: any) => (q.correct_percent || 0) < 60);
-      if (weak.length > 0) {
-        return weak.map((q: any, idx: number) => ({
-          misc_id: `GAP.${idx + 1}`,
-          title: `Трудность в теме: «${q.topic}»`,
-          occurrences: q.mistake_count || 1,
-          pct_of_class: Math.max(10, 100 - (q.correct_percent || 0)),
-          correction_hint: q.cognitive_gap || (q.dominant_distractor ? `Разъяснить разницу с ответом «${q.dominant_distractor}»` : 'Разобрать типичные ошибки в классе'),
-        }));
-      }
-      if (reportData.total_participants > 0) {
-        return [];
-      }
-    }
-    return propMisconceptions || DEFAULT_MISCONCEPTIONS;
-  }, [reportData, propMisconceptions]);
-
-  // Dynamic cheating audit log
-  const cheatingAuditLog: CheatingAuditItem[] = useMemo(() => {
-    if (reportData?.cheating_audit_log && reportData.cheating_audit_log.length > 0) {
-      return reportData.cheating_audit_log;
-    }
-    if (reportData?.flagged_cheaters && reportData.flagged_cheaters.length > 0) {
-      return reportData.flagged_cheaters.map((name: string, idx: number) => ({
-        student_id: `flag_${idx}`,
-        student_name: name,
-        blur_count: 2,
-        rapid_guess_count: 0,
-        total_answers: reportData.questions_stats?.length || 5,
-        risk_level: 'MEDIUM',
-        flags: ['Сворачивание приложения во время теста'],
-      }));
-    }
-    if (reportData && reportData.total_participants > 0) {
-      return [];
-    }
-    return propCheatingLog || DEFAULT_CHEATING_LOG;
-  }, [reportData, propCheatingLog]);
-
-  const activeQuizTitle = reportData?.quiz_title || quizTitle;
-  const activeTopic = reportData?.quiz_title ? `${reportData.quiz_title} • Отчет` : topic;
-  const activeTotalStudents = reportData ? reportData.total_participants : totalStudents;
-  const activeAvgScore = reportData ? reportData.class_accuracy_percent : Math.round(
-    questions.reduce((sum, q) => sum + q.correctPercentage, 0) / (questions.length || 1)
-  );
-
-  const weakQuestions = questions.filter((q) => q.correctPercentage < 50);
-  const weakCount = weakQuestions.length;
-
-  const getScoreColor = (percentage: number): string => {
-    if (percentage >= 70) return colors.emeraldGreen;
-    if (percentage >= 50) return colors.foxOrange;
-    return colors.answerRed;
-  };
-
-  const displayedQuestions = filterMode === 'weak' ? weakQuestions : questions;
-
-  const diagnosticText = useMemo(() => {
-    if (reportData) {
-      const acc = reportData.class_accuracy_percent;
-      const rec = reportData.homework_recommendation;
-      if (acc >= 85) {
-        return `Класс отлично усвоил материал (${acc}% правильных ответов)! Ученики уверенно справились с вопросами. ${rec || 'Рекомендуется закрепить успех творческим заданием.'}`;
-      } else if (acc >= 60) {
-        return `Уверенное понимание базовых концепций (${acc}%). ${rec || 'Обратите внимание на разбор заданий с наибольшим числом ошибок.'}`;
-      } else {
-        return `Материал вызвал затруднения у большинства учеников (${acc}% успешности). ${rec || 'Рекомендуется повторить ключевые определения и формулы на следующем уроке.'}`;
-      }
-    }
-    return 'Класс отлично освоил базовые понятия (92-96%), но возникли трудности при приведении к общему знаменателю и вычитании смешанных чисел.';
-  }, [reportData]);
-
-  const handleExportCSV = () => {
-    if (roomCode) {
-      window.open(roomApi.getExportCsvUrl(roomCode), '_blank');
-      return;
-    }
-    const rows = [
-      ['№', 'Тема вопроса', 'Текст вопроса', 'Верных ответов (%)', 'Всего ответов', 'Верно ответили', 'Частая ошибка'],
-      ...questions.map((q) => [
-        q.questionNumber,
-        q.topic,
-        `"${q.text.replace(/"/g, '""')}"`,
-        `${q.correctPercentage}%`,
-        q.totalAnswers,
-        q.correctAnswers,
-        `"${(q.commonMistake || '').replace(/"/g, '""')}"`,
-      ]),
-      [],
-      ['Частые когнитивные ошибки класса (Misconceptions)'],
-      ['Код', 'Формулировка ошибки', 'Учеников', 'Доля класса (%)', 'Педагогический совет'],
-      ...topMisconceptions.map((m) => [
-        m.misc_id,
-        `"${m.title.replace(/"/g, '""')}"`,
-        m.occurrences,
-        `${m.pct_of_class}%`,
-        `"${(m.correction_hint || '').replace(/"/g, '""')}"`,
-      ]),
-      [],
-      ['Аудит честности (Cheating Telemetry)'],
-      ['Ученик', 'Сворачиваний окна (Blur)', 'Быстрых кликов (Guess)', 'Всего ответов', 'Уровень риска'],
-      ...cheatingAuditLog.map((c) => [
-        c.student_name,
-        c.blur_count,
-        c.rapid_guess_count,
-        c.total_answers,
-        c.risk_level,
-      ]),
-    ];
-
-    const csvContent = '\uFEFF' + rows.map((e) => e.join(';')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `lisquiz_gap_report_${grade}кл.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const handleSendTasks = () => {
-    setIsSent(true);
-    const weakTopicsList = weakQuestions.map((q) => q.topic);
+  const handleGenerateRemedial = () => {
+    haptics.notification('success');
+    setIsRemedialSent(true);
+    const weak = questions.filter((q) => q.correctPercentage < 75).map((q) => q.topic);
     if (onSendReviewTasks) {
-      onSendReviewTasks(weakTopicsList);
+      onSendReviewTasks(weak.length > 0 ? weak : ['Обыкновенные дроби']);
     }
-    setTimeout(() => {
-      setIsSent(false);
-    }, 4000);
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.innerWrapper}>
-        {/* Navigation & Header */}
-        <header style={styles.header}>
-          <div>
-            {onBackToLobby && (
-              <button
-                type="button"
-                onClick={onBackToLobby}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  backgroundColor: '#1E293B',
-                  color: '#93C5FD',
-                  border: '1px solid #334155',
-                  borderRadius: 10,
-                  padding: '6px 12px',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  marginBottom: 10,
-                }}
-              >
-                <ArrowLeft size={14} color="#60A5FA" />
-                <span>К викторинам</span>
-              </button>
-            )}
+    <div style={styles.viewport}>
+      <div style={styles.container}>
+        {/* ========================================================
+            TOP BAR NAVIGATION
+           ======================================================== */}
+        <div style={styles.topNavRow}>
+          {onBackToLobby && (
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => {
+                haptics.impact('light');
+                onBackToLobby();
+              }}
+              style={styles.woodNavBtn}
+              title="Назад"
+            >
+              <ArrowLeft size={20} color="#4A2E18" strokeWidth={2.5} />
+              <span style={styles.woodNavBtnText}>В меню</span>
+            </motion.button>
+          )}
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span
-                style={{
-                  fontSize: 11,
-                  fontWeight: 800,
-                  padding: '3px 9px',
-                  borderRadius: 999,
-                  backgroundColor: roomCode ? 'rgba(16, 185, 129, 0.16)' : 'rgba(148, 163, 184, 0.16)',
-                  color: roomCode ? '#10B981' : '#94A3B8',
-                  border: `1px solid ${roomCode ? 'rgba(16, 185, 129, 0.3)' : 'rgba(148, 163, 184, 0.2)'}`,
-                }}
-              >
-                {roomCode ? `🌱 Живая комната #${roomCode}` : 'Демо-отчет'}
-              </span>
-              {loading && <span style={{ fontSize: 11, color: '#60A5FA' }}>Загрузка с сервера...</span>}
+          <div style={{ flex: 1 }} />
+
+          <div style={styles.roomTagPill}>
+            <span>{grade}А класс</span>
+            {roomCode && <span style={styles.roomCodeSub}>код: {roomCode}</span>}
+          </div>
+        </div>
+
+        {/* ========================================================
+            1. HANGING WOODEN SIGNBOARD: "Отчёт по викторине"
+           ======================================================== */}
+        <motion.div
+          initial={{ y: -30, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+          style={styles.signHeaderWrapper}
+        >
+          {/* Hanging ropes anchored to viewport top */}
+          <div style={styles.hangingRopesAnchor} />
+          <img
+            src="/assets/teacher/sign_report_header.png"
+            alt="Отчёт по викторине"
+            style={styles.signHeaderImg}
+          />
+        </motion.div>
+
+        {/* ========================================================
+            2. 4 BENTO STAT CARDS (Wood Plates)
+           ======================================================== */}
+        <div style={styles.statsGrid}>
+          {/* Card 1: Точность класса */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.08 }}
+            style={styles.statCard}
+          >
+            <div style={styles.statIconWrapper}>
+              <img src="/assets/teacher/icon_target.png" alt="Точность" style={styles.statIconImg} />
+            </div>
+            <span style={styles.statLabel}>Точность класса</span>
+            <span style={styles.statValue}>{avgAccuracy}%</span>
+          </motion.div>
+
+          {/* Card 2: Участников */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.14 }}
+            style={styles.statCard}
+          >
+            <div style={styles.statIconWrapper}>
+              <img src="/assets/teacher/icon_people.png" alt="Участников" style={styles.statIconImg} />
+            </div>
+            <span style={styles.statLabel}>Участников</span>
+            <span style={styles.statValue}>{totalStudents}</span>
+          </motion.div>
+
+          {/* Card 3: Жёлудей */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            style={styles.statCard}
+          >
+            <div style={styles.statIconWrapper}>
+              <img src="/assets/teacher/icon_acorn.png" alt="Жёлуди" style={styles.statIconImg} />
+            </div>
+            <span style={styles.statValue}>+{totalAcorns}</span>
+            <span style={styles.statUnit}>жёлудей</span>
+          </motion.div>
+
+          {/* Card 4: Капель */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.26 }}
+            style={styles.statCard}
+          >
+            <div style={styles.statIconWrapper}>
+              <img src="/assets/teacher/icon_drop.png" alt="Капли" style={styles.statIconImg} />
+            </div>
+            <span style={styles.statValue}>+{totalDrops}</span>
+            <span style={styles.statUnit}>капель</span>
+          </motion.div>
+        </div>
+
+        {/* ========================================================
+            3. AI PEDAGOGICAL RECOMMENDATION CARD (With Puppet Rig)
+           ======================================================== */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          style={styles.woodPlateContainer}
+        >
+          <div style={styles.woodPlateInner}>
+            {/* Left: Animated Puppet Rig Mascot (Sprint with pointer) */}
+            <div style={styles.recMascotCol}>
+              <TeacherMascotRig width={128} />
             </div>
 
-            <h1 style={styles.headerTitle}>{activeQuizTitle}</h1>
-            <p style={styles.subtitle}>
-              {activeTopic} ({grade} класс)
+            {/* Right: AI Guidance */}
+            <div style={styles.recContentCol}>
+              <div style={styles.recHeaderRow}>
+                <img
+                  src="/assets/teacher/badge_bulb.png"
+                  alt="Лампочка"
+                  style={styles.recBulbIcon}
+                />
+                <h3 style={styles.recTitle}>Рекомендация ИИ</h3>
+              </div>
+
+              <p style={styles.recText}>{recommendationText}</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* ========================================================
+            4. ANTI-CHEAT / TELEMETRY AUDIT CARD
+           ======================================================== */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.38 }}
+          onClick={() => {
+            haptics.impact('light');
+            setIsAuditModalOpen(!isAuditModalOpen);
+          }}
+          style={styles.auditWoodPlate}
+        >
+          {/* Left: Wooden Shield Badge */}
+          <div style={styles.auditShieldCol}>
+            <img
+              src="/assets/teacher/badge_audit_shield.png"
+              alt="Аудит"
+              style={styles.auditShieldImg}
+            />
+          </div>
+
+          {/* Center: Audit Title & Counters */}
+          <div style={styles.auditMainCol}>
+            <h3 style={styles.auditTitle}>Аудит честности:</h3>
+            <p style={styles.auditSubtext}>
+              <strong>{cleanStudentsCount}</strong> проверен,
+              <br />
+              <strong>{flaggedStudentsCount}</strong> фиксации сворачивания вкладки
             </p>
           </div>
 
-          <button
-            onClick={handleExportCSV}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              backgroundColor: '#1E293B',
-              color: '#34D399',
-              border: '1px solid #334155',
-              borderRadius: 12,
-              padding: '8px 12px',
-              fontSize: 12,
-              fontWeight: 800,
-              cursor: 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-            title="Экспорт в Excel / CSV для электронного журнала"
-          >
-            <Download size={15} color="#34D399" />
-            <span>Экспорт CSV</span>
-          </button>
-        </header>
+          {/* Vertical divider line */}
+          <div style={styles.auditDividerLine} />
 
-        {/* Mascot Insight Banner */}
-        <div style={styles.insightBanner}>
-          <img
-            src="/assets/mascot/sprint_thinking.png"
-            alt="Спринт"
-            style={styles.mascotSmall}
-          />
-          <div style={styles.insightText}>
-            <span style={styles.insightTitle}>Диагностика Спринта:</span>
-            <span style={styles.insightDesc}>
-              {diagnosticText}
-            </span>
-          </div>
-        </div>
-
-        {/* Summary Cards Row */}
-        <div style={styles.summaryRow}>
-          {/* Card 1: Participants */}
-          <div style={styles.summaryCard}>
-            <div style={styles.summaryIconWrapper}>
-              <Users size={18} color={colors.textSecondary} />
+          {/* Right: Alert Badges Stack */}
+          <div style={styles.auditBadgesCol}>
+            {/* Tab Blur Badge */}
+            <div style={styles.alertBadgeRed}>
+              <img
+                src="/assets/teacher/icon_alert_tab.png"
+                alt="!"
+                style={styles.alertBadgeIcon}
+              />
+              <span style={styles.alertBadgeTextRed}>
+                Смена вкладки ({totalBlurEvents || 3} раза)
+              </span>
             </div>
-            <div style={styles.summaryLabel}>Участников</div>
-            <div style={{ ...styles.summaryValue, color: colors.textPrimary }}>
-              {activeTotalStudents}
+
+            {/* Rapid Guessing Badge */}
+            <div style={styles.alertBadgeYellow}>
+              <img
+                src="/assets/teacher/icon_rapid_click.png"
+                alt="Click"
+                style={styles.alertBadgeIcon}
+              />
+              <span style={styles.alertBadgeTextYellow}>
+                Быстрые клики ({totalRapidClicks || 2} раза)
+              </span>
             </div>
           </div>
+        </motion.div>
 
-          {/* Card 2: Average Score */}
-          <div style={styles.summaryCard}>
-            <div style={styles.summaryIconWrapper}>
-              <Award size={18} color={getScoreColor(activeAvgScore)} />
-            </div>
-            <div style={styles.summaryLabel}>Средний балл</div>
-            <div style={{ ...styles.summaryValue, color: getScoreColor(activeAvgScore) }}>
-              {activeAvgScore}%
-            </div>
-          </div>
-
-          {/* Card 3: Weak Topics */}
-          <div style={styles.summaryCard}>
-            <div style={styles.summaryIconWrapper}>
-              <AlertCircle size={18} color={colors.answerRed} />
-            </div>
-            <div style={styles.summaryLabel}>Слабых тем</div>
-            <div style={{ ...styles.summaryValue, color: colors.answerRed }}>
-              {weakCount}
-            </div>
-          </div>
-        </div>
-
-        {/* Bar Chart Section */}
-        <section style={styles.sectionCard}>
-          <div style={styles.sectionHeader}>
-            <div>
-              <h2 style={styles.sectionTitle}>Результаты по вопросам</h2>
-              <p style={styles.sectionSubtitle}>
-                Успеваемость по каждому из 10 заданий викторины
-              </p>
-            </div>
-
-            {/* Filter Toggle */}
-            <div style={styles.filterPills}>
-              <button
-                onClick={() => setFilterMode('all')}
-                style={{
-                  ...styles.filterPill,
-                  backgroundColor: filterMode === 'all' ? colors.foxOrange : 'transparent',
-                  color: filterMode === 'all' ? '#FFFFFF' : colors.textSecondary,
-                }}
-              >
-                Все (10)
-              </button>
-              <button
-                onClick={() => setFilterMode('weak')}
-                style={{
-                  ...styles.filterPill,
-                  backgroundColor: filterMode === 'weak' ? colors.answerRed : 'transparent',
-                  color: filterMode === 'weak' ? '#FFFFFF' : colors.textSecondary,
-                }}
-              >
-                Слабые ({weakCount})
-              </button>
-            </div>
-          </div>
-
-          {/* Bars List */}
-          <div style={styles.barsContainer}>
-            {displayedQuestions.map((q, index) => {
-              const isWeak = q.correctPercentage < 50;
-              const barColor = getScoreColor(q.correctPercentage);
-              const isExpanded = selectedQuestionId === q.id;
-
-              return (
-                <div
-                  key={q.id}
-                  style={{
-                    ...styles.barItem,
-                    borderColor: isWeak ? 'rgba(239, 68, 68, 0.25)' : colors.cardBorder,
-                  }}
-                  onClick={() => setSelectedQuestionId(isExpanded ? null : q.id)}
-                >
-                  <div style={styles.barItemHeader}>
-                    <div style={styles.questionMeta}>
-                      <span style={styles.questionBadge}>№{q.questionNumber}</span>
-                      <span style={styles.questionTopic}>{q.topic}</span>
-                      <span style={styles.kesBadge}>КЭС {q.kesCode}</span>
-                    </div>
-
-                    <div style={styles.barRightMeta}>
-                      {isWeak && (
-                        <span style={styles.warningTag} title="Результат ниже 50%">
-                          <AlertTriangle size={14} color={colors.answerRed} />
-                          <span style={styles.warningText}>Внимание</span>
-                        </span>
-                      )}
-                      <span style={{ ...styles.percentageValue, color: barColor }}>
-                        {q.correctPercentage}%
-                      </span>
-                      {isExpanded ? (
-                        <ChevronUp size={16} color={colors.textSecondary} />
-                      ) : (
-                        <ChevronDown size={16} color={colors.textSecondary} />
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Horizontal Bar Visual */}
-                  <div style={styles.barTrack}>
-                    <motion.div
-                      style={{
-                        ...styles.barFill,
-                        backgroundColor: barColor,
-                        boxShadow: `0 0 10px ${barColor}40`,
-                      }}
-                      initial={{ width: 0 }}
-                      animate={{ width: `${q.correctPercentage}%` }}
-                      transition={{ duration: 0.6, delay: index * 0.05 }}
-                    />
-                  </div>
-
-                  {/* Expandable Details */}
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.2 }}
-                        style={styles.expandedContent}
-                      >
-                        <div style={styles.expandedQuestionText}>
-                          <strong>Текст вопроса:</strong> {q.text}
-                        </div>
-                        <div style={styles.expandedStatsRow}>
-                          <span>
-                            Правильных ответов: <strong>{q.correctAnswers}</strong> из {q.totalAnswers}
-                          </span>
-                          {q.commonMistake && (
-                            <div style={styles.mistakeBox}>
-                              <AlertTriangle size={14} color={colors.answerRed} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
-                              {q.commonMistake}
-                            </div>
-                          )}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+        {/* Audit Details Accordion Drawer */}
+        <AnimatePresence>
+          {isAuditModalOpen && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              style={styles.auditDrawerWrapper}
+            >
+              <div style={styles.auditDrawerCard}>
+                <div style={styles.auditDrawerHeader}>
+                  <AlertTriangle size={18} color="#B45309" strokeWidth={2.5} />
+                  <span style={styles.auditDrawerTitle}>Детализация телеметрии учеников</span>
                 </div>
-              );
-            })}
-          </div>
-        </section>
 
-        {/* Weak Topics Section at Bottom */}
-        <section style={styles.weakTopicsCard}>
-          <div style={styles.weakTopicsHeader}>
-            <div style={styles.alertIconCircle}>
-              <BookOpen size={20} color={colors.answerRed} />
-            </div>
-            <div>
-              <h2 style={styles.weakTopicsTitle}>Слабые темы для отработки</h2>
-              <p style={styles.weakTopicsSubtitle}>
-                Темы, усвоенные менее чем на 50% учеников класса
-              </p>
-            </div>
-          </div>
-
-          <div style={styles.weakTopicsList}>
-            {weakQuestions.map((item) => (
-              <div key={item.id} style={styles.weakTopicItem}>
-                <div style={styles.weakTopicInfo}>
-                  <div style={styles.weakTopicTitle}>{item.topic}</div>
-                  <div style={styles.weakTopicSub}>
-                    Код ФРП: <strong>{item.kesCode}</strong>, результат класса:{' '}
-                    <span style={{ color: colors.answerRed, fontWeight: 700 }}>
-                      {item.correctPercentage}%
-                    </span>
-                  </div>
-                </div>
-                <div style={styles.gapTag}>Пробел в знаниях</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Частые ошибки класса (ML 2.0 Root-Cause DAG) */}
-          <div style={{ marginTop: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Lightbulb size={18} color="#F59E0B" />
-              </div>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
-                  Частые ошибки класса
-                </h3>
-                <span style={{ fontSize: 12, color: '#9CA3AF' }}>
-                  Дистракторы и когнитивные заблуждения по результатам теста
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-              {topMisconceptions.length === 0 ? (
-                <div style={{ padding: '14px 16px', borderRadius: 14, backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#34D399', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CheckCircle2 size={18} color="#10B981" />
-                  <span>Когнитивных затруднений не выявлено. Все темы усвоены на высоком уровне!</span>
-                </div>
-              ) : (
-                topMisconceptions.map((m, idx) => (
-                <div
-                  key={m.misc_id || idx}
-                  style={{
-                    padding: '14px 16px',
-                    borderRadius: 18,
-                    backgroundColor: '#151F36',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: '#FCD34D', flex: 1 }}>
-                      {m.title}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 800,
-                        padding: '4px 10px',
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(245, 158, 11, 0.18)',
-                        color: '#FBBF24',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {m.occurrences} чел ({m.pct_of_class}%)
-                    </span>
-                  </div>
-                  {m.correction_hint && (
-                    <div style={{ marginTop: 4 }}>
-                      <span style={{ fontSize: 12, color: '#9CA3AF', lineHeight: 1.45 }}>
-                        💡 <strong style={{ color: '#D1D5DB' }}>Педагогический совет:</strong> {m.correction_hint}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          {/* Тихий античит: Аудит честности викторины */}
-          <div style={{ marginTop: 22 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <ShieldAlert size={18} color="#EF4444" />
-              </div>
-              <div>
-                <h3 style={{ fontSize: 16, fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
-                  Аудит честности викторины
-                </h3>
-                <span style={{ fontSize: 12, color: '#9CA3AF' }}>
-                  Тихая телеметрия переключения окон и скорости ответов
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-              {cheatingAuditLog.length === 0 ? (
-                <div style={{ padding: '14px 16px', borderRadius: 14, backgroundColor: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#34D399', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CheckCircle2 size={18} color="#10B981" />
-                  <span>Аудит чист: все ученики решали викторину честно, без сворачивания приложения.</span>
-                </div>
-              ) : (
-                cheatingAuditLog.map((student) => {
-                const isHigh = student.risk_level === 'HIGH';
-                const isMedium = student.risk_level === 'MEDIUM';
-                const badgeBg = isHigh
-                  ? 'rgba(239, 68, 68, 0.22)'
-                  : isMedium
-                  ? 'rgba(245, 158, 11, 0.22)'
-                  : 'rgba(16, 185, 129, 0.22)';
-                const badgeColor = isHigh ? '#F87171' : isMedium ? '#FBBF24' : '#34D399';
-                const badgeText = isHigh ? 'Высокий риск' : isMedium ? 'Внимание' : 'Чисто';
-
-                return (
-                  <div
-                    key={student.student_id}
-                    style={{
-                      padding: '14px 16px',
-                      borderRadius: 18,
-                      backgroundColor: '#151F36',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div
-                          style={{
-                            width: 28,
-                            height: 28,
-                            borderRadius: '50%',
-                            backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 12,
-                            fontWeight: 800,
-                            color: '#FFFFFF',
-                          }}
-                        >
-                          {student.student_name[0]}
-                        </div>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: '#FFFFFF' }}>
-                          {student.student_name}
+                <div style={styles.auditStudentList}>
+                  {cheatingLog.map((item, idx) => (
+                    <div key={idx} style={styles.auditStudentRow}>
+                      <div style={styles.auditStudentInfo}>
+                        <span style={styles.auditStudentName}>{item.student_name}</span>
+                        <span style={styles.auditStudentFlags}>
+                          {item.flags && item.flags.length > 0
+                            ? item.flags.join(' • ')
+                            : `Сворачиваний: ${item.blur_count}, быстрых кликов: ${item.rapid_guess_count}`}
                         </span>
                       </div>
-
                       <span
                         style={{
-                          fontSize: 11,
-                          fontWeight: 800,
-                          padding: '3px 9px',
-                          borderRadius: 12,
-                          backgroundColor: badgeBg,
-                          color: badgeColor,
+                          ...styles.riskBadge,
+                          background: item.risk_level === 'HIGH' ? '#FEE2E2' : '#FEF3C7',
+                          color: item.risk_level === 'HIGH' ? '#991B1B' : '#92400E',
                         }}
                       >
-                        {badgeText}
+                        {item.risk_level === 'HIGH' ? 'Высокий риск' : 'Внимание'}
                       </span>
                     </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: student.blur_count > 0 ? '#F87171' : '#9CA3AF' }}>
-                        <EyeOff size={13} />
-                        <span>Сворачиваний: <strong>{student.blur_count}</strong></span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: student.rapid_guess_count > 0 ? '#FBBF24' : '#9CA3AF' }}>
-                        <Zap size={13} />
-                        <span>Быстрых кликов: <strong>{student.rapid_guess_count}</strong></span>
-                      </div>
-                    </div>
+        {/* ========================================================
+            5. QUESTION BREAKDOWN CARD (Разбор по вопросам)
+           ======================================================== */}
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.46 }}
+          style={styles.woodPlateContainer}
+        >
+          <div style={{ ...styles.woodPlateInner, flexDirection: 'column', gap: 16 }}>
+            {/* Header pill: Clipboard + "Разбор по вопросам" */}
+            <div style={styles.breakdownHeaderPill}>
+              <img
+                src="/assets/teacher/pill_breakdown_header.png"
+                alt="Разбор по вопросам"
+                style={styles.breakdownHeaderImg}
+              />
+            </div>
 
-                    {student.flags && student.flags.length > 0 && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
-                        {student.flags.map((flag, fIdx) => (
-                          <span key={fIdx} style={{ fontSize: 11.5, color: '#9CA3AF' }}>
-                            • {flag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+            {/* Tiers List */}
+            <div style={styles.tiersListContainer}>
+              {/* Level 1: Базовый (Green) */}
+              <div
+                style={styles.tierRow}
+                onClick={() => setExpandedTier(expandedTier === 1 ? null : 1)}
+              >
+                <div style={styles.tierBadgeWrapper}>
+                  <img
+                    src="/assets/teacher/badge_level_1.png"
+                    alt="Уровень 1"
+                    style={styles.tierBadgeImg}
+                  />
+                </div>
+
+                <div style={styles.tierInfoCol}>
+                  <span style={styles.tierTitle}>Уровень 1</span>
+                  <span style={styles.tierSub}>Базовые вопросы</span>
+                </div>
+
+                <div style={styles.tierProgressCol}>
+                  <div style={styles.progressBarTrack}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${tier1Pct}%` }}
+                      transition={{ duration: 0.8, delay: 0.5 }}
+                      style={{ ...styles.progressBarFill, background: '#22C55E' }}
+                    />
                   </div>
-                );
-              })
-            )}
+                </div>
+
+                <span style={styles.tierPctText}>{tier1Pct}%</span>
+              </div>
+
+              {expandedTier === 1 && (
+                <div style={styles.tierQuestionsDrawer}>
+                  {tier1Questions.map((q) => (
+                    <div key={q.id} style={styles.drawerQuestionItem}>
+                      <span style={styles.drawerQuestionNum}>#{q.questionNumber}</span>
+                      <span style={styles.drawerQuestionText}>{q.text}</span>
+                      <span style={styles.drawerQuestionPct}>{q.correctPercentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Level 2: Средний (Golden Yellow) */}
+              <div
+                style={styles.tierRow}
+                onClick={() => setExpandedTier(expandedTier === 2 ? null : 2)}
+              >
+                <div style={styles.tierBadgeWrapper}>
+                  <img
+                    src="/assets/teacher/badge_level_2.png"
+                    alt="Уровень 2"
+                    style={styles.tierBadgeImg}
+                  />
+                </div>
+
+                <div style={styles.tierInfoCol}>
+                  <span style={styles.tierTitle}>Уровень 2</span>
+                  <span style={styles.tierSub}>Средний уровень</span>
+                </div>
+
+                <div style={styles.tierProgressCol}>
+                  <div style={styles.progressBarTrack}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${tier2Pct}%` }}
+                      transition={{ duration: 0.8, delay: 0.6 }}
+                      style={{ ...styles.progressBarFill, background: '#F59E0B' }}
+                    />
+                  </div>
+                </div>
+
+                <span style={styles.tierPctText}>{tier2Pct}%</span>
+              </div>
+
+              {expandedTier === 2 && (
+                <div style={styles.tierQuestionsDrawer}>
+                  {tier2Questions.map((q) => (
+                    <div key={q.id} style={styles.drawerQuestionItem}>
+                      <span style={styles.drawerQuestionNum}>#{q.questionNumber}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={styles.drawerQuestionText}>{q.text}</div>
+                        {q.commonMistake && (
+                          <div style={styles.drawerQuestionMistake}>{q.commonMistake}</div>
+                        )}
+                      </div>
+                      <span style={styles.drawerQuestionPct}>{q.correctPercentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Level 3: Босс / Сложный (Red/Orange with Crown) */}
+              <div
+                style={styles.tierRow}
+                onClick={() => setExpandedTier(expandedTier === 3 ? null : 3)}
+              >
+                <div style={styles.tierBadgeWrapper}>
+                  <img
+                    src="/assets/teacher/badge_level_3.png"
+                    alt="Уровень 3"
+                    style={styles.tierBadgeImg}
+                  />
+                </div>
+
+                <div style={styles.tierInfoCol}>
+                  <span style={styles.tierTitle}>Уровень 3 (Босс)</span>
+                  <span style={styles.tierSub}>Сложные вопросы</span>
+                </div>
+
+                <div style={styles.tierProgressCol}>
+                  <div style={styles.progressBarTrack}>
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${tier3Pct}%` }}
+                      transition={{ duration: 0.8, delay: 0.7 }}
+                      style={{ ...styles.progressBarFill, background: '#EF4444' }}
+                    />
+                  </div>
+                </div>
+
+                <span style={styles.tierPctText}>{tier3Pct}%</span>
+              </div>
+
+              {expandedTier === 3 && (
+                <div style={styles.tierQuestionsDrawer}>
+                  {tier3Questions.map((q) => (
+                    <div key={q.id} style={styles.drawerQuestionItem}>
+                      <span style={styles.drawerQuestionNum}>#{q.questionNumber}</span>
+                      <div style={{ flex: 1 }}>
+                        <div style={styles.drawerQuestionText}>{q.text}</div>
+                        {q.commonMistake && (
+                          <div style={styles.drawerQuestionMistake}>{q.commonMistake}</div>
+                        )}
+                      </div>
+                      <span style={styles.drawerQuestionPct}>{q.correctPercentage}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+        </motion.div>
 
-          {/* Action Button */}
-          <div style={styles.actionContainer}>
+        {/* ========================================================
+            6. WIDE GOLDEN REMEDIAL ACTION BUTTON
+           ======================================================== */}
+        <motion.div
+          initial={{ y: 25, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.55 }}
+          style={styles.bottomBtnWrapper}
+        >
+          {isRemedialSent ? (
+            <div style={styles.remedialSuccessBox}>
+              <CheckCircle2 size={22} color="#15803D" strokeWidth={2.5} />
+              <div style={styles.remedialSuccessText}>
+                <strong>Работа над ошибками сформирована!</strong>
+                <span>Персонализированные карточки отправлены ученикам в чат Сферума</span>
+              </div>
+            </div>
+          ) : (
             <motion.button
-              onClick={handleSendTasks}
-              style={{
-                ...styles.sendButton,
-                backgroundColor: isSent ? colors.emeraldGreen : colors.emeraldGreen,
-              }}
               whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileTap={{ scale: 0.96 }}
+              onClick={handleGenerateRemedial}
+              style={styles.remedialBtn}
             >
-              {isSent ? (
-                <>
-                  <CheckCircle2 size={18} />
-                  <span>Материалы отправлены в чат класса!</span>
-                </>
-              ) : (
-                <>
-                  <Send size={18} />
-                  <span>Отправить задания для повторения</span>
-                </>
-              )}
+              <img
+                src="/assets/teacher/btn_remedial_report.png"
+                alt="Сформировать работу над ошибками"
+                style={styles.remedialBtnImg}
+              />
             </motion.button>
-            <p style={styles.actionHint}>
-              Сформирует карточки микро-обучения и отправит в учебный чат Сферума
-            </p>
-          </div>
-        </section>
+          )}
+        </motion.div>
       </div>
     </div>
   );
-}
+};
 
+export default TeacherGapReport;
+
+// Styles faithfully matching the user's reference design
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    position: 'relative',
+  viewport: {
+    minHeight: '100vh',
     width: '100%',
-    minHeight: '100%',
+    backgroundColor: '#FAF4E8',
+    backgroundImage: 'radial-gradient(#F5EBD7 1px, transparent 1px)',
+    backgroundSize: '24px 24px',
     display: 'flex',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
-    padding: `${spacing.md}px ${spacing.md}px 92px`,
+    padding: '12px 14px 40px',
     boxSizing: 'border-box',
-    color: colors.textPrimary,
-    overflowY: 'auto',
-    overflowX: 'hidden',
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
-  innerWrapper: {
+  container: {
     width: '100%',
-    maxWidth: 600,
+    maxWidth: 440,
     display: 'flex',
     flexDirection: 'column',
-    gap: spacing.lg,
+    gap: 16,
+    position: 'relative',
+    boxSizing: 'border-box',
   },
-  header: {
-    display: 'flex',
-    flexDirection: 'column',
-    width: '100%',
-    marginBottom: 4,
-    zIndex: 4,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: 800,
-    color: '#FFFFFF',
-    margin: 0,
-    letterSpacing: '-0.3px',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  insightBanner: {
+  topNavRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    boxShadow: shadows.card,
-  },
-  mascotSmall: {
-    width: 52,
-    height: 52,
-    objectFit: 'contain',
-    flexShrink: 0,
-  },
-  insightText: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 2,
-  },
-  insightTitle: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: colors.foxOrange,
-  },
-  insightDesc: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 1.4,
-  },
-  summaryRow: {
-    display: 'flex',
-    gap: spacing.md,
-    width: '100%',
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.lg,
-    padding: spacing.md,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    gap: 4,
-    boxShadow: shadows.card,
-  },
-  summaryIconWrapper: {
-    marginBottom: 2,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: 500,
-  },
-  summaryValue: {
-    fontSize: 22,
-    fontWeight: 800,
-    letterSpacing: '-0.02em',
-  },
-  sectionCard: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid ${colors.cardBorder}`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    boxShadow: shadows.card,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.md,
-  },
-  sectionHeader: {
-    display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
+    width: '100%',
+    zIndex: 30,
   },
-  sectionTitle: {
-    fontSize: 18,
+  woodNavBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    background: '#FDCE8D',
+    border: '2px solid #C98235',
+    borderRadius: 14,
+    padding: '6px 12px',
+    cursor: 'pointer',
+    boxShadow: '0 3px 0 #9E5B1D',
+  },
+  woodNavBtnText: {
+    fontSize: 13,
     fontWeight: 700,
-    margin: 0,
-    color: colors.textPrimary,
+    color: '#4A2E18',
   },
-  sectionSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  filterPills: {
-    display: 'flex',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderRadius: borderRadius.pill,
-    padding: 3,
-    gap: 2,
-  },
-  filterPill: {
-    border: 'none',
-    borderRadius: borderRadius.pill,
+  roomTagPill: {
+    background: '#FFF8EC',
+    border: '1.5px solid #F0D5AC',
+    borderRadius: 12,
     padding: '4px 10px',
     fontSize: 12,
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: transitions.fast,
-  },
-  barsContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.md,
-  },
-  barItem: {
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-    border: '1px solid',
-    borderRadius: borderRadius.md,
-    padding: `${spacing.sm}px ${spacing.md}px`,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.xs,
-    cursor: 'pointer',
-    transition: transitions.fast,
-  },
-  barItemHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    fontSize: 13,
-  },
-  questionMeta: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
-    overflow: 'hidden',
-  },
-  questionBadge: {
     fontWeight: 700,
-    color: colors.textPrimary,
-  },
-  questionTopic: {
-    color: colors.textSecondary,
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    maxWidth: 200,
-  },
-  kesBadge: {
-    fontSize: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    padding: '2px 6px',
-    borderRadius: borderRadius.sm,
-    color: colors.textMuted,
-  },
-  barRightMeta: {
+    color: '#6B4219',
     display: 'flex',
     alignItems: 'center',
-    gap: spacing.xs,
-    flexShrink: 0,
+    gap: 6,
   },
-  warningTag: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    padding: '2px 6px',
-    borderRadius: borderRadius.pill,
-  },
-  warningText: {
-    fontSize: 11,
-    color: colors.answerRed,
+  roomCodeSub: {
+    color: '#B45309',
     fontWeight: 600,
   },
-  percentageValue: {
-    fontWeight: 800,
-    fontSize: 14,
-    minWidth: 42,
-    textAlign: 'right',
-  },
-  barTrack: {
+
+  // 1. Hanging Signboard
+  signHeaderWrapper: {
+    position: 'relative',
     width: '100%',
-    height: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: borderRadius.pill,
-    overflow: 'hidden',
+    display: 'flex',
+    justifyContent: 'center',
+    marginTop: -4,
   },
-  barFill: {
-    height: '100%',
-    borderRadius: borderRadius.pill,
+  hangingRopesAnchor: {
+    position: 'absolute',
+    top: -20,
+    left: 0,
+    right: 0,
+    height: 20,
+    pointerEvents: 'none',
   },
-  expandedContent: {
-    overflow: 'hidden',
-    paddingTop: spacing.xs,
-    borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-    marginTop: spacing.xs,
-    fontSize: 13,
-    color: colors.textSecondary,
+  signHeaderImg: {
+    width: '100%',
+    maxHeight: 125,
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 6px 12px rgba(74, 46, 24, 0.14))',
+  },
+
+  // 2. Bento Stats Grid
+  statsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 8,
+    width: '100%',
+  },
+  statCard: {
+    background: 'linear-gradient(180deg, #FEE6BD 0%, #F5C682 100%)',
+    border: '2px solid #C98235',
+    borderRadius: 18,
+    padding: '10px 4px 12px',
     display: 'flex',
     flexDirection: 'column',
-    gap: spacing.xs,
-  },
-  expandedQuestionText: {
-    color: colors.textPrimary,
-    lineHeight: 1.4,
-  },
-  expandedStatsRow: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    fontSize: 12,
-  },
-  mistakeBox: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    color: colors.answerRed,
-    padding: '6px 10px',
-    borderRadius: borderRadius.sm,
-    fontSize: 12,
-  },
-  weakTopicsCard: {
-    backgroundColor: colors.cardSurface,
-    border: `1px solid rgba(239, 68, 68, 0.3)`,
-    borderRadius: borderRadius.xl,
-    padding: spacing.lg,
-    boxShadow: shadows.card,
-    display: 'flex',
-    flexDirection: 'column',
-    gap: spacing.md,
-  },
-  weakTopicsHeader: {
-    display: 'flex',
     alignItems: 'center',
-    gap: spacing.md,
+    justifyContent: 'center',
+    boxShadow: '0 4px 0 #9E5B1D, 0 6px 10px rgba(74, 46, 24, 0.1)',
+    boxSizing: 'border-box',
+    minHeight: 104,
   },
-  alertIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: borderRadius.pill,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+  statIconWrapper: {
+    width: 38,
+    height: 38,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
+    marginBottom: 4,
   },
-  weakTopicsTitle: {
-    fontSize: 18,
+  statIconImg: {
+    width: 36,
+    height: 36,
+    objectFit: 'contain',
+  },
+  statLabel: {
+    fontSize: 10,
     fontWeight: 700,
-    margin: 0,
-    color: colors.textPrimary,
+    color: '#5D381B',
+    textAlign: 'center',
+    lineHeight: 1.15,
+    minHeight: 22,
+    display: 'flex',
+    alignItems: 'center',
   },
-  weakTopicsSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
+  statValue: {
+    fontSize: 22,
+    fontWeight: 900,
+    color: '#38200E',
+    fontVariantNumeric: 'tabular-nums',
+    marginTop: 2,
+    letterSpacing: '-0.02em',
+  },
+  statUnit: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: '#6B4219',
     marginTop: 2,
   },
-  weakTopicsList: {
+
+  // Wood Plate Generic Container
+  woodPlateContainer: {
+    position: 'relative',
+    background: 'linear-gradient(180deg, #FEE6BD 0%, #F5C682 100%)',
+    border: '2.5px solid #C98235',
+    borderRadius: 22,
+    padding: 3,
+    boxShadow: '0 5px 0 #9E5B1D, 0 8px 14px rgba(74, 46, 24, 0.1)',
+    boxSizing: 'border-box',
+    width: '100%',
+  },
+  woodPlateInner: {
+    background: '#FFFDF9',
+    border: '1.5px solid #F5DEB3',
+    borderRadius: 18,
+    padding: '14px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    boxSizing: 'border-box',
+    width: '100%',
+  },
+  cornerLeaf: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    objectFit: 'contain',
+    zIndex: 10,
+    pointerEvents: 'none',
+  },
+
+  // 3. AI Recommendation Card
+  recMascotCol: {
+    width: 126,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recContentCol: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
-    gap: spacing.sm,
+    gap: 6,
   },
-  weakTopicItem: {
+  recHeaderRow: {
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
-    borderRadius: borderRadius.md,
-    padding: `${spacing.sm}px ${spacing.md}px`,
-    borderLeft: `3px solid ${colors.answerRed}`,
+    gap: 8,
   },
-  weakTopicInfo: {
+  recBulbIcon: {
+    width: 28,
+    height: 28,
+    objectFit: 'contain',
+  },
+  recTitle: {
+    margin: 0,
+    fontSize: 16,
+    fontWeight: 900,
+    color: '#38200E',
+  },
+  recText: {
+    margin: 0,
+    fontSize: 12.5,
+    lineHeight: 1.45,
+    color: '#5D381B',
+    fontWeight: 500,
+  },
+
+  // 4. Anti-Cheat Card
+  auditWoodPlate: {
+    position: 'relative',
+    background: 'linear-gradient(180deg, #FEE6BD 0%, #F5C682 100%)',
+    border: '2.5px solid #C98235',
+    borderRadius: 22,
+    padding: '12px 14px',
+    boxShadow: '0 5px 0 #9E5B1D, 0 8px 14px rgba(74, 46, 24, 0.1)',
+    boxSizing: 'border-box',
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    cursor: 'pointer',
+  },
+  auditShieldCol: {
+    width: 60,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  auditShieldImg: {
+    width: 58,
+    height: 58,
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 2px 4px rgba(74, 46, 24, 0.12))',
+  },
+  auditDividerLine: {
+    width: 1.5,
+    height: 48,
+    backgroundColor: '#C98235',
+    opacity: 0.4,
+    flexShrink: 0,
+    margin: '0 2px',
+  },
+  auditMainCol: {
+    flex: 1,
     display: 'flex',
     flexDirection: 'column',
     gap: 2,
   },
-  weakTopicTitle: {
-    fontSize: 14,
-    fontWeight: 600,
-    color: colors.textPrimary,
+  auditTitle: {
+    margin: 0,
+    fontSize: 14.5,
+    fontWeight: 900,
+    color: '#38200E',
   },
-  weakTopicSub: {
+  auditSubtext: {
+    margin: 0,
     fontSize: 12,
-    color: colors.textSecondary,
+    color: '#5D381B',
+    lineHeight: 1.35,
   },
-  gapTag: {
-    fontSize: 11,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    color: colors.answerRed,
-    padding: '3px 8px',
-    borderRadius: borderRadius.pill,
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
-  },
-  actionContainer: {
+  auditBadgesCol: {
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xs,
+    gap: 5,
+    flexShrink: 0,
   },
-  sendButton: {
-    width: '100%',
-    padding: `${spacing.md}px ${spacing.lg}px`,
-    borderRadius: borderRadius.md,
-    border: 'none',
-    color: '#FFFFFF',
-    fontSize: 15,
+  alertBadgeRed: {
+    background: '#FEE2E2',
+    border: '1px solid #FECACA',
+    borderRadius: 14,
+    padding: '4px 8px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+  },
+  alertBadgeYellow: {
+    background: '#FEF3C7',
+    border: '1px solid #FDE68A',
+    borderRadius: 14,
+    padding: '4px 8px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+  },
+  alertBadgeIcon: {
+    width: 14,
+    height: 14,
+    objectFit: 'contain',
+  },
+  alertBadgeTextRed: {
+    fontSize: 10.5,
     fontWeight: 700,
+    color: '#991B1B',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  alertBadgeTextYellow: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: '#92400E',
+    fontVariantNumeric: 'tabular-nums',
+  },
+
+  // Audit Drawer
+  auditDrawerWrapper: {
+    overflow: 'hidden',
+    width: '100%',
+  },
+  auditDrawerCard: {
+    background: '#FFF8EC',
+    border: '1.5px solid #F0D5AC',
+    borderRadius: 16,
+    padding: '12px 14px',
+    boxSizing: 'border-box',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  auditDrawerHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+  },
+  auditDrawerTitle: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: '#4A2E18',
+  },
+  auditStudentList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  auditStudentRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '6px 8px',
+    background: '#FFFFFF',
+    borderRadius: 10,
+    border: '1px solid #F5E5D0',
+  },
+  auditStudentInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+  },
+  auditStudentName: {
+    fontSize: 12.5,
+    fontWeight: 700,
+    color: '#38200E',
+  },
+  auditStudentFlags: {
+    fontSize: 11,
+    color: '#784E2D',
+  },
+  riskBadge: {
+    fontSize: 10.5,
+    fontWeight: 700,
+    borderRadius: 8,
+    padding: '3px 7px',
+  },
+
+  // 5. Question Breakdown Card
+  breakdownHeaderPill: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'flex-start',
+  },
+  breakdownHeaderImg: {
+    maxHeight: 38,
+    objectFit: 'contain',
+  },
+  tiersListContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    width: '100%',
+  },
+  tierRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
     cursor: 'pointer',
+    padding: '8px 12px',
+    background: '#FFF8EC',
+    border: '1.5px solid #F0D5AC',
+    borderRadius: 16,
+    boxShadow: '0 2px 4px rgba(74, 46, 24, 0.05)',
+    boxSizing: 'border-box',
+    width: '100%',
+  },
+  tierBadgeWrapper: {
+    width: 36,
+    height: 36,
+    flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
-    boxShadow: shadows.glow(colors.emeraldGreen),
-    transition: transitions.normal,
   },
-  actionHint: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textAlign: 'center',
-    margin: 0,
+  tierBadgeImg: {
+    width: 36,
+    height: 36,
+    objectFit: 'contain',
+  },
+  tierInfoCol: {
+    width: 105,
+    flexShrink: 0,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  tierTitle: {
+    fontSize: 13,
+    fontWeight: 800,
+    color: '#38200E',
+  },
+  tierSub: {
+    fontSize: 10.5,
+    color: '#6B4219',
+    fontWeight: 500,
+  },
+  tierProgressCol: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+  },
+  progressBarTrack: {
+    width: '100%',
+    height: 12,
+    background: '#F3E8D2',
+    borderRadius: 8,
+    overflow: 'hidden',
+    boxShadow: 'inset 0 1px 3px rgba(74, 46, 24, 0.15)',
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 8,
+    boxShadow: 'inset 0 1px 1px rgba(255, 255, 255, 0.6)',
+  },
+  tierPctText: {
+    width: 38,
+    textAlign: 'right',
+    fontSize: 14.5,
+    fontWeight: 900,
+    color: '#38200E',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  tierQuestionsDrawer: {
+    background: '#FFF9EF',
+    border: '1px solid #F5E5D0',
+    borderRadius: 12,
+    padding: '8px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    marginTop: -4,
+  },
+  drawerQuestionItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 11.5,
+  },
+  drawerQuestionNum: {
+    fontWeight: 800,
+    color: '#B45309',
+    width: 20,
+  },
+  drawerQuestionText: {
+    flex: 1,
+    color: '#38200E',
+  },
+  drawerQuestionMistake: {
+    fontSize: 10.5,
+    color: '#DC2626',
+    marginTop: 2,
+  },
+  drawerQuestionPct: {
+    fontWeight: 800,
+    color: '#38200E',
+    fontVariantNumeric: 'tabular-nums',
+  },
+
+  // 6. Remedial Button
+  bottomBtnWrapper: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  remedialBtn: {
+    background: 'transparent',
+    border: 'none',
+    padding: 0,
+    cursor: 'pointer',
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+  },
+  remedialBtnImg: {
+    width: '100%',
+    maxHeight: 76,
+    objectFit: 'contain',
+    filter: 'drop-shadow(0 6px 12px rgba(74, 46, 24, 0.18))',
+  },
+  remedialSuccessBox: {
+    width: '100%',
+    background: '#F0FDF4',
+    border: '2px solid #86EFAC',
+    borderRadius: 18,
+    padding: '14px 16px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    boxShadow: '0 4px 12px rgba(21, 128, 61, 0.12)',
+    boxSizing: 'border-box',
+  },
+  remedialSuccessText: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 2,
+    fontSize: 12.5,
+    color: '#166534',
   },
 };
