@@ -117,14 +117,18 @@ class SoundManager {
 
     const onUserGesture = async () => {
       await this.unlock();
-      window.removeEventListener('pointerdown', onUserGesture, true);
-      window.removeEventListener('touchstart', onUserGesture, true);
-      window.removeEventListener('keydown', onUserGesture, true);
+      this.tryResumePendingBgm();
     };
 
-    window.addEventListener('pointerdown', onUserGesture, true);
-    window.addEventListener('touchstart', onUserGesture, true);
-    window.addEventListener('keydown', onUserGesture, true);
+    ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'].forEach((evt) => {
+      window.addEventListener(evt, onUserGesture, { capture: true, passive: true });
+    });
+  }
+
+  public tryResumePendingBgm(): void {
+    if (this.currentBgmTrack && this.bgmAudio && !this.isMuted && this.bgmAudio.paused) {
+      this.bgmAudio.play().catch(() => {});
+    }
   }
 
   /**
@@ -200,6 +204,7 @@ class SoundManager {
 
   public playTap(): void {
     haptics.impact('light');
+    this.tryResumePendingBgm();
     if (this.isMuted) return;
     this.unlock().then(() => {
       if (this.ctx) playClayTap(this.ctx, this.masterVolume);

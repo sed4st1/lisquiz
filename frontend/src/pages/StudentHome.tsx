@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -24,9 +24,11 @@ export interface StudentHomeProps {
   onJoinGame?: (payload: JoinRoomPayload) => void;
   onGoToGrove?: () => void;
   onGoToLeaderboard?: () => void;
+  onGoToClasses?: () => void;
   onSwitchToTeacher?: () => void;
   groveStage?: number;
   groveHealth?: number;
+  appMode?: 'user' | 'dev';
 }
 
 export type DivisionType = 'sprout_keepers' | 'forest_guardians' | 'council_of_groves';
@@ -218,9 +220,16 @@ export default function StudentHome({
   onJoinGame,
   onGoToGrove,
   onGoToLeaderboard,
+  onGoToClasses,
   onSwitchToTeacher,
+  appMode = 'user',
 }: StudentHomeProps) {
-  // Profile & Division state
+  // Start ambient BGM on mount
+  useEffect(() => {
+    soundManager.playBgm('grove', true);
+  }, []);
+
+  // Profile & Division state (Defaults for a fresh new student: 0 stats, sprout_keepers tier)
   const [division, setDivision] = useState<DivisionType>(() => {
     try {
       const saved = sessionStorage.getItem('lisquiz_student_division') as DivisionType;
@@ -228,19 +237,16 @@ export default function StudentHome({
         return saved;
       }
     } catch {}
-    return 'forest_guardians';
+    return 'sprout_keepers';
   });
 
   const [studentName, setStudentName] = useState<string>(() => {
     try {
       const saved = sessionStorage.getItem('lisquiz_student_name');
       if (saved) return saved;
-      const pool = ['Иван К', 'Анна С', 'Михаил В', 'София М', 'Даниил Р', 'Алиса Т', 'Максим Д'];
-      const chosen = pool[Math.floor(Math.random() * pool.length)] ?? 'Анна С';
-      sessionStorage.setItem('lisquiz_student_name', chosen);
-      return chosen;
+      return 'Новый ученик';
     } catch {
-      return 'Анна С';
+      return 'Новый ученик';
     }
   });
 
@@ -251,8 +257,50 @@ export default function StudentHome({
   const [isQuestsModalOpen, setIsQuestsModalOpen] = useState(false);
   const [isCardsModalOpen, setIsCardsModalOpen] = useState(false);
 
-  // Economy state
-  const [acorns, setAcorns] = useState(128);
+  // Economy & Progression state (Fresh player begins with 0)
+  const [acorns, setAcorns] = useState<number>(() => {
+    try {
+      const saved = sessionStorage.getItem('lisquiz_user_acorns');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        return isNaN(val) ? 0 : val;
+      }
+    } catch {}
+    return 0;
+  });
+
+  const [xp, setXp] = useState<number>(() => {
+    try {
+      const saved = sessionStorage.getItem('lisquiz_user_xp');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        return isNaN(val) ? 0 : val;
+      }
+    } catch {}
+    return 0;
+  });
+
+  const [streak, setStreak] = useState<number>(() => {
+    try {
+      const saved = sessionStorage.getItem('lisquiz_user_streak');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        return isNaN(val) ? 0 : val;
+      }
+    } catch {}
+    return 0;
+  });
+
+  const [quizzesCount, setQuizzesCount] = useState<number>(() => {
+    try {
+      const saved = sessionStorage.getItem('lisquiz_user_quizzes');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        return isNaN(val) ? 0 : val;
+      }
+    } catch {}
+    return 0;
+  });
 
   // PIN inputs directly on hero card
   const [digits, setDigits] = useState<string[]>(() => {
@@ -408,9 +456,9 @@ export default function StudentHome({
             <span style={styles.statPillIcon}>🌰</span>
             <span style={styles.statPillValue}>{acorns}</span>
           </motion.div>
-          <div style={styles.statPill} title="Ударный режим: 5 дней">
+          <div style={styles.statPill} title={`Ударный режим: ${streak} дней`}>
             <span style={styles.statPillIcon}>🔥</span>
-            <span style={styles.statPillValue}>5</span>
+            <span style={styles.statPillValue}>{streak}</span>
           </div>
         </div>
       </header>
@@ -573,7 +621,7 @@ export default function StudentHome({
             onClick={() => {
               haptics.impact('light');
               soundManager.playTap();
-              onGoToLeaderboard?.() ?? onGoToGrove?.();
+              onGoToClasses?.() ?? onGoToLeaderboard?.() ?? onGoToGrove?.();
             }}
             style={{
               ...styles.featureCard,
@@ -583,11 +631,11 @@ export default function StudentHome({
             <div style={styles.featureCardContent}>
               <img
                 src="/assets/icons/shield_rank.png"
-                alt="Класс"
+                alt="Классы"
                 style={styles.featureIcon}
                 draggable={false}
               />
-              <h3 style={styles.featureTitle}>Класс</h3>
+              <h3 style={styles.featureTitle}>Классы</h3>
             </div>
           </motion.div>
         </section>
@@ -653,14 +701,14 @@ export default function StudentHome({
                 <div style={styles.xpProgressHeader}>
                   <span style={styles.xpProgressLabel}>Прогресс дивизиона</span>
                   <span style={styles.xpProgressVal}>
-                    {activeDivision.currentXp} / {activeDivision.nextTierXp} XP
+                    {xp} / {activeDivision.nextTierXp} XP ({Math.min(100, Math.round((xp / Math.max(1, activeDivision.nextTierXp)) * 100))}%)
                   </span>
                 </div>
                 <div style={styles.xpTrack}>
                   <div
                     style={{
                       ...styles.xpBarFill,
-                      width: `${Math.min(100, (activeDivision.currentXp / activeDivision.nextTierXp) * 100)}%`,
+                      width: `${Math.min(100, (xp / Math.max(1, activeDivision.nextTierXp)) * 100)}%`,
                       backgroundColor: activeDivision.color,
                     }}
                   />
@@ -695,7 +743,7 @@ export default function StudentHome({
                 })}
               </div>
 
-              {/* Bento Statistics Grid (6 key indicators) */}
+              {/* Bento Statistics Grid (6 key indicators - 0 defaults for fresh user) */}
               <div style={styles.statsBentoGrid}>
                 {/* 1. Acorns */}
                 <div style={styles.statBentoCard}>
@@ -712,7 +760,7 @@ export default function StudentHome({
                     <span style={{ fontSize: 18 }}>⚡</span>
                     <span style={styles.statBentoLabel}>Опыт (XP)</span>
                   </div>
-                  <span style={styles.statBentoVal}>1,420</span>
+                  <span style={styles.statBentoVal}>{xp.toLocaleString('ru-RU')}</span>
                 </div>
 
                 {/* 3. Daily Streak */}
@@ -721,7 +769,7 @@ export default function StudentHome({
                     <span style={{ fontSize: 18 }}>🔥</span>
                     <span style={styles.statBentoLabel}>Серия</span>
                   </div>
-                  <span style={styles.statBentoVal}>5 дней</span>
+                  <span style={styles.statBentoVal}>{streak === 0 ? '0 дн.' : `${streak} дн.`}</span>
                 </div>
 
                 {/* 4. Accuracy */}
@@ -730,7 +778,7 @@ export default function StudentHome({
                     <span style={{ fontSize: 18 }}>🎯</span>
                     <span style={styles.statBentoLabel}>Точность</span>
                   </div>
-                  <span style={styles.statBentoVal}>92%</span>
+                  <span style={styles.statBentoVal}>{quizzesCount === 0 ? '—' : '92%'}</span>
                 </div>
 
                 {/* 5. Quizzes Completed */}
@@ -739,7 +787,7 @@ export default function StudentHome({
                     <span style={{ fontSize: 18 }}>📚</span>
                     <span style={styles.statBentoLabel}>Викторин</span>
                   </div>
-                  <span style={styles.statBentoVal}>14</span>
+                  <span style={styles.statBentoVal}>{quizzesCount}</span>
                 </div>
 
                 {/* 6. Class Rank */}
@@ -748,9 +796,170 @@ export default function StudentHome({
                     <span style={{ fontSize: 18 }}>🏆</span>
                     <span style={styles.statBentoLabel}>Ранг</span>
                   </div>
-                  <span style={styles.statBentoVal}>#3 в классе</span>
+                  <span style={styles.statBentoVal}>{quizzesCount === 0 ? '—' : '#3 в классе'}</span>
                 </div>
               </div>
+
+              {/* Developer Testing Controls (Visible ONLY in dev mode) */}
+              {appMode === 'dev' && (
+                <div
+                  style={{
+                    backgroundColor: '#FEF3C7',
+                    border: '1.5px dashed #F59E0B',
+                    borderRadius: 14,
+                    padding: '10px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      color: '#92400E',
+                    }}
+                  >
+                    <span>🛠️ Панель прокачки (Developer Mode)</span>
+                    <span style={{ fontSize: 10, color: '#B45309' }}>быстрый тест</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.impact('light');
+                        soundManager.playAcorn();
+                        setAcorns((a) => {
+                          const next = a + 50;
+                          sessionStorage.setItem('lisquiz_user_acorns', String(next));
+                          return next;
+                        });
+                      }}
+                      style={{
+                        flex: '1 1 auto',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: '1px solid #D97706',
+                        backgroundColor: '#FFFFFF',
+                        color: '#92400E',
+                        fontWeight: 700,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +50 🌰
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.impact('light');
+                        soundManager.playCorrect();
+                        setXp((x) => {
+                          const next = x + 200;
+                          sessionStorage.setItem('lisquiz_user_xp', String(next));
+                          return next;
+                        });
+                      }}
+                      style={{
+                        flex: '1 1 auto',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: '1px solid #D97706',
+                        backgroundColor: '#FFFFFF',
+                        color: '#92400E',
+                        fontWeight: 700,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +200 ⚡ XP
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.impact('light');
+                        soundManager.playTap();
+                        setStreak((s) => {
+                          const next = s + 1;
+                          sessionStorage.setItem('lisquiz_user_streak', String(next));
+                          return next;
+                        });
+                      }}
+                      style={{
+                        flex: '1 1 auto',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: '1px solid #D97706',
+                        backgroundColor: '#FFFFFF',
+                        color: '#92400E',
+                        fontWeight: 700,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +1 🔥 Стрик
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.impact('light');
+                        soundManager.playTap();
+                        setQuizzesCount((q) => {
+                          const next = q + 1;
+                          sessionStorage.setItem('lisquiz_user_quizzes', String(next));
+                          return next;
+                        });
+                      }}
+                      style={{
+                        flex: '1 1 auto',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: '1px solid #D97706',
+                        backgroundColor: '#FFFFFF',
+                        color: '#92400E',
+                        fontWeight: 700,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      +1 📚
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.notification('warning');
+                        soundManager.playKnock();
+                        setAcorns(0);
+                        setXp(0);
+                        setStreak(0);
+                        setQuizzesCount(0);
+                        setDivision('sprout_keepers');
+                        sessionStorage.setItem('lisquiz_user_acorns', '0');
+                        sessionStorage.setItem('lisquiz_user_xp', '0');
+                        sessionStorage.setItem('lisquiz_user_streak', '0');
+                        sessionStorage.setItem('lisquiz_user_quizzes', '0');
+                        sessionStorage.setItem('lisquiz_student_division', 'sprout_keepers');
+                      }}
+                      style={{
+                        flex: '1 1 auto',
+                        padding: '6px 10px',
+                        borderRadius: 8,
+                        border: '1px solid #DC2626',
+                        backgroundColor: '#FEE2E2',
+                        color: '#991B1B',
+                        fontWeight: 800,
+                        fontSize: 12,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Сброс (0)
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Name & Avatar Customization Section */}
               <div style={styles.editSectionCard}>

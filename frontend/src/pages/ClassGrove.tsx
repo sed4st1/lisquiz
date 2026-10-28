@@ -43,6 +43,7 @@ interface ClassGroveProps {
   onOpenLeaderboard?: () => void;
   onOpenStats?: () => void;
   classId?: string;
+  appMode?: 'user' | 'dev';
 }
 
 export default function ClassGrove({
@@ -51,32 +52,50 @@ export default function ClassGrove({
   onOpenLeaderboard: _onOpenLeaderboard,
   onOpenStats: _onOpenStats,
   classId = '5A',
+  appMode = 'user',
 }: ClassGroveProps) {
+  const isDevMode = appMode === 'dev';
+
   // Live State
   const [grove, setGrove] = useState<GroveStateResponse>(mockDefaultGrove);
   const [leaderboard, setLeaderboard] = useState<GroveLeaderboardResponse>(mockDefaultLeaderboard);
-  const [inventory, setInventory] = useState<StudentInventoryResponse>({
-    student_id: 'current_student',
-    acorns_balance: 924,
-    collection_progress: '1/16 (6.2%)',
-    unique_cards_count: 1,
-    catalog_total: 16,
-    cards: [],
+  const [inventory, setInventory] = useState<StudentInventoryResponse>(() => {
+    try {
+      const savedAcorns = sessionStorage.getItem('lisquiz_user_acorns');
+      const acorns = savedAcorns !== null ? parseInt(savedAcorns, 10) : (isDevMode ? 924 : 0);
+      return {
+        student_id: 'current_student',
+        acorns_balance: isNaN(acorns) ? 0 : acorns,
+        collection_progress: isDevMode ? '1/16 (6.2%)' : '0/16 (0%)',
+        unique_cards_count: isDevMode ? 1 : 0,
+        catalog_total: 16,
+        cards: [],
+      };
+    } catch {
+      return {
+        student_id: 'current_student',
+        acorns_balance: isDevMode ? 924 : 0,
+        collection_progress: '0/16 (0%)',
+        unique_cards_count: 0,
+        catalog_total: 16,
+        cards: [],
+      };
+    }
   });
 
   // UI & Interaction State
   const [activeSheet, setActiveSheet] = useState<ActiveSheetType>(null);
   const [activeDivisionTab, setActiveDivisionTab] = useState<'council' | 'guardians' | 'sprouts'>('guardians');
-  const [points, setPoints] = useState<number>(320);
+  const [points, setPoints] = useState<number>(() => isDevMode ? 320 : 0);
   const maxPoints = 500;
-  const [waterCount, setWaterCount] = useState<number>(248);
-  const soilCount = 186;
-  const sunCount = 132;
+  const [waterCount, setWaterCount] = useState<number>(() => isDevMode ? 248 : 0);
+  const soilCount = isDevMode ? 186 : 0;
+  const sunCount = isDevMode ? 132 : 0;
   const [isWatering, setIsWatering] = useState<boolean>(false);
   const [bubbleMessage, setBubbleMessage] = useState<string | null>(null);
 
-  // Dev override stage (0..5)
-  const [devStageOverride, setDevStageOverride] = useState<number | null>(4); // Default to Stage 4 (Oak) as in reference
+  // Dev override stage (0..5). In user mode, stage is fixed to Stage 1 ("Росток")
+  const [devStageOverride, setDevStageOverride] = useState<number | null>(() => isDevMode ? 4 : 1);
 
   // Canvas ref
   const particlesRef = useRef<WaterParticlesCanvasHandle | null>(null);
@@ -104,14 +123,12 @@ export default function ClassGrove({
 
   // Ambient BGM for Class Grove
   useEffect(() => {
-    soundManager.playBgm('grove');
-    return () => {
-      soundManager.stopBgm();
-    };
+    soundManager.playBgm('grove', true);
   }, []);
 
   // Active tree stage (0..5)
-  const activeTreeStage: number = devStageOverride ?? 4;
+  // In user mode: locked to real class progress (Stage 1 = Росток for new class), no user override
+  const activeTreeStage: number = isDevMode ? (devStageOverride ?? 1) : (grove.stage_level ?? 1);
 
   // Interactive watering action
   const handleWaterTree = async () => {
@@ -161,14 +178,16 @@ export default function ClassGrove({
     setTimeout(() => setBubbleMessage(null), 3600);
   };
 
-  // Click on tree (runic burst and stage explorer)
+  // Click on tree (runic burst; stage explorer only in dev mode)
   const handleTreeClick = () => {
     soundManager.playTap();
     if (particlesRef.current && sceneRef.current) {
       const rect = sceneRef.current.getBoundingClientRect();
       particlesRef.current.triggerExplosion(rect.width * 0.50, rect.height * 0.45, 28);
     }
-    setActiveSheet('stages');
+    if (isDevMode) {
+      setActiveSheet('stages');
+    }
   };
 
   // Active division list
@@ -199,35 +218,36 @@ export default function ClassGrove({
       {/* Particle Canvas */}
       <WaterParticlesCanvas ref={particlesRef} />
 
-      {/* Back button */}
+      {/* Top Left: Tactile Back to Home Button */}
       {onBack && (
         <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          type="button"
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
           onClick={() => {
-            haptics.impact('light');
+            soundManager.playTap();
             onBack();
           }}
           style={{
             position: 'absolute',
             top: 10,
-            left: 12,
+            left: 10,
             width: 38,
             height: 38,
             borderRadius: '50%',
-            backgroundColor: '#FFFDF2',
-            border: '2px solid #F3EEDB',
-            borderBottom: '3px solid #E5DBC7',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+            backgroundColor: '#FFF5EA',
+            border: '2px solid #FFAF66',
+            boxShadow: '0 3px 0 #C95000, 0 3px 8px rgba(245, 107, 0, 0.25)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
             zIndex: 35,
+            color: '#EA580C',
           }}
-          title="Назад на главную"
+          title="Вернуться на главную"
         >
-          <ArrowLeft size={20} color="#4A2E18" strokeWidth={2.5} />
+          <ArrowLeft size={20} strokeWidth={2.8} />
         </motion.button>
       )}
 
@@ -602,61 +622,61 @@ export default function ClassGrove({
             right: '12%',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: isDevMode ? 'space-between' : 'center',
             zIndex: 2,
           }}
         >
-          {/* Previous Stage Arrow */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.15 }}
-            whileTap={{ scale: 0.85 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              soundManager.playKnock();
-              setDevStageOverride((s) => Math.max(0, (s ?? 4) - 1));
-            }}
-            disabled={activeTreeStage <= 0}
-            style={{
-              background: activeTreeStage > 0 ? '#5C3317' : '#D1B89D',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '50%',
-              width: 26,
-              height: 26,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: activeTreeStage > 0 ? 'pointer' : 'default',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
-              fontSize: 11,
-              fontWeight: 900,
-              opacity: activeTreeStage > 0 ? 1 : 0.45,
-              transition: 'all 0.15s ease',
-            }}
-            title="Предыдущая стадия"
-          >
-            ◀
-          </motion.button>
+          {/* Previous Stage Arrow (dev only) */}
+          {isDevMode && (
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.15 }}
+              whileTap={{ scale: 0.85 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                soundManager.playKnock();
+                setDevStageOverride((s) => Math.max(0, (s ?? 1) - 1));
+              }}
+              disabled={activeTreeStage <= 0}
+              style={{
+                background: activeTreeStage > 0 ? '#5C3317' : '#D1B89D',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '50%',
+                width: 26,
+                height: 26,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: activeTreeStage > 0 ? 'pointer' : 'default',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+                fontSize: 11,
+                fontWeight: 900,
+                opacity: activeTreeStage > 0 ? 1 : 0.45,
+                transition: 'all 0.15s ease',
+              }}
+              title="Предыдущая стадия"
+            >
+              ◀
+            </motion.button>
+          )}
 
-          {/* Clickable Stage Title -> opens stages modal */}
-          <motion.div
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => {
+          {/* Clickable Stage Title -> opens stages modal only in dev mode */}
+          <div
+            onClick={isDevMode ? () => {
               soundManager.playTap();
               setActiveSheet('stages');
-            }}
+            } : undefined}
             style={{
-              cursor: 'pointer',
+              cursor: isDevMode ? 'pointer' : 'default',
               display: 'flex',
               alignItems: 'center',
               gap: 4,
               padding: '2px 8px',
               borderRadius: 8,
-              backgroundColor: 'rgba(255, 255, 255, 0.35)',
+              backgroundColor: isDevMode ? 'rgba(255, 255, 255, 0.35)' : 'transparent',
             }}
-            title="Нажмите, чтобы посмотреть все стадии Древа"
+            title={isDevMode ? 'Нажмите, чтобы посмотреть все стадии Древа' : undefined}
           >
             <span
               style={{
@@ -669,43 +689,45 @@ export default function ClassGrove({
                 whiteSpace: 'nowrap',
               }}
             >
-              Стадия {activeTreeStage}. {STAGE_NAMES[activeTreeStage] ?? 'Дуб'}
+              Стадия {activeTreeStage}. {STAGE_NAMES[activeTreeStage] ?? 'Росток'}
             </span>
-            <span style={{ fontSize: 10, color: '#8C531B' }}>▾</span>
-          </motion.div>
+            {isDevMode && <span style={{ fontSize: 10, color: '#8C531B' }}>▾</span>}
+          </div>
 
-          {/* Next Stage Arrow */}
-          <motion.button
-            type="button"
-            whileHover={{ scale: 1.15 }}
-            whileTap={{ scale: 0.85 }}
-            onClick={(e) => {
-              e.stopPropagation();
-              soundManager.playKnock();
-              setDevStageOverride((s) => Math.min(5, (s ?? 4) + 1));
-            }}
-            disabled={activeTreeStage >= 5}
-            style={{
-              background: activeTreeStage < 5 ? '#5C3317' : '#D1B89D',
-              color: '#FFFFFF',
-              border: 'none',
-              borderRadius: '50%',
-              width: 26,
-              height: 26,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: activeTreeStage < 5 ? 'pointer' : 'default',
-              boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
-              fontSize: 11,
-              fontWeight: 900,
-              opacity: activeTreeStage < 5 ? 1 : 0.45,
-              transition: 'all 0.15s ease',
-            }}
-            title="Следующая стадия"
-          >
-            ▶
-          </motion.button>
+          {/* Next Stage Arrow (dev only) */}
+          {isDevMode && (
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.15 }}
+              whileTap={{ scale: 0.85 }}
+              onClick={(e) => {
+                e.stopPropagation();
+                soundManager.playKnock();
+                setDevStageOverride((s) => Math.min(5, (s ?? 1) + 1));
+              }}
+              disabled={activeTreeStage >= 5}
+              style={{
+                background: activeTreeStage < 5 ? '#5C3317' : '#D1B89D',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: '50%',
+                width: 26,
+                height: 26,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: activeTreeStage < 5 ? 'pointer' : 'default',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+                fontSize: 11,
+                fontWeight: 900,
+                opacity: activeTreeStage < 5 ? 1 : 0.45,
+                transition: 'all 0.15s ease',
+              }}
+              title="Следующая стадия"
+            >
+              ▶
+            </motion.button>
+          )}
         </div>
 
         {/* Dynamic Progress Bar & Numbers on Clean Parchment */}

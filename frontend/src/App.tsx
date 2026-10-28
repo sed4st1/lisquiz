@@ -65,10 +65,11 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const r = params.get('role');
       const s = params.get('screen') || params.get('subScreen');
-      if (r === 'teacher' || s === 'teacher_classes' || s === 'teacher_quizzes' || s === 'teacher_game' || s === 'teacher_waiting' || s === 'teacher_report' || s === 'stats') return 'teacher';
+      if (r === 'teacher') return 'teacher';
       if (r === 'student') return 'student';
-      const saved = sessionStorage.getItem('lisquiz_role');
-      if (saved === 'teacher' || saved === 'student') return saved;
+      const savedRole = (localStorage.getItem('lisquiz_user_role') || sessionStorage.getItem('lisquiz_role')) as 'teacher' | 'student';
+      if (savedRole === 'teacher' || savedRole === 'student') return savedRole;
+      if (s === 'teacher_quizzes' || s === 'teacher_game' || s === 'teacher_waiting' || s === 'teacher_report' || s === 'stats') return 'teacher';
     } catch {}
     return 'student';
   });
@@ -95,8 +96,11 @@ export default function App() {
       if (s === 'student_round_wait' || s === 'wait') return 'student_round_wait';
       if (s === 'student_quiz_finish' || s === 'finish') return 'student_quiz_finish';
       if (s === 'student_leaderboard' || s === 'leaderboard') return 'student_leaderboard';
-      const savedRole = sessionStorage.getItem('lisquiz_role');
-      if (!savedRole && !params.get('role')) {
+
+      // One-time role selection for first-time user:
+      const savedRole = localStorage.getItem('lisquiz_user_role') || sessionStorage.getItem('lisquiz_role');
+      const r = params.get('role');
+      if (!savedRole && !r) {
         return 'role_select';
       }
     } catch {}
@@ -451,11 +455,15 @@ export default function App() {
   // Render content according to active Tab & Role
   const renderTabContent = () => {
     if (subScreen === 'role_select') {
+      const isFirstLaunch = !localStorage.getItem('lisquiz_user_role');
       return (
         <RoleSelectScreen
           currentRole={role}
-          onClose={() => setSubScreen(null)}
+          onClose={isFirstLaunch ? undefined : () => setSubScreen(null)}
           onSelectRole={(newRole) => {
+            try {
+              localStorage.setItem('lisquiz_user_role', newRole);
+            } catch {}
             handleRoleSwitch(newRole);
             setSubScreen(null);
             setTab('home');
@@ -752,20 +760,23 @@ export default function App() {
                     setSubScreen(null);
                     setAuthFeedback(err?.message || 'Комната не найдена или не отвечает');
                   });
-              }}
               onGoToGrove={() => handleTabChange('grove')}
               onGoToLeaderboard={() => handleTabChange('leaderboard')}
-              onSwitchToTeacher={() => {
-                handleRoleSwitch('teacher');
-                handleTabChange('home');
-              }}
+              onGoToClasses={() => setSubScreen('teacher_classes')}
+              onSwitchToTeacher={() => setSubScreen('role_select')}
+              appMode={appMode}
             />
           );
         case 'grove':
           return (
             <ClassGrove
+              appMode={appMode}
               onBack={() => handleTabChange('home')}
               onStartQuiz={() => setSubScreen('student_game')}
+              onOpenLeaderboard={() => handleTabChange('leaderboard')}
+              onOpenStats={() => handleTabChange('stats')}
+            />
+          );
               onOpenLeaderboard={() => handleTabChange('leaderboard')}
               onOpenStats={() => handleTabChange('stats')}
             />
