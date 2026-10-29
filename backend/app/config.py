@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     MAX_APP_ID: str = ""
     MAX_APP_SECRET: str = ""
     MAX_WEBHOOK_URL: str = ""
+    MAX_WEBAPP_URL: str = ""
 
     # AI / LLM
     LLM_PROVIDER: str = "gigachat"  # mock, gigachat, yandexgpt

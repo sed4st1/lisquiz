@@ -111,6 +111,8 @@ class MaxBotService:
 
         pid = self.get_pseudonym_id(sender_id)
 
+        app_base = (settings.MAX_WEBAPP_URL or "http://localhost:8000").rstrip("/")
+
         if root_cmd in ("/start", "старт", "привет"):
             reply_text = (
                 "🦊 **Привет! Я лисёнок Спринт** — твой проводник в интерактивных экспресс-викторинах «Лисквиз» в Сферуме!\n\n"
@@ -121,9 +123,9 @@ class MaxBotService:
                 "Выбирай, с чего начнём 👇"
             )
             buttons = [
-                [{"text": "🎮 Ввести PIN и играть", "type": "open_app", "url": "https://lisquiz.ru/student"}],
-                [{"text": "🌳 Наша Классная Роща", "type": "open_app", "url": "https://lisquiz.ru/grove"}],
-                [{"text": "✨ Создать викторину (для учителя)", "type": "open_app", "url": "https://lisquiz.ru/teacher"}],
+                [{"text": "🎮 Ввести PIN и играть", "type": "open_app", "url": f"{app_base}/"}],
+                [{"text": "🌳 Наша Классная Роща", "type": "open_app", "url": f"{app_base}/"}],
+                [{"text": "✨ Создать викторину (для учителя)", "type": "open_app", "url": f"{app_base}/"}],
             ]
             await self.send_message(chat_id, reply_text, buttons)
             return {"command": "/start", "status": "sent"}
@@ -141,7 +143,7 @@ class MaxBotService:
                         "Жми кнопку ниже, чтобы мгновенно войти в викторину!"
                     )
                     buttons = [
-                        [{"text": f"🚀 Присоединиться к игре ({pin})", "type": "open_app", "url": f"https://lisquiz.ru/student?pin={pin}"}]
+                        [{"text": f"🚀 Присоединиться к игре ({pin})", "type": "open_app", "url": f"{app_base}/?pin={pin}"}]
                     ]
                 else:
                     reply_text = (
@@ -149,7 +151,7 @@ class MaxBotService:
                         "Уточни правильный 6-значный код у своего учителя!"
                     )
                     buttons = [
-                        [{"text": "🎮 Ввести другой PIN", "type": "open_app", "url": "https://lisquiz.ru/student"}]
+                        [{"text": "🎮 Ввести другой PIN", "type": "open_app", "url": f"{app_base}/"}]
                     ]
             else:
                 reply_text = "🦊 Напиши команду с номером комнаты, например: `/quiz 482915`"
@@ -175,7 +177,7 @@ class MaxBotService:
                 f"💬 *Совет Спринта: {grove.get('mascot_advice', 'Сыграйте викторину сегодня!')}*"
             )
             buttons = [
-                [{"text": "🌳 Открыть Рощу в приложении", "type": "open_app", "url": "https://lisquiz.ru/grove"}]
+                [{"text": "🌳 Открыть Рощу в приложении", "type": "open_app", "url": f"{app_base}/"}]
             ]
             await self.send_message(chat_id, reply_text, buttons)
             return {"command": "/grove", "status": "sent"}
@@ -188,7 +190,7 @@ class MaxBotService:
                     "Присоединяйся к классу в Лисквизе, чтобы твои победы шли в общий рейтинг класса и растили нашу Классную Рощу! 🌳"
                 )
                 buttons = [
-                    [{"text": f"🎒 Вступить в класс ({code})", "type": "open_app", "url": f"https://lisquiz.ru/?join_class={code}"}]
+                    [{"text": f"🎒 Вступить в класс ({code})", "type": "open_app", "url": f"{app_base}/?join_class={code}"}]
                 ]
             else:
                 reply_text = "🦊 Напиши команду с кодом класса, например: `/class 7A-X9K2`"
