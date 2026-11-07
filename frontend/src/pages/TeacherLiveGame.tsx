@@ -129,7 +129,7 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
         setTotalQuestions(data.total_questions);
       }
 
-      if (data?.all_answered === true) {
+      if (data?.all_finished === true) {
         setTimeout(() => {
           handleEndQuiz();
         }, 1200);

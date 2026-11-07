@@ -85,11 +85,13 @@ export const roomApi = {
     return res.json();
   },
 
-  async joinRoom(roomCode: string, name: string, avatar: string): Promise<JoinRoomResponse> {
+  async joinRoom(roomCode: string, name: string, avatar: string, pseudonymId?: string): Promise<JoinRoomResponse> {
+    const user = authService.getCachedUser();
+    const pid = pseudonymId || user?.pseudonym_id;
     const res = await fetch(`/api/rooms/${roomCode}/join`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authService.getAuthHeaders() },
-      body: JSON.stringify({ name, avatar }),
+      body: JSON.stringify({ name, avatar, pseudonym_id: pid }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));

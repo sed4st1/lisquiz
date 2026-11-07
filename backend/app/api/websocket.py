@@ -320,6 +320,7 @@ async def websocket_room_endpoint(
                             "points_earned": res.get("points_awarded", 0),
                             "total_players": len([p for p in room.players.values() if p.connected]),
                             "all_answered": res.get("all_answered", False),
+                            "all_finished": res.get("all_finished", False),
                         },
                     )
 

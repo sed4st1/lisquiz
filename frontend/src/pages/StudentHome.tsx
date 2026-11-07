@@ -13,6 +13,7 @@ import SoundToggleButton from '../components/SoundToggleButton';
 import { roomApi, JoinRoomResponse } from '../services/roomApi';
 import { pullKnowledgeCard, fetchStudentInventory, KnowledgeCard } from '../services/groveApi';
 import MascotPuppet from '../components/MascotPuppet';
+import { authService } from '../services/authService';
 
 export interface JoinRoomPayload {
   pin: string;
@@ -32,6 +33,9 @@ export interface StudentHomeProps {
   appMode?: 'user' | 'dev';
   className?: string;
   classId?: string;
+  initialStudentName?: string;
+  initialStudentAvatar?: string;
+  onUpdateProfile?: (profile: { name: string; avatar: string }) => void;
 }
 
 export type DivisionType = 'sprout_keepers' | 'forest_guardians' | 'council_of_groves';
@@ -227,6 +231,10 @@ export default function StudentHome({
   onSwitchToTeacher,
   appMode = 'user',
   className = '',
+  classId: _classId = '',
+  initialStudentName,
+  initialStudentAvatar,
+  onUpdateProfile,
 }: StudentHomeProps) {
   // Start ambient BGM on mount
   useEffect(() => {
@@ -235,15 +243,22 @@ export default function StudentHome({
 
   const [studentName, setStudentName] = useState<string>(() => {
     try {
-      const saved = sessionStorage.getItem('lisquiz_student_name');
+      const saved = localStorage.getItem('lisquiz_student_name') || sessionStorage.getItem('lisquiz_student_name');
       if (saved) return saved;
-      return 'Новый ученик';
+      if (initialStudentName) return initialStudentName;
+      return 'Ученик';
     } catch {
-      return 'Новый ученик';
+      return initialStudentName || 'Ученик';
     }
   });
 
-  const [selectedAvatar, setSelectedAvatar] = useState('fox_smart');
+  const [selectedAvatar, setSelectedAvatar] = useState(() => {
+    try {
+      return localStorage.getItem('lisquiz_student_avatar') || initialStudentAvatar || 'fox_smart';
+    } catch {
+      return initialStudentAvatar || 'fox_smart';
+    }
+  });
 
   // Modal states
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -1105,10 +1120,16 @@ export default function StudentHome({
               {/* Tactile Close Button */}
               <motion.button
                 whileTap={{ y: 2 }}
-                onClick={() => {
+                onClick={async () => {
                   haptics.notification('success');
                   soundManager.playKnock();
                   setIsProfileModalOpen(false);
+                  const trimmed = studentName.trim() || 'Ученик';
+                  localStorage.setItem('lisquiz_student_name', trimmed);
+                  sessionStorage.setItem('lisquiz_student_name', trimmed);
+                  localStorage.setItem('lisquiz_student_avatar', selectedAvatar);
+                  await authService.updateProfile(trimmed, selectedAvatar);
+                  onUpdateProfile?.({ name: trimmed, avatar: selectedAvatar });
                 }}
                 style={styles.gachaPullBtn}
               >

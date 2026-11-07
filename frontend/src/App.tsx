@@ -193,8 +193,20 @@ export default function App() {
   });
   const [teacherToken, setTeacherToken] = useState<string>('');
   const [studentPlayerId, setStudentPlayerId] = useState<string>('');
-  const [studentName, setStudentName] = useState<string>(() => authService.getCachedUser()?.display_name || 'Иван К');
-  const [studentAvatar, setStudentAvatar] = useState<string>(() => authService.getCachedUser()?.avatar || 'fox_smart');
+  const [studentName, setStudentName] = useState<string>(() => {
+    try {
+      return localStorage.getItem('lisquiz_student_name') || sessionStorage.getItem('lisquiz_student_name') || authService.getCachedUser()?.display_name || 'Ученик';
+    } catch {
+      return 'Ученик';
+    }
+  });
+  const [studentAvatar, setStudentAvatar] = useState<string>(() => {
+    try {
+      return localStorage.getItem('lisquiz_student_avatar') || authService.getCachedUser()?.avatar || 'fox_smart';
+    } catch {
+      return 'fox_smart';
+    }
+  });
   const [currentQuestionData, setCurrentQuestionData] = useState<any>(null);
   const [personalAnswerResult, setPersonalAnswerResult] = useState<any>(null);
   const [quizFinishData, setQuizFinishData] = useState<any>(null);
@@ -425,7 +437,9 @@ export default function App() {
           } catch {}
         }
       } else {
-        authService.quickLogin('student', 'Иван К', 'fox_smart')
+        const savedName = localStorage.getItem('lisquiz_student_name') || sessionStorage.getItem('lisquiz_student_name') || 'Ученик';
+        const savedAvatar = localStorage.getItem('lisquiz_student_avatar') || 'fox_smart';
+        authService.quickLogin('student', savedName, savedAvatar)
           .then(async (res) => {
             setCurrentUser(res.user);
             try {
@@ -476,7 +490,7 @@ export default function App() {
     setSubScreen(null);
     setTab('home');
 
-    const name = newRole === 'teacher' ? 'Марья Ивановна' : (studentName || 'Иван К');
+    const name = newRole === 'teacher' ? 'Марья Ивановна' : (studentName || localStorage.getItem('lisquiz_student_name') || 'Ученик');
     const avatar = newRole === 'teacher' ? 'owl' : (studentAvatar || 'fox_smart');
     authService.quickLogin(newRole, name, avatar)
       .then((res) => setCurrentUser(res.user))
@@ -487,8 +501,8 @@ export default function App() {
     setAuthLoading(true);
     setAuthFeedback(null);
     try {
-      const name = targetRole === 'teacher' ? 'Марья Ивановна' : 'Иван К';
-      const avatar = targetRole === 'teacher' ? 'owl' : 'fox_smart';
+      const name = targetRole === 'teacher' ? 'Марья Ивановна' : (studentName || localStorage.getItem('lisquiz_student_name') || 'Ученик');
+      const avatar = targetRole === 'teacher' ? 'owl' : (studentAvatar || 'fox_smart');
       const botRes = await authService.simulateBotStart('/start', targetRole, name, avatar);
       const exchangeRes = await authService.exchangeTicket(botRes.ticket);
       setCurrentUser(exchangeRes.user);
@@ -931,6 +945,19 @@ export default function App() {
               appMode={appMode}
               className={quizClass}
               classId={quizClassId}
+              initialStudentName={studentName}
+              initialStudentAvatar={studentAvatar}
+              onUpdateProfile={(p) => {
+                setStudentName(p.name);
+                setStudentAvatar(p.avatar);
+                if (currentUser) {
+                  setCurrentUser({
+                    ...currentUser,
+                    display_name: p.name,
+                    avatar: p.avatar,
+                  });
+                }
+              }}
             />
           );
         case 'grove':
@@ -939,6 +966,7 @@ export default function App() {
               appMode={appMode}
               classId={quizClassId || quizClass || ''}
               className={quizClass || ''}
+              studentsCount={quizClassStudentsCount}
               onBack={() => handleTabChange('home')}
               onStartQuiz={() => setSubScreen('student_game')}
               onOpenLeaderboard={() => handleTabChange('leaderboard')}
@@ -998,6 +1026,7 @@ export default function App() {
               appMode={appMode}
               classId={quizClassId || quizClass || ''}
               className={quizClass || ''}
+              studentsCount={quizClassStudentsCount}
               onBack={() => handleTabChange('home')}
               onStartQuiz={() => handleTabChange('leaderboard')}
               onOpenLeaderboard={() => handleTabChange('leaderboard')}

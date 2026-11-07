@@ -26,6 +26,8 @@ class CreateClassRequest(BaseModel):
 class JoinClassRequest(BaseModel):
     invite_code: str = Field(..., description="Код приглашения, например '7A-X9K2'")
     pseudonym_id: Optional[str] = Field(default=None, description="Zero-PII ID ученика")
+    student_name: Optional[str] = Field(default=None, description="Имя ученика")
+    avatar: Optional[str] = Field(default=None, description="Аватар ученика")
 
 
 class JoinTeacherClassRequest(BaseModel):
@@ -160,6 +162,23 @@ async def join_class_endpoint(
             status_code=400,
             detail="Не передан идентификатор ученика (pseudonym_id) или токен авторизации",
         )
+
+    # Синхронизируем имя и аватар ученика в БД, если переданы
+    if student_pid and (req.student_name or req.avatar):
+        try:
+            from ..db.models import UserModel
+            from sqlalchemy import select
+            u_stmt = select(UserModel).where(UserModel.pseudonym_id == student_pid)
+            u_res = await db.execute(u_stmt)
+            user = u_res.scalars().first()
+            if user:
+                if req.student_name and req.student_name.strip():
+                    user.display_name = req.student_name.strip()
+                if req.avatar:
+                    user.avatar = req.avatar
+                await db.commit()
+        except Exception:
+            pass
 
     try:
         res = await class_service.join_class(

@@ -177,7 +177,7 @@ async def exchange_auth(
 
     # 3. Быстрый Dev-вход / браузерный вход (изоляция аккаунтов по устройствам)
     role = req.quick_role or "teacher"
-    default_name = "Ангелина Валерьевна" if role == "teacher" else "Иван К."
+    default_name = "Ангелина Валерьевна" if role == "teacher" else "Ученик"
     default_avatar = "fox_smart" if role == "teacher" else "raccoon"
     name = req.name or default_name
     avatar = req.avatar or default_avatar
@@ -251,4 +251,65 @@ async def get_current_user_profile(
         "auth_provider": user.auth_provider,
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+    }
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    avatar: Optional[str] = None
+    role: Optional[str] = None
+
+
+@router.put("/me")
+async def update_current_user_profile(
+    req: UpdateProfileRequest,
+    payload: Dict[str, Any] = Depends(get_current_user_payload),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Обновление имени, аватара или роли текущего пользователя в БД.
+    """
+    pid = payload.get("pseudonym_id")
+    if not pid:
+        raise HTTPException(status_code=401, detail="Не авторизован")
+
+    from sqlalchemy import select
+    from ..db.models import UserModel
+
+    stmt = select(UserModel).where(UserModel.pseudonym_id == pid)
+    result = await db.execute(stmt)
+    user = result.scalars().first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Пользователь не найден")
+
+    if req.display_name is not None and req.display_name.strip():
+        user.display_name = req.display_name.strip()
+    if req.avatar is not None:
+        user.avatar = req.avatar
+    if req.role is not None:
+        user.role = req.role
+
+    await db.commit()
+    await db.refresh(user)
+
+    token_data = {
+        "sub": user.id,
+        "pseudonym_id": user.pseudonym_id,
+        "role": user.role,
+        "name": user.display_name,
+        "avatar": user.avatar,
+    }
+    new_token = auth_service.create_access_token(token_data)
+
+    return {
+        "access_token": new_token,
+        "user": {
+            "id": user.id,
+            "pseudonym_id": user.pseudonym_id,
+            "role": user.role,
+            "display_name": user.display_name,
+            "avatar": user.avatar,
+            "auth_provider": user.auth_provider,
+        },
     }

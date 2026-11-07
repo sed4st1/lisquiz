@@ -25,6 +25,7 @@ import {
   mockDefaultGrove,
   mockDefaultLeaderboard,
 } from '../services/groveApi';
+import { classApi } from '../services/classApi';
 
 export function formatDays(n: number): string {
   const mod10 = n % 10;
@@ -108,6 +109,39 @@ export default function ClassGrove({
   // Canvas ref
   const particlesRef = useRef<WaterParticlesCanvasHandle | null>(null);
   const sceneRef = useRef<HTMLDivElement | null>(null);
+
+  // Real class metadata
+  const [realClassData, setRealClassData] = useState<{
+    name: string;
+    studentsCount: number;
+    quizzesCount: number;
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (classId && classId !== '7А') {
+      classApi.getClass(classId).then((c) => {
+        if (isMounted && c) {
+          setRealClassData({
+            name: c.name,
+            studentsCount: c.students_count,
+            quizzesCount: c.rooms_count,
+          });
+        }
+      }).catch(() => {});
+    } else {
+      classApi.getStudentClass().then((c) => {
+        if (isMounted && c) {
+          setRealClassData({
+            name: c.name,
+            studentsCount: c.students_count,
+            quizzesCount: c.rooms_count,
+          });
+        }
+      }).catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [classId]);
 
   // Load Data
   const loadGroveData = useCallback(async () => {
@@ -401,12 +435,6 @@ export default function ClassGrove({
         initial={{ x: -20, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ type: 'spring', stiffness: 280, damping: 22, delay: 0.1 }}
-        whileHover={{ scale: 1.04 }}
-        whileTap={{ scale: 0.96 }}
-        onClick={() => {
-          haptics.impact('light');
-          setActiveSheet('leaderboard');
-        }}
         style={{
           position: 'absolute',
           top: 56,
@@ -416,9 +444,8 @@ export default function ClassGrove({
           aspectRatio: '1 / 1.02',
           zIndex: 18,
           userSelect: 'none',
-          cursor: 'pointer',
+          pointerEvents: 'none',
         }}
-        title="Нажмите, чтобы открыть наш класс и дивизионы"
       >
         <img
           src="/assets/grove/grove_board_our_class.png"
@@ -434,37 +461,37 @@ export default function ClassGrove({
           }}
         />
 
-        {/* Content Inside "Наш класс" Board */}
+        {/* Content Inside "Наш класс" Board (Informational Display) */}
         {(() => {
-          const rawClassName = className || classId || (grove?.class_id !== '7А' ? grove?.class_id : '') || '';
+          const rawClassName = realClassData?.name || className || (classId && classId !== '7А' ? classId : '') || (grove?.class_id && grove?.class_id !== '7А' && grove?.class_id !== '5A' ? grove?.class_id : '') || '';
           const hasClass = Boolean(rawClassName && rawClassName.trim().length > 0);
-          const displayClassName = hasClass ? rawClassName : 'Без класса';
-          const displayStudents = studentsCount ?? (leaderboard?.total_students || 0);
-          const displayQuizzes = quizzesCount ?? (grove?.weekly_quizzes_completed || 0);
+          const cleanClassName = rawClassName.replace(/\s*класс/i, '').trim();
+          const displayStudents = realClassData?.studentsCount ?? studentsCount ?? (leaderboard?.total_students || 0);
+          const displayQuizzes = realClassData?.quizzesCount ?? quizzesCount ?? (grove?.weekly_quizzes_completed || 0);
           const displayAcc = accuracy ?? (displayQuizzes > 0 ? 82 : 0);
 
           return (
             <div
               style={{
                 position: 'absolute',
-                top: '38%',
+                top: '41%',
                 left: '12%',
                 right: '12%',
-                bottom: '12%',
+                bottom: '10%',
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'flex-start',
-                gap: 5,
+                justifyContent: 'center',
+                gap: 3.5,
                 boxSizing: 'border-box',
               }}
             >
               {/* Class title */}
-              <div style={{ textAlign: 'center', marginBottom: 2 }}>
+              <div style={{ textAlign: 'center', marginBottom: 1 }}>
                 <span
                   style={{
-                    fontFamily: 'Comfortaa, system-ui, sans-serif',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
                     fontWeight: 900,
-                    fontSize: 'clamp(9.5px, 1.8vw, 11.5px)',
+                    fontSize: 'clamp(9px, 2vw, 11px)',
                     color: hasClass ? '#E06D00' : '#8C5E32',
                     letterSpacing: -0.2,
                     whiteSpace: 'nowrap',
@@ -473,16 +500,16 @@ export default function ClassGrove({
                     overflow: 'hidden',
                   }}
                 >
-                  {hasClass ? `${displayClassName} класс` : 'Вступите в класс'}
+                  {hasClass ? `${cleanClassName} класс` : 'Без класса'}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Users size={12} color="#5C3317" style={{ flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Users size={11} color="#5C3317" style={{ flexShrink: 0 }} />
                 <span
                   style={{
-                    fontFamily: 'system-ui, sans-serif',
-                    fontWeight: 800,
-                    fontSize: 'clamp(9px, 1.6vw, 11px)',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 'clamp(8.5px, 1.8vw, 10px)',
                     color: '#4A2306',
                     whiteSpace: 'nowrap',
                   }}
@@ -490,13 +517,13 @@ export default function ClassGrove({
                   {displayStudents} {displayStudents === 1 ? 'ученик' : (displayStudents >= 2 && displayStudents <= 4 ? 'ученика' : 'учеников')}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Layers size={12} color="#5C3317" style={{ flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Layers size={11} color="#5C3317" style={{ flexShrink: 0 }} />
                 <span
                   style={{
-                    fontFamily: 'system-ui, sans-serif',
-                    fontWeight: 800,
-                    fontSize: 'clamp(9px, 1.6vw, 11px)',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 'clamp(8.5px, 1.8vw, 10px)',
                     color: '#4A2306',
                     whiteSpace: 'nowrap',
                   }}
@@ -504,18 +531,18 @@ export default function ClassGrove({
                   {displayQuizzes} {displayQuizzes === 1 ? 'квиз' : (displayQuizzes >= 2 && displayQuizzes <= 4 ? 'квиза' : 'квизов')}
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <Award size={12} color="#EF4444" style={{ flexShrink: 0 }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Award size={11} color="#EF4444" style={{ flexShrink: 0 }} />
                 <span
                   style={{
-                    fontFamily: 'system-ui, sans-serif',
-                    fontWeight: 800,
-                    fontSize: 'clamp(9px, 1.6vw, 11px)',
+                    fontFamily: 'system-ui, -apple-system, sans-serif',
+                    fontWeight: 700,
+                    fontSize: 'clamp(8.5px, 1.8vw, 10px)',
                     color: '#4A2306',
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {displayAcc > 0 ? `${displayAcc}% точность` : (hasClass ? 'Новый класс' : 'Вне рейтинга')}
+                  {displayAcc > 0 ? `${displayAcc}% точн.` : (hasClass ? 'Новый класс' : 'Вне рейтинга')}
                 </span>
               </div>
             </div>
@@ -567,8 +594,8 @@ export default function ClassGrove({
       <div
         style={{
           position: 'absolute',
-          right: 10,
-          top: '47.2%',
+          right: '5.5%',
+          top: '48.5%',
           width: 105,
           height: 115,
           zIndex: 14,
@@ -595,7 +622,7 @@ export default function ClassGrove({
             style={{
               position: 'absolute',
               right: '18%',
-              top: '40%',
+              top: '41%',
               maxWidth: 190,
               backgroundColor: '#FFFFFF',
               border: '2px solid #FF7A00',
@@ -658,7 +685,7 @@ export default function ClassGrove({
         <div
           style={{
             position: 'absolute',
-            top: '41%',
+            top: '38%',
             left: '12%',
             right: '12%',
             display: 'flex',
@@ -789,7 +816,7 @@ export default function ClassGrove({
             <div
               style={{
                 position: 'absolute',
-                top: '55%',
+                top: '56%',
                 left: '14%',
                 right: '14%',
                 bottom: '12%',

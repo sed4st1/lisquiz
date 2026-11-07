@@ -2,7 +2,7 @@ import io
 import csv
 import re
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Response, Depends
+from fastapi import APIRouter, HTTPException, status, Response, Depends, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.session import get_db
@@ -10,6 +10,7 @@ from ..models.schemas import Quiz, Question, AnswerOption, GameRoom, RoomStatus,
 from ..services.room_state_engine import room_state_engine
 from ..services.ws_manager import ws_manager
 from ..services.bank_service import bank_service
+from ..services.auth_service import auth_service
 
 router = APIRouter(prefix="/api/rooms", tags=["Rooms"])
 
@@ -279,7 +280,12 @@ async def update_room_quiz(room_code: str, quiz: Quiz):
 
 
 @router.post("/{room_code}/join")
-async def join_room(room_code: str, req: JoinRoomRequest):
+async def join_room(
+    room_code: str,
+    req: JoinRoomRequest,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
     """Подключение ученика к комнате в лобби."""
     room = await room_state_engine.get_room(room_code)
     if not room or room.status != RoomStatus.LOBBY:
@@ -288,13 +294,38 @@ async def join_room(room_code: str, req: JoinRoomRequest):
             detail=f"Комната {room_code} не найдена или уже завершена",
         )
 
+    auth_pid = None
+    if authorization and authorization.startswith("Bearer "):
+        tok = authorization.split(" ", 1)[1].strip()
+        payload = auth_service.decode_access_token(tok)
+        if payload:
+            auth_pid = payload.get("pseudonym_id")
+
+    target_pid = req.pseudonym_id or auth_pid
+
+    # Синхронизируем имя и аватар ученика в БД users, если аккаунт авторизован
+    if target_pid:
+        try:
+            from ..db.models import UserModel
+            from sqlalchemy import select
+            u_stmt = select(UserModel).where(UserModel.pseudonym_id == target_pid)
+            u_res = await db.execute(u_stmt)
+            user = u_res.scalars().first()
+            if user:
+                if req.name and req.name.strip():
+                    user.display_name = req.name.strip()
+                if req.avatar:
+                    user.avatar = req.avatar
+                await db.commit()
+        except Exception:
+            pass
 
     try:
         player, token = await room_state_engine.join_room(
             room_code=room_code,
             name=req.name,
             avatar=req.avatar,
-            pseudonym_id=req.pseudonym_id,
+            pseudonym_id=target_pid,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

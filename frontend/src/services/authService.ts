@@ -199,6 +199,41 @@ export const authService = {
   },
 
   /**
+   * Update current user display_name and/or avatar on backend and refresh cache.
+   */
+  async updateProfile(displayName: string, avatar?: string): Promise<UserProfile | null> {
+    const token = this.getAuthToken();
+    if (!token) return null;
+
+    try {
+      const res = await fetch('/api/auth/me', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ display_name: displayName, avatar }),
+      });
+
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json();
+      if (data.access_token) {
+        this.setAuthToken(data.access_token);
+      }
+      if (data.user) {
+        this.setCachedUser(data.user);
+        return data.user;
+      }
+    } catch (e) {
+      console.warn('Failed to update user profile:', e);
+    }
+    return null;
+  },
+
+  /**
    * Simulate MAX / Sferum Bot /start command for test environments.
    */
   async simulateBotStart(

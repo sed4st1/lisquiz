@@ -151,7 +151,14 @@ export const classApi = {
   /**
    * Вступление ученика в класс по коду приглашения.
    */
-  async joinClass(inviteCode: string, pseudonymId?: string): Promise<{ class_id: string; name: string; students_count: number }> {
+  async joinClass(
+    inviteCode: string,
+    pseudonymId?: string,
+    studentName?: string,
+    avatar?: string
+  ): Promise<{ class_id: string; name: string; students_count: number }> {
+    const sName = studentName || localStorage.getItem('lisquiz_student_name') || sessionStorage.getItem('lisquiz_student_name') || undefined;
+    const sAvatar = avatar || localStorage.getItem('lisquiz_student_avatar') || undefined;
     const res = await fetch('/api/classes/join', {
       method: 'POST',
       headers: {
@@ -161,6 +168,8 @@ export const classApi = {
       body: JSON.stringify({
         invite_code: inviteCode,
         pseudonym_id: pseudonymId,
+        student_name: sName,
+        avatar: sAvatar,
       }),
     });
 
