@@ -510,10 +510,11 @@ class RoomStateEngine:
                 q_idx = min(room.current_question_index, len(room.quiz.questions) - 1)
                 cur_q = room.quiz.questions[q_idx]
 
-            # 2. Защита от повторного ответа на ОДИН И ТОТ ЖЕ вопрос
+            # 2. Защита от повторного ответа на ОДИН И ТОТ ЖЕ вопрос (нормализуем id)
+            sub.question_id = cur_q.id
             prev_answers = self.answers.get(sub.room_code, [])
             already_answered_this_q = any(
-                a.player_id == sub.player_id and (a.question_id == cur_q.id or a.question_id == q_idx)
+                a.player_id == sub.player_id and a.question_id == cur_q.id
                 for a in prev_answers
             )
             if already_answered_this_q:
@@ -573,8 +574,13 @@ class RoomStateEngine:
             player_answered_count = len(player_all_answers)
             is_player_finished = player_answered_count >= len(room.quiz.questions)
 
-            # Проверка, завершили ли викторину все активные подключенные игроки
+            # Проверка, ответили ли все активные игроки на текущий вопрос
             active_players = [p for p in room.players.values() if p.connected]
+            all_answered_current = False
+            if active_players:
+                all_answered_current = len(room.answered_player_ids) >= len(active_players)
+
+            # Проверка, завершили ли викторину все активные подключенные игроки
             all_finished = False
             if active_players and len(room.quiz.questions) > 0:
                 all_finished = all(
@@ -591,10 +597,12 @@ class RoomStateEngine:
                 "speed_bonus": speed_bonus,
                 "total_score": player.score,
                 "streak": player.streak,
-                "answered_count": player_answered_count,
+                "answered_count": len(room.answered_player_ids),
+                "player_answered_count": player_answered_count,
                 "total_questions": len(room.quiz.questions),
                 "is_player_finished": is_player_finished,
-                "all_answered": all_finished,
+                "all_answered": all_answered_current,
+                "all_finished": all_finished,
                 "grove_energy": room.grove_energy,
                 "blurred_count": player.blurred_count,
             }
@@ -782,6 +790,10 @@ class RoomStateEngine:
             blurred_count=player.blurred_count if player else 0,
             current_question=cur_q_copy,
             players=player_list,
+            subject=room.quiz.subject if room.quiz else None,
+            grade=room.quiz.grade if room.quiz else None,
+            class_name=getattr(room, "class_name", None),
+            class_students_count=getattr(room, "class_students_count", None),
         )
 
     # ==========================================

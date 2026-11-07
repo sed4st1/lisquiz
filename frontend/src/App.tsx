@@ -202,6 +202,7 @@ export default function App() {
   const [quizGrade, setQuizGrade] = useState<number>(7);
   const [quizClass, setQuizClass] = useState<string>('');
   const [quizClassId, setQuizClassId] = useState<string | undefined>(undefined);
+  const [quizClassStudentsCount, setQuizClassStudentsCount] = useState<number | undefined>(undefined);
   const [classModalInitialOpen, setClassModalInitialOpen] = useState<boolean>(false);
   const [quizTitle, setQuizTitle] = useState<string>('Викторина по математике');
   const [leaderboardBoostPoints, setLeaderboardBoostPoints] = useState<number | null>(null);
@@ -213,12 +214,21 @@ export default function App() {
 
   // Listen to incoming WebSocket events
   useEffect(() => {
+    const handleRoomSync = (data: any) => {
+      if (data?.subject) setQuizSubject(data.subject);
+      if (data?.grade) setQuizGrade(data.grade);
+      if (data?.class_name) setQuizClass(data.class_name);
+      if (data?.class_students_count != null) setQuizClassStudentsCount(data.class_students_count);
+      if (data?.quiz_title) setQuizTitle(data.quiz_title);
+    };
+
     const handleQuestionStart = (data: any) => {
       setCurrentQuestionData(data);
       setPersonalAnswerResult(null);
       if (data?.subject) setQuizSubject(data.subject);
       if (data?.class_name) setQuizClass(data.class_name);
       if (data?.grade) setQuizGrade(data.grade);
+      if (data?.class_students_count != null) setQuizClassStudentsCount(data.class_students_count);
       if (data?.quiz_title) setQuizTitle(data.quiz_title);
       if (data?.question_index === 0) {
         studentQuizStatsRef.current = { correct: 0, wrong: 0, total: data?.total_questions || 3, score: 0 };
@@ -317,6 +327,8 @@ export default function App() {
       }
     };
 
+    socketService.on('ROOM_SYNC', handleRoomSync);
+    socketService.on('SYNC_STATE', handleRoomSync);
     socketService.on('QUESTION_START', handleQuestionStart);
     socketService.on('PERSONAL_ANSWER_RESULT', handleAnswerResult);
     socketService.on('GAME_FINISHED', handleGameFinished);
@@ -326,6 +338,8 @@ export default function App() {
     socketService.on('TEACHER_LEFT', handleStudentKickOrClose);
 
     return () => {
+      socketService.off('ROOM_SYNC', handleRoomSync);
+      socketService.off('SYNC_STATE', handleRoomSync);
       socketService.off('QUESTION_START', handleQuestionStart);
       socketService.off('PERSONAL_ANSWER_RESULT', handleAnswerResult);
       socketService.off('GAME_FINISHED', handleGameFinished);
@@ -579,6 +593,7 @@ export default function App() {
             setQuizGrade(cls.grade);
             setQuizClass(cls.name);
             setQuizClassId(cls.id);
+            setQuizClassStudentsCount(cls.students_count);
             setSubScreen('teacher_quizzes');
           }}
         />
@@ -617,10 +632,20 @@ export default function App() {
           playerAvatar={studentAvatar}
           subject={quizSubject}
           grade={quizGrade}
+          classNameTitle={quizClassId ? quizClass : undefined}
+          maxStudents={quizClassId ? quizClassStudentsCount : undefined}
           onGameStart={() => setSubScreen('student_game')}
           onLeaveRoom={() => {
             socketService.disconnect();
+            setActivePin('');
             setSubScreen(null);
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.delete('pin');
+              url.searchParams.delete('subScreen');
+              url.searchParams.delete('screen');
+              window.history.replaceState({}, '', url.toString());
+            } catch {}
           }}
         />
       );
@@ -757,6 +782,25 @@ export default function App() {
         />
       );
     }
+    if (subScreen === 'teacher_report') {
+      return (
+        <TeacherGapReport
+          roomCode={lastFinishedRoomCode || activePin}
+          classId={quizClassId}
+          className={quizClass}
+          quizTitle={quizTitle}
+          topic={quizSubject}
+          grade={quizGrade}
+          onBackToLobby={() => {
+            socketService.disconnect();
+            setActivePin('');
+            setTeacherToken('');
+            setSubScreen(null);
+            setTab('leaderboard');
+          }}
+        />
+      );
+    }
     if (subScreen === 'feedback_correct' || subScreen === 'feedback_wrong') {
       return (
         <FeedbackStreak
@@ -838,6 +882,8 @@ export default function App() {
           currentStudentAvatar={studentAvatar || 'raccoon'}
           currentScore={quizFinishData?.myScore || 750}
           currentRank={quizFinishData?.myRank || 4}
+          quizPlayers={quizFinishData?.top_players || []}
+          classId={quizClassId}
           onBack={() => setSubScreen('student_quiz_finish')}
           onClearBoost={() => {
             setLeaderboardBoostPoints(null);
@@ -966,6 +1012,8 @@ export default function App() {
               quizTitle={quizTitle}
               subject={quizSubject}
               grade={quizGrade}
+              classNameTitle={quizClassId ? quizClass : undefined}
+              maxStudents={quizClassId ? quizClassStudentsCount : undefined}
               isDev={isDevMode}
               onRoomReady={(pin, token) => {
                 setActivePin(pin);
@@ -990,6 +1038,8 @@ export default function App() {
           return (
             <TeacherGapReport
               roomCode={lastFinishedRoomCode || activePin}
+              classId={quizClassId}
+              className={quizClass}
               quizTitle={quizTitle}
               topic={quizSubject}
               grade={quizGrade}

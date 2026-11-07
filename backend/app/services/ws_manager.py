@@ -1,6 +1,7 @@
 import logging
 from typing import Dict, List, Optional
 from fastapi import WebSocket
+from fastapi.encoders import jsonable_encoder
 from ..models.schemas import SessionData, UserRole
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,8 @@ class ConnectionManager:
     async def send_personal(self, websocket: WebSocket, event: str, data: dict):
         """Отправка персонального события конкретному сокету."""
         try:
-            await websocket.send_json({"event": event, "data": data})
+            payload = jsonable_encoder({"event": event, "data": data})
+            await websocket.send_json(payload)
         except Exception as e:
             logger.warning(f"Ошибка отправки personal WS сообщения: {e}")
 
@@ -51,7 +53,7 @@ class ConnectionManager:
         if room_code not in self.rooms:
             return
 
-        payload = {"event": event, "data": data}
+        payload = jsonable_encoder({"event": event, "data": data})
         dead_sockets: List[WebSocket] = []
 
         for ws in list(self.rooms[room_code].keys()):
@@ -71,7 +73,7 @@ class ConnectionManager:
         if room_code not in self.rooms:
             return
 
-        payload = {"event": event, "data": data}
+        payload = jsonable_encoder({"event": event, "data": data})
         for ws, session in list(self.rooms[room_code].items()):
             if session.role == UserRole.TEACHER:
                 try:
@@ -84,7 +86,7 @@ class ConnectionManager:
         if room_code not in self.rooms:
             return
 
-        payload = {"event": event, "data": data}
+        payload = jsonable_encoder({"event": event, "data": data})
         for ws, session in list(self.rooms[room_code].items()):
             if session.role == UserRole.STUDENT:
                 try:

@@ -56,6 +56,7 @@ export default function TeacherClassManagement({
 
   // Join by key form state
   const [joinCode, setJoinCode] = useState('');
+  const [joinSubject, setJoinSubject] = useState('География');
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
@@ -159,7 +160,7 @@ export default function TeacherClassManagement({
     setJoinLoading(true);
     setJoinError(null);
     try {
-      const res = await classApi.joinClass(joinCode.trim().toUpperCase());
+      const res = await classApi.joinClassAsTeacher(joinCode.trim().toUpperCase(), joinSubject);
       haptics.notification('success');
       await loadClasses();
       setIsJoinModalOpen(false);
@@ -1195,6 +1196,34 @@ export default function TeacherClassManagement({
                       }}
                       required
                     />
+                  </div>
+
+                  <div style={{ ...styles.formGroup, marginTop: 12 }}>
+                    <label style={{ display: 'block', fontSize: 13, fontWeight: 800, color: '#6B4A2F', marginBottom: 6 }}>
+                      Ваш предмет в этом классе:
+                    </label>
+                    <select
+                      value={joinSubject}
+                      onChange={(e) => setJoinSubject(e.target.value)}
+                      style={{
+                        ...styles.modalTextInput,
+                        fontSize: 15,
+                        fontWeight: 700,
+                        backgroundColor: '#FFFFFF',
+                      }}
+                    >
+                      <option value="Математика">Математика</option>
+                      <option value="География">География</option>
+                      <option value="Физика">Физика</option>
+                      <option value="Русский язык">Русский язык</option>
+                      <option value="Литература">Литература</option>
+                      <option value="История">История</option>
+                      <option value="Обществознание">Обществознание</option>
+                      <option value="Биология">Биология</option>
+                      <option value="Химия">Химия</option>
+                      <option value="Информатика">Информатика</option>
+                      <option value="Английский язык">Английский язык</option>
+                    </select>
                   </div>
 
                   {joinError && (

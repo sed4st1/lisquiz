@@ -26,7 +26,7 @@ async def broadcast_question(room_code: str, q_idx: int):
     time_limit_sec = cur_q.time_limit_sec
 
     # Для учителя отправляем полные данные (включая правильный ответ)
-    q_teacher = cur_q.model_dump()
+    q_teacher = cur_q.model_dump(mode="json")
     q_teacher["tier"] = tier
     q_teacher["is_boss"] = is_boss
     q_teacher["time_limit_sec"] = time_limit_sec
@@ -34,13 +34,15 @@ async def broadcast_question(room_code: str, q_idx: int):
     # Санитизированный список всех вопросов викторины для учеников
     sanitized_questions = []
     for idx, q in enumerate(room.quiz.questions):
-        q_copy = q.model_copy(deep=True).model_dump()
+        q_copy = q.model_copy(deep=True).model_dump(mode="json")
         q_copy["tier"] = getattr(q, "tier", 2) or 2
         q_copy["is_boss"] = getattr(q, "is_boss", False) or (idx == len(room.quiz.questions) - 1 and len(room.quiz.questions) >= 3)
         q_copy["time_limit_sec"] = getattr(q, "time_limit_sec", 25)
         for opt in q_copy.get("options", []):
             opt["is_correct"] = False
         sanitized_questions.append(q_copy)
+
+    q_student = sanitized_questions[q_idx] if q_idx < len(sanitized_questions) else sanitized_questions[0]
 
     active_students = len([p for p in room.players.values() if p.connected])
     class_name = f"{room.quiz.grade}А"
@@ -51,7 +53,7 @@ async def broadcast_question(room_code: str, q_idx: int):
             "question_index": q_idx,
             "total_questions": len(room.quiz.questions),
             "question": q_teacher,
-            "questions": [q.model_dump() for q in room.quiz.questions],
+            "questions": [q.model_dump(mode="json") for q in room.quiz.questions],
             "tier": tier,
             "is_boss": is_boss,
             "time_limit_sec": time_limit_sec,
@@ -117,11 +119,11 @@ async def websocket_room_endpoint(
     # 3. Немедленная отправка SYNC_STATE подключающемуся клиенту
     sync_state = await room_state_engine.get_sync_state(room_code, player_id=session.player_id)
     if sync_state:
-        await ws_manager.send_personal(websocket, "SYNC_STATE", sync_state.model_dump())
+        await ws_manager.send_personal(websocket, "SYNC_STATE", sync_state.model_dump(mode="json"))
 
     # 4. Оповещение комнаты о новом подключении
     if session.role == UserRole.STUDENT:
-        # Всем остальным в комнате
+        players_dict = {pid: p.model_dump(mode="json") for pid, p in room.players.items()}
         await ws_manager.broadcast_room(
             room_code,
             "PLAYER_JOINED",
@@ -130,6 +132,7 @@ async def websocket_room_endpoint(
                 "name": session.name,
                 "avatar": session.avatar,
                 "total_players": len(room.players),
+                "players": players_dict,
             },
             exclude=websocket,
         )
@@ -160,7 +163,7 @@ async def websocket_room_endpoint(
             if event == "GET_SYNC":
                 sync_state = await room_state_engine.get_sync_state(room_code, player_id=session.player_id)
                 if sync_state:
-                    await ws_manager.send_personal(websocket, "SYNC_STATE", sync_state.model_dump())
+                    await ws_manager.send_personal(websocket, "SYNC_STATE", sync_state.model_dump(mode="json"))
                 continue
 
             # ==========================================
@@ -173,6 +176,7 @@ async def websocket_room_endpoint(
                         kicked_name = room.players[target_id].name
                         room.players.pop(target_id, None)
                         await ws_manager.kick_player(room_code, target_id, reason="Исключён учителем")
+                        players_dict = {pid: p.model_dump(mode="json") for pid, p in room.players.items()}
                         await ws_manager.broadcast_room(
                             room_code,
                             "PLAYER_LEFT",
@@ -181,6 +185,7 @@ async def websocket_room_endpoint(
                                 "name": kicked_name,
                                 "reason": "kicked",
                                 "total_players": len(room.players),
+                                "players": players_dict,
                             },
                         )
 
@@ -256,6 +261,28 @@ async def websocket_room_endpoint(
                                     await ws_manager.close_room_connections(rc, reason="Викторина завершена")
                                     await room_state_engine.close_room(rc)
                                 asyncio.create_task(_delayed_kick(room_code))
+                        elif action == "FINISH_GAME":
+                            gap_rep = await room_state_engine.generate_gap_report(room_code)
+                            sorted_players = sorted(room.players.values(), key=lambda p: p.score, reverse=True)
+                            top_players = [
+                                {
+                                    "rank": idx + 1,
+                                    "id": p.id,
+                                    "name": p.name,
+                                    "avatar": p.avatar,
+                                    "score": p.score,
+                                    "streak": p.streak,
+                                }
+                                for idx, p in enumerate(sorted_players)
+                            ]
+                            await ws_manager.broadcast_room(
+                                room_code,
+                                "GAME_FINISHED",
+                                {
+                                    "gap_report": gap_rep.model_dump() if gap_rep else {},
+                                    "top_players": top_players,
+                                },
+                            )
                         elif action == "CLOSE_ROOM":
                             await ws_manager.close_room_connections(room_code, reason="Учитель закрыл комнату")
                             await room_state_engine.close_room(room_code)
@@ -296,30 +323,6 @@ async def websocket_room_endpoint(
                         },
                     )
 
-                    # Если все ученики завершили викторину, автоматически отправляем GAME_FINISHED
-                    if res.get("all_answered", False):
-                        gap_rep = await room_state_engine.generate_gap_report(room_code)
-                        sorted_players = sorted(room.players.values(), key=lambda p: p.score, reverse=True)
-                        top_players = [
-                            {
-                                "rank": idx + 1,
-                                "id": p.id,
-                                "name": p.name,
-                                "avatar": p.avatar,
-                                "score": p.score,
-                                "streak": p.streak,
-                            }
-                            for idx, p in enumerate(sorted_players)
-                        ]
-                        await ws_manager.broadcast_room(
-                            room_code,
-                            "GAME_FINISHED",
-                            {
-                                "gap_report": gap_rep.model_dump() if gap_rep else {},
-                                "top_players": top_players,
-                            },
-                        )
-
                 elif event == "CHEAT_SUSPECTED":
                     # Фиксация расфокуса окна
                     reason = data.get("reason", "tab_switched")
@@ -343,6 +346,7 @@ async def websocket_room_endpoint(
                     await room_state_engine.set_player_connection(token, False)
                     ws_manager.disconnect(websocket, room_code)
                     active_players = len([p for p in room.players.values() if p.connected])
+                    players_dict = {pid: p.model_dump(mode="json") for pid, p in room.players.items()}
                     await ws_manager.broadcast_room(
                         room_code,
                         "PLAYER_LEFT",
@@ -351,6 +355,7 @@ async def websocket_room_endpoint(
                             "name": session.name,
                             "reason": "left",
                             "total_players": active_players,
+                            "players": players_dict,
                         },
                     )
 
@@ -363,6 +368,7 @@ async def websocket_room_endpoint(
                 room.players.pop(disc_session.player_id, None)
             await room_state_engine.set_player_connection(token, False)
             active_players = len([p for p in room.players.values() if p.connected])
+            players_dict = {pid: p.model_dump(mode="json") for pid, p in room.players.items()}
             await ws_manager.broadcast_room(
                 room_code,
                 "PLAYER_LEFT",
@@ -371,6 +377,7 @@ async def websocket_room_endpoint(
                     "name": disc_session.name,
                     "reason": "disconnect",
                     "total_players": active_players,
+                    "players": players_dict,
                 },
             )
 

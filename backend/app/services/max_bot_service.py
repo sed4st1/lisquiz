@@ -167,7 +167,7 @@ class MaxBotService:
             return {"command": "/start", "status": "sent"}
 
         # 2. Генерация одноразового кода для входа на ПК учителя (get_pc_code, /pc, /code)
-        elif root_cmd in ("get_pc_code", "/pc", "/code", "/connect", "код", "пк", "войти"):
+        elif root_cmd in ("get_pc_code", "/pc", "/code", "код", "пк", "войти"):
             code = await self.generate_pc_ticket(sender_id)
             reply_text = (
                 "💻 **Ваш одноразовый код для входа на школьном ПК / проекторе:**\n\n"
@@ -337,7 +337,7 @@ class MaxBotService:
             await self.send_message(chat_id, reply_text, buttons)
             return {"command": "/grove", "status": "sent"}
 
-        elif root_cmd in ("/class", "/connect", "/join_class", "/класс", "класс"):
+        elif root_cmd in ("/class", "/connect", "/connect_chat", "/join_class", "/класс", "класс"):
             if len(parts) > 1:
                 code = parts[1].strip().upper()
                 from ..db.session import async_session_maker
@@ -363,7 +363,7 @@ class MaxBotService:
                         [{"text": f"🎒 Вступить в класс ({code})", "type": "open_app", "url": f"{app_base}/?join_class={code}"}]
                     ]
             else:
-                reply_text = "🦊 Напишите команду с кодом класса, например: `/connect 7A-X9K2` или `/class 7A-X9K2`"
+                reply_text = "🦊 Напишите команду с кодом класса или PIN комнаты, например: `/connect 7A-X9K2` или `/connect 638706`"
                 buttons = []
             await self.send_message(chat_id, reply_text, buttons)
             return {"command": "/class", "status": "sent"}

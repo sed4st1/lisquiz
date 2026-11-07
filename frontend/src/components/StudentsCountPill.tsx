@@ -9,9 +9,19 @@ interface StudentsCountPillProps {
 
 export const StudentsCountPill: React.FC<StudentsCountPillProps> = ({
   count,
-  max = 25,
+  max,
   className = '',
 }) => {
+  const hasMax = typeof max === 'number' && max > 0;
+  const pluralStudents = (n: number) => {
+    const mod10 = n % 10;
+    const mod100 = n % 100;
+    if (mod100 >= 11 && mod100 <= 19) return 'учеников';
+    if (mod10 === 1) return 'ученик';
+    if (mod10 >= 2 && mod10 <= 4) return 'ученика';
+    return 'учеников';
+  };
+
   return (
     <motion.div
       initial={{ scale: 0.95, opacity: 0 }}
@@ -44,7 +54,7 @@ export const StudentsCountPill: React.FC<StudentsCountPillProps> = ({
         }}
       />
 
-      {/* Dynamic Text "Ученики в классе: {count} из {max}" */}
+      {/* Dynamic Text */}
       <div
         style={{
           position: 'absolute',
@@ -65,7 +75,7 @@ export const StudentsCountPill: React.FC<StudentsCountPillProps> = ({
           userSelect: 'none',
         }}
       >
-        <span>Ученики в классе:</span>
+        <span>{hasMax ? 'Ученики в классе:' : 'Подключено:'}</span>
         <span
           style={{
             fontFamily: "'SF Mono', 'Fira Code', 'Roboto Mono', monospace",
@@ -75,7 +85,7 @@ export const StudentsCountPill: React.FC<StudentsCountPillProps> = ({
             color: '#4A2306',
           }}
         >
-          {count} {max ? `из ${max}` : ''}
+          {hasMax ? `${count} из ${max}` : `${count} ${pluralStudents(count)}`}
         </span>
       </div>
     </motion.div>

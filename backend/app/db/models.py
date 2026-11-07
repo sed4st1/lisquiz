@@ -115,6 +115,12 @@ class ClassModel(Base):
         cascade="all, delete-orphan",
         lazy="selectin",
     )
+    teachers: Mapped[List["ClassTeacherModel"]] = relationship(
+        "ClassTeacherModel",
+        back_populates="class_group",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
     rooms: Mapped[List["GameRoomModel"]] = relationship(
         "GameRoomModel",
         back_populates="class_group",
@@ -137,6 +143,24 @@ class ClassStudentModel(Base):
 
 
 Index("uq_class_student", ClassStudentModel.class_id, ClassStudentModel.pseudonym_id, unique=True)
+
+
+class ClassTeacherModel(Base):
+    """Связующая таблица учителей-предметников класса (коллаборация нескольких учителей в одном классе)."""
+    __tablename__ = "class_teachers"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    class_id: Mapped[str] = mapped_column(String(36), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    teacher_pseudonym_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # e.g. "География", "Физика", "История"
+    role: Mapped[str] = mapped_column(String(32), default="subject_teacher", nullable=False)  # "creator" | "subject_teacher"
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Связи
+    class_group: Mapped["ClassModel"] = relationship("ClassModel", back_populates="teachers")
+
+
+Index("uq_class_teacher", ClassTeacherModel.class_id, ClassTeacherModel.teacher_pseudonym_id, unique=True)
 
 
 class GameRoomModel(Base):

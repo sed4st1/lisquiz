@@ -39,7 +39,7 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
   initialStudents,
   onFinishQuiz,
 }) => {
-  const totalQuestions = initialQuestionData?.total_questions || 6;
+  const [totalQuestions, setTotalQuestions] = useState<number>(initialQuestionData?.total_questions || 5);
   const [students, setStudents] = useState<StudentLiveStatus[]>(() => {
     if (initialStudents && initialStudents.length > 0) {
       return initialStudents.map((s) => ({
@@ -47,7 +47,7 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
         name: s.name,
         avatar: s.avatar,
         answeredCount: 0,
-        totalQuestions,
+        totalQuestions: initialQuestionData?.total_questions || 5,
         isFinished: false,
         score: 0,
       }));
@@ -64,6 +64,16 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
   const totalCount = students.length;
   const progressPct = Math.round((completedCount / Math.max(1, totalCount)) * 100);
   const isAllFinished = completedCount >= totalCount && totalCount > 0;
+
+  // Auto-finish quiz when all students have finished
+  useEffect(() => {
+    if (isAllFinished && !isFinishing) {
+      const timer = setTimeout(() => {
+        handleEndQuiz();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [isAllFinished, isFinishing]);
 
   // Countdown suspense BGM stream for teacher classroom projector during active quiz
   useEffect(() => {
@@ -114,6 +124,17 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
       haptics.impact('light');
       soundManager.playTap();
 
+      const incomingTotalQ = typeof data?.total_questions === 'number' && data.total_questions > 0 ? data.total_questions : totalQuestions;
+      if (typeof data?.total_questions === 'number' && data.total_questions > 0) {
+        setTotalQuestions(data.total_questions);
+      }
+
+      if (data?.all_answered === true) {
+        setTimeout(() => {
+          handleEndQuiz();
+        }, 1200);
+      }
+
       const studentId = data?.player_id || data?.student_id;
       const studentName = data?.player_name || data?.student_name;
       if (!studentId && !studentName) return;
@@ -131,8 +152,8 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
               name: studentName || 'Ученик',
               avatar: data?.avatar || 'fox',
               answeredCount: answered,
-              totalQuestions,
-              isFinished: incomingFinished ?? (answered >= totalQuestions),
+              totalQuestions: incomingTotalQ,
+              isFinished: incomingFinished ?? (answered >= incomingTotalQ),
               score: data?.points_earned || 100,
             },
           ];

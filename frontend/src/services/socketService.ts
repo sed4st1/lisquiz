@@ -53,6 +53,7 @@ class SocketService {
             const { event: eventName, data } = parsed;
             if (eventName === 'SYNC_STATE') {
               this.lastSyncState = data;
+              this.dispatch('ROOM_SYNC', data);
             }
             if (eventName) {
               this.dispatch(eventName, data);

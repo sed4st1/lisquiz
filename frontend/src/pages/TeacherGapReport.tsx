@@ -49,6 +49,7 @@ export interface CheatingAuditItem {
 export interface TeacherGapReportProps {
   roomCode?: string;
   classId?: string;
+  className?: string;
   quizTitle?: string;
   topic?: string;
   grade?: number;
@@ -63,6 +64,7 @@ export interface TeacherGapReportProps {
 export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   roomCode,
   classId,
+  className: initialClassName,
   quizTitle: _quizTitle = 'Обыкновенные дроби: сложение и вычитание',
   topic: _topic = 'Математика',
   grade = 7,
@@ -234,11 +236,12 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
     if (isSendingToChat) return;
     setIsSendingToChat(true);
     haptics.impact('medium');
+    const fallbackName = initialClassName || (grade ? `${grade}А класс` : 'Ваш класс');
     try {
       const result = await roomApi.sendReportToChat(roomCode!, classId);
       if (result?.need_chat_connection) {
         setConnectChatData({
-          className: result.class_name || `${grade}А класс`,
+          className: result.class_name || fallbackName,
           inviteCode: result.invite_code || '',
           botUsername: result.bot_username || 'ideya_fiks_131_bot',
         });
@@ -251,7 +254,7 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
       } else {
         // No chat linked — show connect modal
         setConnectChatData({
-          className: `${grade}А класс`,
+          className: fallbackName,
           inviteCode: roomCode || '',
           botUsername: 'ideya_fiks_131_bot',
         });
@@ -260,7 +263,7 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
     } catch (err) {
       // Network error — show connect modal as fallback
       setConnectChatData({
-        className: `${grade}А класс`,
+        className: fallbackName,
         inviteCode: roomCode || '',
         botUsername: 'ideya_fiks_131_bot',
       });

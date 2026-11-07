@@ -173,6 +173,33 @@ export const classApi = {
   },
 
   /**
+   * Вступление учителя-предметника в существующий класс по коду приглашения.
+   */
+  async joinClassAsTeacher(
+    inviteCode: string,
+    subject?: string
+  ): Promise<{ class_id: string; name: string; students_count: number; role: string }> {
+    const res = await fetch('/api/classes/join-teacher', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authService.getAuthHeaders(),
+      },
+      body: JSON.stringify({
+        invite_code: inviteCode.trim().toUpperCase(),
+        subject,
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || 'Не удалось присоединиться к классу');
+    }
+
+    return res.json();
+  },
+
+  /**
    * Накопительный глобальный лидерборд класса за четверть/год.
    */
   async getClassLeaderboard(classId: string): Promise<ClassLeaderboardResponse> {

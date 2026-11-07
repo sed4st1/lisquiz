@@ -10,6 +10,7 @@ interface HangingPinSignProps {
   onBack?: () => void;
   subject?: string;
   grade?: number;
+  classNameTitle?: string;
   className?: string;
 }
 
@@ -20,6 +21,7 @@ export const HangingPinSign: React.FC<HangingPinSignProps> = ({
   onBack,
   subject = 'Математика',
   grade = 7,
+  classNameTitle,
   className = '',
 }) => {
   const [copied, setCopied] = useState(false);
@@ -88,25 +90,25 @@ export const HangingPinSign: React.FC<HangingPinSignProps> = ({
       {onBack && (
         <motion.button
           type="button"
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          whileHover={{ scale: 1.12 }}
+          whileTap={{ scale: 0.88 }}
           onClick={handleBackClick}
           style={{
             position: 'absolute',
-            left: '11.4%',
-            top: '15.3%',
-            width: '11%',
-            height: '21%',
+            left: '9.8%',
+            top: '15.5%',
+            width: '14%',
+            height: '25%',
             transform: 'translate(-50%, -50%)',
-            zIndex: 12,
+            zIndex: 15,
             background: 'transparent',
             border: 'none',
-            borderRadius: 16,
+            borderRadius: '50%',
             cursor: 'pointer',
             outline: 'none',
           }}
           aria-label="Назад"
-          title="Вернуться к созданию викторин"
+          title="Вернуться назад"
         />
       )}
 
@@ -127,27 +129,35 @@ export const HangingPinSign: React.FC<HangingPinSignProps> = ({
           overflow: 'hidden',
         }}
       >
-        <span
-          style={{
-            fontFamily: 'system-ui, -apple-system, sans-serif',
-            fontSize:
-              (`${subject} • ${typeof grade === 'string' ? grade : `${grade}А класс`}`).length > 24
-                ? 'clamp(9.5px, 1.7vw, 12px)'
-                : (`${subject} • ${typeof grade === 'string' ? grade : `${grade}А класс`}`).length > 18
-                ? 'clamp(11px, 1.95vw, 13.5px)'
-                : (`${subject} • ${typeof grade === 'string' ? grade : `${grade}А класс`}`).length > 14
-                ? 'clamp(12px, 2.2vw, 15.5px)'
-                : 'clamp(13px, 2.4vw, 17.5px)',
-            fontWeight: 800,
-            color: '#4A2306',
-            letterSpacing: '0.01em',
-            textShadow: '0 1px 0 rgba(255, 255, 255, 0.6)',
-            textOverflow: 'ellipsis',
-            overflow: 'hidden',
-          }}
-        >
-          {subject} • {typeof grade === 'string' ? grade : `${grade}А класс`}
-        </span>
+        {(() => {
+          const classText = classNameTitle
+            ? `${classNameTitle} класс`
+            : (grade ? `${grade} класс` : 'Викторина');
+          const fullTitle = `${subject} • ${classText}`;
+          return (
+            <span
+              style={{
+                fontFamily: 'system-ui, -apple-system, sans-serif',
+                fontSize:
+                  fullTitle.length > 24
+                    ? 'clamp(9.5px, 1.7vw, 12px)'
+                    : fullTitle.length > 18
+                    ? 'clamp(11px, 1.95vw, 13.5px)'
+                    : fullTitle.length > 14
+                    ? 'clamp(12px, 2.2vw, 15.5px)'
+                    : 'clamp(13px, 2.4vw, 17.5px)',
+                fontWeight: 800,
+                color: '#4A2306',
+                letterSpacing: '0.01em',
+                textShadow: '0 1px 0 rgba(255, 255, 255, 0.6)',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+              }}
+            >
+              {fullTitle}
+            </span>
+          );
+        })()}
       </div>
 
       {/* 4. Large Engraved 3D PIN Digits */}

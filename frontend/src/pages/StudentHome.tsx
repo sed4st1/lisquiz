@@ -497,19 +497,6 @@ export default function StudentHome({
         {/* Currency & Daily Streak Status Pills + Sound Toggle */}
         <div style={styles.topRightStats}>
           <SoundToggleButton variant="round" size={14} />
-          {onSwitchToTeacher && (
-            <motion.button
-              whileTap={{ scale: 0.94 }}
-              onClick={() => {
-                haptics.selection();
-                onSwitchToTeacher();
-              }}
-              style={styles.teacherSwitchChip}
-              title="Перейти в режим Учителя"
-            >
-              <span>🦉 Учитель</span>
-            </motion.button>
-          )}
           <motion.div
             whileTap={{ scale: 0.94 }}
             onClick={() => {

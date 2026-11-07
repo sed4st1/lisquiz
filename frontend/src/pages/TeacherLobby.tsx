@@ -38,6 +38,7 @@ export interface TeacherLobbyProps {
   quizTitle?: string;
   subject?: string;
   grade?: number;
+  classNameTitle?: string;
   maxStudents?: number;
   onStartQuiz?: (connectedStudents?: ConnectedStudent[]) => void;
   onRoomReady?: (pin: string, token: string) => void;
@@ -92,7 +93,8 @@ export default function TeacherLobby({
   quizTitle = 'Викторина по математике',
   subject = 'Математика',
   grade = 7,
-  maxStudents = 25,
+  classNameTitle,
+  maxStudents,
   onStartQuiz,
   onRoomReady,
   onQuizTitleChange,
@@ -281,6 +283,18 @@ export default function TeacherLobby({
           if (!isMounted) return;
           haptics.notification('success');
           soundManager.playKnock();
+          if (data && data.players) {
+            const list: ConnectedStudent[] = Object.values(data.players)
+              .filter((p: any) => p.connected !== false)
+              .map((p: any, idx: number) => ({
+                id: p.id,
+                name: p.name,
+                avatar: p.avatar,
+                division: p.division || DEMO_DIVISIONS[idx % 3],
+              }));
+            setStudents(list);
+            return;
+          }
           setStudents((prev) => {
             const exists = prev.some((s) => s.id === data.player_id);
             if (exists) return prev;
@@ -298,6 +312,18 @@ export default function TeacherLobby({
 
         handleLeft = (data: any) => {
           if (!isMounted) return;
+          if (data && data.players) {
+            const list: ConnectedStudent[] = Object.values(data.players)
+              .filter((p: any) => p.connected !== false)
+              .map((p: any, idx: number) => ({
+                id: p.id,
+                name: p.name,
+                avatar: p.avatar,
+                division: p.division || DEMO_DIVISIONS[idx % 3],
+              }));
+            setStudents(list);
+            return;
+          }
           setStudents((prev) => prev.filter((s) => s.id !== data.player_id));
         };
 
@@ -326,6 +352,7 @@ export default function TeacherLobby({
         };
 
         socketService.on('ROOM_SYNC', handleSync);
+        socketService.on('SYNC_STATE', handleSync);
         socketService.on('PLAYER_JOINED', handleJoined);
         socketService.on('PLAYER_LEFT', handleLeft);
         socketService.on('COUNTDOWN_START', handleCountdown);
@@ -358,7 +385,10 @@ export default function TeacherLobby({
     return () => {
       isMounted = false;
       if (syncInterval) clearInterval(syncInterval);
-      if (handleSync) socketService.off('ROOM_SYNC', handleSync);
+      if (handleSync) {
+        socketService.off('ROOM_SYNC', handleSync);
+        socketService.off('SYNC_STATE', handleSync);
+      }
       if (handleJoined) socketService.off('PLAYER_JOINED', handleJoined);
       if (handleLeft) socketService.off('PLAYER_LEFT', handleLeft);
       if (handleCountdown) socketService.off('COUNTDOWN_START', handleCountdown);
@@ -601,6 +631,7 @@ export default function TeacherLobby({
           onBack={onNavigateToCreateQuiz}
           subject={activeQuiz?.subject || subject}
           grade={activeQuiz?.grade || grade}
+          classNameTitle={classNameTitle}
           onCopy={() => showToast('PIN скопирован в буфер обмена')}
           onOpenQr={() => setIsQrModalOpen(true)}
         />

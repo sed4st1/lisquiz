@@ -28,6 +28,12 @@ class JoinClassRequest(BaseModel):
     pseudonym_id: Optional[str] = Field(default=None, description="Zero-PII ID ученика")
 
 
+class JoinTeacherClassRequest(BaseModel):
+    invite_code: str = Field(..., description="Код приглашения класса, например '7A-X9K2'")
+    subject: Optional[str] = Field(default=None, description="Предмет учителя (например, 'География', 'Физика')")
+    teacher_pseudonym_id: Optional[str] = Field(default=None, description="Zero-PII ID учителя")
+
+
 # ==========================================
 # Auth Helper
 # ==========================================
@@ -160,6 +166,28 @@ async def join_class_endpoint(
             db=db,
             invite_code=req.invite_code,
             pseudonym_id=student_pid,
+        )
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/join-teacher")
+async def join_class_as_teacher_endpoint(
+    req: JoinTeacherClassRequest,
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Привязывает учителя-предметника к существующему классу по инвайт-коду."""
+    auth_pid = get_current_user_pid(authorization)
+    teacher_pid = auth_pid or req.teacher_pseudonym_id or "teacher_host"
+
+    try:
+        res = await class_service.join_class_as_teacher(
+            db=db,
+            invite_code=req.invite_code,
+            teacher_pseudonym_id=teacher_pid,
+            subject=req.subject,
         )
         return res
     except ValueError as e:

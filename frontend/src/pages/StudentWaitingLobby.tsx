@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Hourglass, X, Copy, Check } from 'lucide-react';
+import { Hourglass, X, Copy, Check, ArrowLeft } from 'lucide-react';
 import QRCode from 'qrcode';
 import { socketService } from '../services/socketService';
 import { roomApi } from '../services/roomApi';
 import { haptics } from '../services/haptics';
 import { soundManager } from '../services/soundManager';
+import SoundToggleButton from '../components/SoundToggleButton';
 import { LobbyBoardScene, LobbyStudent } from '../components/LobbyBoardScene';
 import { HangingPinSign } from '../components/HangingPinSign';
 import { StudentsCountPill } from '../components/StudentsCountPill';
@@ -16,6 +17,8 @@ interface StudentWaitingLobbyProps {
   playerAvatar: string;
   subject?: string;
   grade?: number;
+  classNameTitle?: string;
+  maxStudents?: number;
   onGameStart: () => void;
   onLeaveRoom: () => void;
 }
@@ -26,11 +29,15 @@ export default function StudentWaitingLobby({
   playerAvatar,
   subject = 'Математика',
   grade = 7,
+  classNameTitle,
+  maxStudents,
   onGameStart,
   onLeaveRoom,
 }: StudentWaitingLobbyProps) {
   const [roomSubject, setRoomSubject] = useState<string>(subject);
   const [roomGrade, setRoomGrade] = useState<number>(grade);
+  const [roomClassName, setRoomClassName] = useState<string | undefined>(classNameTitle);
+  const [roomMaxStudents, setRoomMaxStudents] = useState<number | undefined>(maxStudents);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [gameJoinUrl, setGameJoinUrl] = useState<string>('');
@@ -60,6 +67,8 @@ export default function StudentWaitingLobby({
         if (!isMounted || !info) return;
         if (info.subject) setRoomSubject(info.subject);
         if (info.grade) setRoomGrade(info.grade);
+        if (info.class_name) setRoomClassName(info.class_name);
+        if (info.class_students_count != null) setRoomMaxStudents(info.class_students_count);
       }).catch(() => {});
     }
 
@@ -67,6 +76,8 @@ export default function StudentWaitingLobby({
       if (!isMounted) return;
       if (data?.subject) setRoomSubject(data.subject);
       if (data?.grade) setRoomGrade(data.grade);
+      if (data?.class_name) setRoomClassName(data.class_name);
+      if (data?.class_students_count != null) setRoomMaxStudents(data.class_students_count);
       if (data?.status === 'finished') {
         socketService.disconnect();
         onLeaveRoom();
@@ -84,7 +95,7 @@ export default function StudentWaitingLobby({
           division: p.division,
         }));
         // Ensure student is in list
-        const hasMe = list.some((p) => p.name === playerName);
+        const hasMe = list.some((p) => p.name === playerName || p.id === 'me');
         if (!hasMe && playerName) {
           list.unshift({ id: 'me', name: playerName, avatar: playerAvatar });
         }
@@ -96,6 +107,16 @@ export default function StudentWaitingLobby({
       if (!isMounted) return;
       haptics.notification('success');
       soundManager.playKnock();
+      if (data && data.players) {
+        const list: LobbyStudent[] = Object.values(data.players).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar,
+          division: p.division,
+        }));
+        setPlayers(list);
+        return;
+      }
       setPlayers((prev) => {
         if (prev.some((p) => p.id === data.player_id)) return prev;
         return [...prev, { id: data.player_id, name: data.name, avatar: data.avatar, division: data.division }];
@@ -104,6 +125,16 @@ export default function StudentWaitingLobby({
 
     const handlePlayerLeft = (data: any) => {
       if (!isMounted) return;
+      if (data && data.players) {
+        const list: LobbyStudent[] = Object.values(data.players).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          avatar: p.avatar,
+          division: p.division,
+        }));
+        setPlayers(list);
+        return;
+      }
       setPlayers((prev) => prev.filter((p) => p.id !== data.player_id));
     };
 
@@ -132,6 +163,7 @@ export default function StudentWaitingLobby({
     };
 
     socketService.on('ROOM_SYNC', handleSync);
+    socketService.on('SYNC_STATE', handleSync);
     socketService.on('PLAYER_JOINED', handlePlayerJoined);
     socketService.on('PLAYER_LEFT', handlePlayerLeft);
     socketService.on('COUNTDOWN_START', handleCountdownStart);
@@ -139,6 +171,7 @@ export default function StudentWaitingLobby({
     return () => {
       isMounted = false;
       socketService.off('ROOM_SYNC', handleSync);
+      socketService.off('SYNC_STATE', handleSync);
       socketService.off('PLAYER_JOINED', handlePlayerJoined);
       socketService.off('PLAYER_LEFT', handlePlayerLeft);
       socketService.off('COUNTDOWN_START', handleCountdownStart);
@@ -177,22 +210,67 @@ export default function StudentWaitingLobby({
   const myPlayer = players.find((p) => p.name === playerName || p.id === 'me');
   const myId = myPlayer?.id || 'me';
 
+  const handleLeave = () => {
+    try {
+      haptics.impact('light');
+      soundManager.playTap();
+      if (socketService.isConnected()) {
+        socketService.send('LEAVE_ROOM', {});
+      }
+      socketService.disconnect();
+    } catch {}
+    onLeaveRoom();
+  };
+
   return (
     <div style={styles.container}>
+      {/* Floating Header: Back to Home (Left) & Sound Toggle (Right) */}
+      <div style={{ position: 'fixed', top: 16, left: 16, right: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 90, pointerEvents: 'none' }}>
+        <motion.button
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.92 }}
+          onClick={handleLeave}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '7px 14px',
+            borderRadius: 24,
+            backgroundColor: '#FFFDF9',
+            border: '2px solid #E5C39E',
+            boxShadow: '0 3px 0 #D8BEA3, 0 3px 10px rgba(0, 0, 0, 0.12)',
+            cursor: 'pointer',
+            color: '#4A2E18',
+            fontWeight: 800,
+            fontSize: 12,
+            pointerEvents: 'auto',
+          }}
+          title="Выйти из викторины"
+        >
+          <ArrowLeft size={16} color="#4A2E18" strokeWidth={2.5} />
+          <span>Выйти</span>
+        </motion.button>
+
+        <div style={{ pointerEvents: 'auto' }}>
+          <SoundToggleButton variant="round" size={16} />
+        </div>
+      </div>
+
       {/* 1. Hanging Wooden PIN Sign (with integrated back/leave button and title) */}
       <div style={{ width: '100%', maxWidth: 540, display: 'flex', justifyContent: 'center', marginTop: 8, marginBottom: 10 }}>
         <HangingPinSign
           pin={roomCode}
           subject={roomSubject}
           grade={roomGrade}
-          onBack={onLeaveRoom}
+          classNameTitle={roomClassName}
+          onBack={handleLeave}
           onOpenQr={() => setIsQrModalOpen(true)}
         />
       </div>
 
       {/* 2. Wooden Students Count Pill */}
       <div style={{ width: '100%', maxWidth: 380, display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
-        <StudentsCountPill count={players.length} max={25} />
+        <StudentsCountPill count={players.length} max={roomMaxStudents} />
       </div>
 
       {/* 3. Center Scene: Mossy Stump + Animated Sprint + 12-Slot Board */}

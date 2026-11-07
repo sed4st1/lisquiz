@@ -272,6 +272,44 @@ export default function StudentGameQuestion({
     return false;
   });
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [liveAnsweredCount, setLiveAnsweredCount] = useState<number>(answeredCount);
+  const [liveTotalStudents, setLiveTotalStudents] = useState<number>(totalStudents);
+  const [finishPayload, setFinishPayload] = useState<any>(null);
+
+  useEffect(() => {
+    if (answeredCount > 0) setLiveAnsweredCount(answeredCount);
+  }, [answeredCount]);
+
+  useEffect(() => {
+    if (totalStudents > 0) setLiveTotalStudents(totalStudents);
+  }, [totalStudents]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const handleAnswerCollected = (data: any) => {
+      if (!isMounted) return;
+      if (typeof data.answered_count === 'number') {
+        setLiveAnsweredCount(data.answered_count);
+      }
+      if (typeof data.total_players === 'number') {
+        setLiveTotalStudents(data.total_players);
+      }
+    };
+
+    const handleGameFinished = (data: any) => {
+      if (!isMounted) return;
+      setFinishPayload(data);
+    };
+
+    socketService.on('ANSWER_COLLECTED', handleAnswerCollected);
+    socketService.on('GAME_FINISHED', handleGameFinished);
+
+    return () => {
+      isMounted = false;
+      socketService.off('ANSWER_COLLECTED', handleAnswerCollected);
+      socketService.off('GAME_FINISHED', handleGameFinished);
+    };
+  }, []);
 
   // Live timer for current question
   const currentQ = activeQuestionsList[currentQIndex] || activeQuestionsList[0]!;
@@ -684,24 +722,35 @@ export default function StudentGameQuestion({
 
               <div style={styles.waitingProgressPill}>
                 <Clock size={16} color="#B45309" strokeWidth={2.5} />
-                <span>Завершили: {answeredCount > 0 ? answeredCount : 18} из {totalStudents > 0 ? totalStudents : 24} учеников</span>
+                {liveTotalStudents > 1 ? (
+                  <span>Завершили: {Math.max(1, liveAnsweredCount)} из {liveTotalStudents} учеников</span>
+                ) : (
+                  <span>Все вопросы пройдены! Ожидаем завершения викторины...</span>
+                )}
               </div>
 
               {/* Action button to finish when everyone is done */}
               <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.96 }}
+                whileHover={{ scale: finishPayload ? 1.03 : 1 }}
+                whileTap={{ scale: finishPayload ? 0.96 : 1 }}
+                disabled={!finishPayload}
                 onClick={() => {
+                  if (!finishPayload) return;
                   haptics.notification('success');
                   if (onGameFinished) {
-                    onGameFinished();
+                    onGameFinished(finishPayload);
                   } else if (onBack) {
                     onBack();
                   }
                 }}
-                style={styles.finishWaitingBtn}
+                style={{
+                  ...styles.finishWaitingBtn,
+                  opacity: finishPayload ? 1 : 0.65,
+                  cursor: finishPayload ? 'pointer' : 'not-allowed',
+                  filter: finishPayload ? 'none' : 'grayscale(0.35)',
+                }}
               >
-                <span>Посмотреть результаты викторины</span>
+                <span>{finishPayload ? '🏆 Посмотреть результаты викторины' : '⏳ Ожидаем завершения викторины учителем...'}</span>
               </motion.button>
             </div>
           </motion.div>
@@ -896,45 +945,54 @@ const styles: Record<string, React.CSSProperties> = {
   },
   buttonsGrid: {
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
+    gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
     gridTemplateRows: '1fr 1fr',
-    gap: 14,
+    gap: 'clamp(8px, 2.5vw, 14px)',
     width: '100%',
+    maxWidth: '100%',
+    boxSizing: 'border-box',
     flex: 1,
-    minHeight: 330,
+    minHeight: 280,
     maxHeight: 440,
-    marginBottom: 18,
+    marginBottom: 16,
   },
   answerBtn: {
     height: '100%',
-    minHeight: 150,
-    borderRadius: 24,
+    minHeight: 120,
+    width: '100%',
+    minWidth: 0,
+    borderRadius: 20,
     border: '2px solid',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    padding: '16px 12px',
+    gap: 8,
+    padding: '12px 8px',
     cursor: 'pointer',
     outline: 'none',
     boxSizing: 'border-box',
     userSelect: 'none',
+    overflow: 'hidden',
     transition: 'opacity 0.2s ease, transform 0.15s ease',
   },
   shapeSymbol: {
-    fontSize: 28,
+    fontSize: 24,
     color: '#FFFFFF',
     lineHeight: 1,
     textShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
   },
   answerText: {
-    fontSize: 23,
+    fontSize: 'clamp(14px, 4vw, 21px)',
     fontWeight: 900,
     color: '#FFFFFF',
     textAlign: 'center',
-    lineHeight: 1.15,
+    lineHeight: 1.2,
     textShadow: '0 2px 4px rgba(0, 0, 0, 0.25)',
+    wordBreak: 'break-word',
+    overflowWrap: 'break-word',
+    hyphens: 'auto',
+    maxWidth: '100%',
   },
   bottomPillWrapper: {
     display: 'flex',

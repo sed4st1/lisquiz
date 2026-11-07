@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 from ..db.models import (
     ClassModel,
     ClassStudentModel,
+    ClassTeacherModel,
     UserModel,
     GameRoomModel,
     RoomParticipantModel,
@@ -75,23 +76,45 @@ async def get_classes_by_teacher(
     db: AsyncSession,
     teacher_pseudonym_id: str,
 ) -> List[Dict[str, Any]]:
-    """Возвращает список классов учителя с подсчетом учеников и проведенных игр."""
-    cond = (
-        ClassModel.teacher_pseudonym_id.in_([teacher_pseudonym_id, "pid_0afabb09f35b7d27"])
-        if teacher_pseudonym_id == "teacher_host"
-        else (ClassModel.teacher_pseudonym_id == teacher_pseudonym_id)
+    """Возвращает список классов учителя (как созданных им, так и совместных) с подсчетом учеников."""
+    teacher_ids = [teacher_pseudonym_id]
+    if teacher_pseudonym_id == "teacher_host":
+        teacher_ids.append("pid_0afabb09f35b7d27")
+
+    # Находим ID классов, к которым учитель присоединился как предметник
+    co_stmt = select(ClassTeacherModel.class_id).where(
+        ClassTeacherModel.teacher_pseudonym_id.in_(teacher_ids)
     )
+    co_res = await db.execute(co_stmt)
+    co_class_ids = [r[0] for r in co_res.all()]
+
+    cond = (ClassModel.teacher_pseudonym_id.in_(teacher_ids))
+    if co_class_ids:
+        cond = cond | (ClassModel.id.in_(co_class_ids))
+
     stmt = (
         select(ClassModel)
         .where(cond)
         .order_by(desc(ClassModel.created_at))
-        .options(selectinload(ClassModel.students), selectinload(ClassModel.rooms))
+        .options(
+            selectinload(ClassModel.students),
+            selectinload(ClassModel.teachers),
+            selectinload(ClassModel.rooms),
+        )
     )
     result = await db.execute(stmt)
     classes = result.scalars().all()
 
     out = []
     for c in classes:
+        teachers_list = [
+            {
+                "teacher_pseudonym_id": t.teacher_pseudonym_id,
+                "subject": t.subject or c.subject,
+                "role": t.role,
+            }
+            for t in (c.teachers or [])
+        ]
         out.append({
             "id": c.id,
             "name": c.name,
@@ -101,6 +124,8 @@ async def get_classes_by_teacher(
             "invite_url": f"/?join_class={c.invite_code}",
             "students_count": len(c.students),
             "rooms_count": len(c.rooms),
+            "teachers": teachers_list,
+            "is_co_teacher": c.teacher_pseudonym_id not in teacher_ids,
             "created_at": c.created_at.isoformat() if c.created_at else None,
         })
     return out
@@ -190,6 +215,63 @@ async def join_class(
         "grade": cls_obj.grade,
         "invite_code": cls_obj.invite_code,
         "students_count": students_total,
+    }
+
+
+async def join_class_as_teacher(
+    db: AsyncSession,
+    invite_code: str,
+    teacher_pseudonym_id: str,
+    subject: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Привязывает учителя-предметника к существующему классу по инвайт-коду."""
+    cls_obj = await get_class_by_invite_code(db, invite_code)
+    if not cls_obj:
+        raise ValueError(f"Класс с кодом {invite_code} не найден")
+
+    # Проверка, является ли уже создателем
+    if cls_obj.teacher_pseudonym_id == teacher_pseudonym_id:
+        return {
+            "status": "already_joined",
+            "class_id": cls_obj.id,
+            "name": cls_obj.name,
+            "subject": cls_obj.subject,
+            "grade": cls_obj.grade,
+            "invite_code": cls_obj.invite_code,
+            "students_count": len(cls_obj.students),
+            "role": "creator",
+        }
+
+    # Проверка существующего со-учительства
+    check_stmt = select(ClassTeacherModel).where(
+        ClassTeacherModel.class_id == cls_obj.id,
+        ClassTeacherModel.teacher_pseudonym_id == teacher_pseudonym_id,
+    )
+    existing = await db.execute(check_stmt)
+    membership = existing.scalar_one_or_none()
+
+    if not membership:
+        membership = ClassTeacherModel(
+            class_id=cls_obj.id,
+            teacher_pseudonym_id=teacher_pseudonym_id,
+            subject=subject or cls_obj.subject,
+            role="subject_teacher",
+        )
+        db.add(membership)
+        await db.commit()
+    elif subject and membership.subject != subject:
+        membership.subject = subject
+        await db.commit()
+
+    return {
+        "status": "joined_as_teacher",
+        "class_id": cls_obj.id,
+        "name": cls_obj.name,
+        "subject": subject or cls_obj.subject,
+        "grade": cls_obj.grade,
+        "invite_code": cls_obj.invite_code,
+        "students_count": len(cls_obj.students),
+        "role": "subject_teacher",
     }
 
 
@@ -412,13 +494,39 @@ async def connect_chat_to_class(
     code_or_id: str,
     chat_id: str,
 ) -> Optional[ClassModel]:
-    """Привязка группового чата MAX к существующему классу."""
+    """Привязка группового чата MAX к существующему классу или комнате викторины."""
     clean = code_or_id.strip().upper()
     stmt = select(ClassModel).where(
         (ClassModel.invite_code == clean) | (ClassModel.id == code_or_id.strip())
     )
     res = await db.execute(stmt)
     cls_obj = res.scalar_one_or_none()
+
+    # Если класс не найден по инвайт-коду, проверяем, может это код комнаты викторины (PIN)
+    if not cls_obj:
+        from .room_state_engine import room_state_engine
+        room = await room_state_engine.get_room(code_or_id.strip())
+        if room:
+            if room.class_id:
+                cls_stmt = select(ClassModel).where(ClassModel.id == room.class_id)
+                cls_res = await db.execute(cls_stmt)
+                cls_obj = cls_res.scalar_one_or_none()
+            if not cls_obj and room.host_pseudonym_id:
+                teacher_classes = await get_classes_by_teacher(db, room.host_pseudonym_id)
+                if teacher_classes:
+                    cls_stmt = select(ClassModel).where(ClassModel.id == teacher_classes[0]["id"])
+                    cls_res = await db.execute(cls_stmt)
+                    cls_obj = cls_res.scalar_one_or_none()
+            if not cls_obj:
+                cls_obj = await create_class(
+                    db=db,
+                    teacher_pseudonym_id=room.host_pseudonym_id or "teacher_host",
+                    name=f"{room.quiz.grade}А",
+                    subject=room.quiz.subject,
+                    grade=room.quiz.grade,
+                )
+                room.class_id = cls_obj.id
+
     if not cls_obj:
         return None
 

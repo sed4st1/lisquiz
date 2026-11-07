@@ -13,6 +13,15 @@ from .services import room_state_engine
 async def lifespan(app: FastAPI):
     # Startup: попытка подключения к Redis
     await room_state_engine.init_redis()
+    # Автоматическое создание/обновление таблиц базы данных при старте
+    try:
+        from .db.session import engine, Base
+        from .db import models as _models  # noqa: F401
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as dbe:
+        import logging
+        logging.getLogger("lisquiz.main").warning(f"DB schema ensure warning: {dbe}")
     yield
     # Shutdown: корректное закрытие соединений
     await room_state_engine.close()

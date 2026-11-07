@@ -143,6 +143,10 @@ class SyncState(BaseModel):
     blurred_count: int
     current_question: Optional[Question] = None
     players: Optional[List[Dict[str, Any]]] = None
+    subject: Optional[str] = None
+    grade: Optional[int] = None
+    class_name: Optional[str] = None
+    class_students_count: Optional[int] = None
 
 
 class QuestionStat(BaseModel):

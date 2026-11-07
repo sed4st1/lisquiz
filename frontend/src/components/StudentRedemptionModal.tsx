@@ -78,8 +78,9 @@ export default function StudentRedemptionModal({
     haptics.impact('medium');
     setIsSubmitting(true);
 
-    const isCorrect = selectedOption === (quest.isomorphic_item?.correct_index ?? 0);
-    const potentialPts = quest.potential_recovery_points || Math.round(basePoints * 0.6);
+    const correctIdx = quest.isomorphic_item?.correct_idx ?? quest.isomorphic_item?.correct_index ?? 0;
+    const isCorrect = selectedOption === correctIdx;
+    const potentialPts = quest.potential_points_recovery || quest.potential_recovery_points || Math.round(basePoints * 0.6);
 
     try {
       const res = await fetch('/api/ml2/redemption/submit', {
@@ -129,7 +130,7 @@ export default function StudentRedemptionModal({
   if (!isOpen) return null;
 
   const item = quest?.isomorphic_item;
-  const potential = quest?.potential_recovery_points || Math.round(basePoints * 0.6);
+  const potential = quest?.potential_points_recovery || quest?.potential_recovery_points || Math.round(basePoints * 0.6);
 
   return (
     <div style={styles.backdrop}>
@@ -203,7 +204,7 @@ export default function StudentRedemptionModal({
               <div style={styles.hintHeader}>
                 <span style={styles.hintMascot}>Совет от Спринта</span>
               </div>
-              <p style={styles.hintText}>{quest?.hint || 'Вспомните базовые формулы и правила!'}</p>
+              <p style={styles.hintText}>{quest?.pedagogical_hint || quest?.hint || 'Вспомните базовые формулы и правила!'}</p>
             </div>
 
             {/* Fresh Isomorphic Problem */}
@@ -212,8 +213,9 @@ export default function StudentRedemptionModal({
               <p style={styles.qStem}>{item?.stem || 'Решите задачу'}</p>
 
               <div style={styles.optionsList}>
-                {item?.options?.map((opt: string, idx: number) => {
+                {item?.options?.map((opt: any, idx: number) => {
                   const isSelected = selectedOption === idx;
+                  const optText = typeof opt === 'string' ? opt : (opt?.text ?? String(opt));
                   return (
                     <motion.button
                       key={idx}
@@ -244,7 +246,7 @@ export default function StudentRedemptionModal({
                           fontWeight: isSelected ? 800 : 700,
                         }}
                       >
-                        {opt}
+                        {optText}
                       </span>
                     </motion.button>
                   );

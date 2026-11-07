@@ -28,6 +28,14 @@ export interface StudentLeaderboardProps {
   currentStudentAvatar?: string;
   currentScore?: number;
   currentRank?: number;
+  quizPlayers?: Array<{
+    rank?: number;
+    id: string;
+    name: string;
+    avatar: string;
+    score: number;
+  }>;
+  classId?: string;
 }
 
 interface RankedStudent {
@@ -39,30 +47,17 @@ interface RankedStudent {
   isMe?: boolean;
 }
 
-const DEFAULT_LEADERBOARD_STUDENTS: RankedStudent[] = [
-  { rank: 1, id: 's1', name: 'Егор Петров', avatar: 'raccoon', score: 980 },
-  { rank: 2, id: 's2', name: 'София Иванова', avatar: 'owl', score: 920 },
-  { rank: 3, id: 's3', name: 'Максим Соколов', avatar: 'hedgehog', score: 870 },
-  { rank: 4, id: 's4', name: 'Артём Кузнецов', avatar: 'raccoon', score: 750, isMe: true },
-  { rank: 5, id: 's5', name: 'Даниил Фёдоров', avatar: 'bear', score: 720 },
-  { rank: 6, id: 's6', name: 'Виктория Смирнова', avatar: 'bunny', score: 690 },
-  { rank: 7, id: 's7', name: 'Илья Волков', avatar: 'hedgehog', score: 660 },
-  { rank: 8, id: 's8', name: 'Анна Морозова', avatar: 'owl', score: 620 },
-  { rank: 9, id: 's9', name: 'Кирилл Новиков', avatar: 'squirrel', score: 580 },
-  { rank: 10, id: 's10', name: 'Мария Павлова', avatar: 'bear', score: 540 },
-  { rank: 11, id: 's11', name: 'Роман Васильев', avatar: 'raccoon', score: 510 },
-  { rank: 12, id: 's12', name: 'Полина Зайцева', avatar: 'bunny', score: 480 },
-];
-
 export default function StudentLeaderboard({
   boostPoints,
   boostRank: _boostRank,
   onClearBoost,
   onBack,
-  currentStudentName = 'Артём К',
+  currentStudentName = 'Ученик',
   currentStudentAvatar = 'raccoon',
   currentScore = 750,
-  currentRank = 4,
+  currentRank = 1,
+  quizPlayers = [],
+  classId,
 }: StudentLeaderboardProps = {}) {
   const [activeTab, setActiveTab] = useState<'quiz' | 'season'>('quiz');
   const [serverData, setServerData] = useState<LeaderboardData | null>(null);
@@ -81,48 +76,70 @@ export default function StudentLeaderboard({
   }, [boostPoints]);
 
   useEffect(() => {
-    groveApi.getWeeklyLeaderboard('class_7a')
-      .then((data) => setServerData(data))
-      .catch((e) => console.warn('Failed to load grove leaderboard:', e));
-  }, []);
+    if (classId) {
+      groveApi.getWeeklyLeaderboard(classId)
+        .then((data) => setServerData(data))
+        .catch((e) => console.warn('Failed to load grove leaderboard:', e));
+    }
+  }, [classId]);
 
   // Resolve students list
   const studentsList: RankedStudent[] = React.useMemo(() => {
-    if (activeTab === 'season' && serverData) {
-      const all: StudentContribution[] = [
-        ...(serverData.divisions.council_of_groves || []),
-        ...(serverData.divisions.forest_guardians || []),
-        ...(serverData.divisions.sprout_keepers || []),
-      ].sort((a, b) => a.rank - b.rank);
+    if (activeTab === 'season') {
+      if (serverData) {
+        const all: StudentContribution[] = [
+          ...(serverData.divisions.council_of_groves || []),
+          ...(serverData.divisions.forest_guardians || []),
+          ...(serverData.divisions.sprout_keepers || []),
+        ].sort((a, b) => a.rank - b.rank);
 
-      if (all.length > 0) {
-        return all.map((s) => ({
-          rank: s.rank,
-          id: s.student_id,
-          name: s.student_name,
-          avatar: s.avatar,
-          score: s.weekly_xp,
-          isMe: s.student_name.includes('(Ты)') || s.student_id === 'std_ivan',
-        }));
+        if (all.length > 0) {
+          return all.map((s) => ({
+            rank: s.rank,
+            id: s.student_id,
+            name: s.student_name,
+            avatar: s.avatar,
+            score: s.weekly_xp,
+            isMe: s.student_name.includes('(Ты)') || s.student_id === 'std_ivan',
+          }));
+        }
       }
+      return [];
     }
-    return DEFAULT_LEADERBOARD_STUDENTS.map((s) => {
-      if (s.isMe) {
+
+    // Tab 'quiz': use real quiz players from current game
+    if (quizPlayers && quizPlayers.length > 0) {
+      const sorted = [...quizPlayers].sort((a, b) => b.score - a.score);
+      return sorted.map((p, idx) => {
+        const isCurrent = (p.name && currentStudentName && p.name.trim().toLowerCase() === currentStudentName.trim().toLowerCase()) ||
+          p.id === 'me';
         return {
-          ...s,
-          name: `${currentStudentName} (Ты)`,
-          avatar: currentStudentAvatar,
-          score: currentScore,
-          rank: currentRank,
+          rank: idx + 1,
+          id: p.id,
+          name: isCurrent ? `${currentStudentName} (Ты)` : p.name,
+          avatar: p.avatar,
+          score: p.score,
+          isMe: isCurrent,
         };
-      }
-      return s;
-    });
-  }, [activeTab, serverData, currentStudentName, currentStudentAvatar, currentScore, currentRank]);
+      });
+    }
+
+    // Default: single player entry for current student if alone
+    return [
+      {
+        rank: currentRank || 1,
+        id: 'me',
+        name: `${currentStudentName} (Ты)`,
+        avatar: currentStudentAvatar,
+        score: currentScore,
+        isMe: true,
+      },
+    ];
+  }, [activeTab, serverData, quizPlayers, currentStudentName, currentStudentAvatar, currentScore, currentRank]);
 
   // Determine current user data
   const myEntry = studentsList.find((s) => s.isMe) || {
-    rank: currentRank,
+    rank: currentRank || 1,
     id: 'me',
     name: `${currentStudentName} (Ты)`,
     avatar: currentStudentAvatar,
@@ -240,18 +257,30 @@ export default function StudentLeaderboard({
            ======================================================== */}
         <div style={styles.boardCard}>
           <div style={styles.boardList}>
-            {studentsList.map((st) => (
-              <motion.div
-                key={st.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                style={{
-                  ...styles.studentRow,
-                  backgroundColor: st.isMe ? '#FEF3C7' : '#FFFFFF',
-                  borderColor: st.isMe ? '#F59E0B' : '#F2E2D0',
-                }}
-              >
+            {studentsList.length === 0 ? (
+              <div style={{ padding: '36px 16px', textAlign: 'center' }}>
+                <p style={{ margin: '0 0 8px', fontSize: 15, fontWeight: 800, color: '#4A2306' }}>
+                  {activeTab === 'season' ? 'Сезонный рейтинг пока пуст' : 'Нет данных по викторине'}
+                </p>
+                <p style={{ margin: 0, fontSize: 13, color: '#8A5D3B', lineHeight: 1.45 }}>
+                  {activeTab === 'season'
+                    ? 'Сезонный рейтинг Рощи формируется при игре внутри постоянного класса. Подключите класс через меню учителя или введите инвайт-код!'
+                    : 'Сыграйте викторину, чтобы увидеть результаты на пьедестале!'}
+                </p>
+              </div>
+            ) : (
+              studentsList.map((st) => (
+                <motion.div
+                  key={st.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25 }}
+                  style={{
+                    ...styles.studentRow,
+                    backgroundColor: st.isMe ? '#FEF3C7' : '#FFFFFF',
+                    borderColor: st.isMe ? '#F59E0B' : '#F2E2D0',
+                  }}
+                >
                 {/* 1. Hexagon Rank Badge */}
                 <div style={styles.rankBadgeCell}>
                   {renderHexBadge(st.rank)}
@@ -291,7 +320,7 @@ export default function StudentLeaderboard({
                   <span style={styles.rowScoreText}>{st.score}</span>
                 </div>
               </motion.div>
-            ))}
+            )))}
           </div>
         </div>
 

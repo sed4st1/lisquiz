@@ -67,22 +67,29 @@ export default function StudentQuizFinish({
   const [displayTop2, setDisplayTop2] = useState<number>(0);
   const [displayTop3, setDisplayTop3] = useState<number>(0);
 
-  // Default mock top players if none supplied from server
-  const resolvedTop = topPlayers.length >= 3
-    ? topPlayers
+  // Resolve actual top players from real game data without fake fallbacks
+  const resolvedTop = (topPlayers && topPlayers.length > 0)
+    ? [...topPlayers].sort((a, b) => b.score - a.score)
     : [
-        { rank: 1, id: 'p1', name: 'Егор Петров', avatar: 'raccoon', score: 980 },
-        { rank: 2, id: 'p2', name: 'София Иванова', avatar: 'owl', score: 920 },
-        { rank: 3, id: 'p3', name: 'Максим Соколов', avatar: 'hedgehog', score: 870 },
+        {
+          rank: 1,
+          id: playerId || 'me',
+          name: playerName,
+          avatar: playerAvatar,
+          score: currentScore,
+        },
       ];
 
-  const top1 = resolvedTop[0] || { rank: 1, name: 'Егор Петров', avatar: 'raccoon', score: 980 };
-  const top2 = resolvedTop[1] || { rank: 2, name: 'София Иванова', avatar: 'owl', score: 920 };
-  const top3 = resolvedTop[2] || { rank: 3, name: 'Максим Соколов', avatar: 'hedgehog', score: 870 };
+  const top1 = resolvedTop[0] || { rank: 1, id: 'me', name: playerName, avatar: playerAvatar, score: currentScore };
+  const top2 = resolvedTop.length > 1 ? resolvedTop[1] : null;
+  const top3 = resolvedTop.length > 2 ? resolvedTop[2] : null;
 
-  const effectiveRank = myRankProp ?? 4;
-  const accuracyPercent = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 80;
-  const waterDropsCount = Math.max(40, Math.round(currentScore * 0.16));
+  const foundRankIdx = resolvedTop.findIndex(
+    (p) => (playerId && p.id === playerId) || (p.name && p.name.trim().toLowerCase() === playerName.trim().toLowerCase())
+  );
+  const effectiveRank = myRankProp ?? (foundRankIdx >= 0 ? foundRankIdx + 1 : 1);
+  const accuracyPercent = totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+  const waterDropsCount = Math.max(20, Math.round(currentScore * 0.16));
 
   useEffect(() => {
     // Disconnect active socket room upon quiz finish
@@ -109,14 +116,14 @@ export default function StudentQuizFinish({
       const progress = Math.min(1, (Date.now() - startTime) / durationMs);
       const ease = 1 - Math.pow(1 - progress, 3); // ease-out cubic
       setDisplayScore(Math.round(currentScore * ease));
-      setDisplayTop1(Math.round(top1.score * ease));
-      setDisplayTop2(Math.round(top2.score * ease));
-      setDisplayTop3(Math.round(top3.score * ease));
+      if (top1) setDisplayTop1(Math.round(top1.score * ease));
+      if (top2) setDisplayTop2(Math.round(top2.score * ease));
+      if (top3) setDisplayTop3(Math.round(top3.score * ease));
       if (progress >= 1) clearInterval(interval);
     }, 25);
 
     return () => clearInterval(interval);
-  }, [currentScore, top1.score, top2.score, top3.score]);
+  }, [currentScore, top1?.score, top2?.score, top3?.score]);
 
   const handlePointsRestored = (points: number) => {
     setRestoredPoints(points);
@@ -193,37 +200,39 @@ export default function StudentQuizFinish({
             />
 
             {/* 2nd Place: Silver Laurel Frame + Avatar */}
-            <motion.div
-              initial={{ scale: 0, x: '-50%', y: -25, opacity: 0 }}
-              animate={{ scale: 1, x: '-50%', y: 0, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.35 }}
-              style={styles.top2Slot}
-            >
-              <div style={styles.avatarCropCircle}>
+            {top2 && (
+              <motion.div
+                initial={{ scale: 0, x: '-50%', y: -25, opacity: 0 }}
+                animate={{ scale: 1, x: '-50%', y: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.35 }}
+                style={styles.top2Slot}
+              >
+                <div style={styles.avatarCropCircle}>
+                  <img
+                    src={getStudentAvatarSrc(top2.avatar)}
+                    alt={top2.name}
+                    style={styles.avatarImg}
+                  />
+                </div>
                 <img
-                  src={getStudentAvatarSrc(top2.avatar)}
-                  alt={top2.name}
-                  style={styles.avatarImg}
+                  src="/assets/leaderboard/frame_silver.png"
+                  alt="2 место"
+                  style={styles.frameImg}
                 />
-              </div>
-              <img
-                src="/assets/leaderboard/frame_silver.png"
-                alt="2 место"
-                style={styles.frameImg}
-              />
-              {/* Tactile Carved Wooden Score Frame */}
-              <div style={styles.woodenScoreCapsule}>
-                <img
-                  src="/assets/leaderboard/acorn_gold.png"
-                  alt=""
-                  style={styles.capsuleAcornImg}
-                />
-                <span style={styles.capsuleScoreText}>+{displayTop2}</span>
-              </div>
-              <span style={styles.studentNameLabel}>
-                {top2.name.split(' ')[0]}{isMe(top2) && ' (Ты)'}
-              </span>
-            </motion.div>
+                {/* Tactile Carved Wooden Score Frame */}
+                <div style={styles.woodenScoreCapsule}>
+                  <img
+                    src="/assets/leaderboard/acorn_gold.png"
+                    alt=""
+                    style={styles.capsuleAcornImg}
+                  />
+                  <span style={styles.capsuleScoreText}>+{displayTop2}</span>
+                </div>
+                <span style={styles.studentNameLabel}>
+                  {top2.name.split(' ')[0]}{isMe(top2) && ' (Ты)'}
+                </span>
+              </motion.div>
+            )}
 
             {/* 1st Place: Gold Laurel Frame + Avatar */}
             <motion.div
@@ -261,37 +270,39 @@ export default function StudentQuizFinish({
             </motion.div>
 
             {/* 3rd Place: Bronze Laurel Frame + Avatar */}
-            <motion.div
-              initial={{ scale: 0, x: '-50%', y: -25, opacity: 0 }}
-              animate={{ scale: 1, x: '-50%', y: 0, opacity: 1 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.65 }}
-              style={styles.top3Slot}
-            >
-              <div style={styles.avatarCropCircle}>
+            {top3 && (
+              <motion.div
+                initial={{ scale: 0, x: '-50%', y: -25, opacity: 0 }}
+                animate={{ scale: 1, x: '-50%', y: 0, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 16, delay: 0.65 }}
+                style={styles.top3Slot}
+              >
+                <div style={styles.avatarCropCircle}>
+                  <img
+                    src={getStudentAvatarSrc(top3.avatar)}
+                    alt={top3.name}
+                    style={styles.avatarImg}
+                  />
+                </div>
                 <img
-                  src={getStudentAvatarSrc(top3.avatar)}
-                  alt={top3.name}
-                  style={styles.avatarImg}
+                  src="/assets/leaderboard/frame_bronze.png"
+                  alt="3 место"
+                  style={styles.frameImg}
                 />
-              </div>
-              <img
-                src="/assets/leaderboard/frame_bronze.png"
-                alt="3 место"
-                style={styles.frameImg}
-              />
-              {/* Tactile Carved Wooden Score Frame */}
-              <div style={styles.woodenScoreCapsule}>
-                <img
-                  src="/assets/leaderboard/acorn_gold.png"
-                  alt=""
-                  style={styles.capsuleAcornImg}
-                />
-                <span style={styles.capsuleScoreText}>+{displayTop3}</span>
-              </div>
-              <span style={styles.studentNameLabel}>
-                {top3.name.split(' ')[0]}{isMe(top3) && ' (Ты)'}
-              </span>
-            </motion.div>
+                {/* Tactile Carved Wooden Score Frame */}
+                <div style={styles.woodenScoreCapsule}>
+                  <img
+                    src="/assets/leaderboard/acorn_gold.png"
+                    alt=""
+                    style={styles.capsuleAcornImg}
+                  />
+                  <span style={styles.capsuleScoreText}>+{displayTop3}</span>
+                </div>
+                <span style={styles.studentNameLabel}>
+                  {top3.name.split(' ')[0]}{isMe(top3) && ' (Ты)'}
+                </span>
+              </motion.div>
+            )}
           </motion.div>
 
           {/* Mascot Sprint with Golden Acorn stepping out from right */}
