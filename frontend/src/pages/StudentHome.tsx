@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -30,6 +30,8 @@ export interface StudentHomeProps {
   groveStage?: number;
   groveHealth?: number;
   appMode?: 'user' | 'dev';
+  className?: string;
+  classId?: string;
 }
 
 export type DivisionType = 'sprout_keepers' | 'forest_guardians' | 'council_of_groves';
@@ -224,22 +226,12 @@ export default function StudentHome({
   onGoToClasses,
   onSwitchToTeacher,
   appMode = 'user',
+  className = '',
 }: StudentHomeProps) {
   // Start ambient BGM on mount
   useEffect(() => {
     soundManager.playBgm('grove', true);
   }, []);
-
-  // Profile & Division state (Defaults for a fresh new student: 0 stats, sprout_keepers tier)
-  const [division, setDivision] = useState<DivisionType>(() => {
-    try {
-      const saved = sessionStorage.getItem('lisquiz_student_division') as DivisionType;
-      if (saved && ['sprout_keepers', 'forest_guardians', 'council_of_groves'].includes(saved)) {
-        return saved;
-      }
-    } catch {}
-    return 'sprout_keepers';
-  });
 
   const [studentName, setStudentName] = useState<string>(() => {
     try {
@@ -456,7 +448,17 @@ export default function StudentHome({
     }
   };
 
-  const activeDivision = DIVISION_META[division] || DIVISION_META.forest_guardians;
+  // Division is earned strictly through achievements and XP:
+  // 0 - 599 XP: Хранители Ростков (Бронза)
+  // 600 - 1199 XP: Стражи Леса (Серебро)
+  // 1200+ XP: Совет Дубрав (Золото • Элита)
+  const earnedDivision: DivisionType = useMemo(() => {
+    if (xp >= 1200) return 'council_of_groves';
+    if (xp >= 600) return 'forest_guardians';
+    return 'sprout_keepers';
+  }, [xp]);
+
+  const activeDivision = DIVISION_META[earnedDivision];
 
   return (
     <div style={styles.container}>
@@ -475,10 +477,10 @@ export default function StudentHome({
           style={styles.studentProfilePill}
           title="Открыть профиль и дивизион"
         >
-          {/* Mini Avatar wearing the division frame */}
+          {/* Mini Avatar wearing the earned division frame */}
           <FramedAvatar
             avatarKey={selectedAvatar}
-            division={division}
+            division={earnedDivision}
             size={36}
           />
           <div style={styles.profilePillInfo}>
@@ -518,7 +520,7 @@ export default function StudentHome({
             style={styles.statPill}
             title="Баланс желудей (нажмите, чтобы открыть паки карточек)"
           >
-            <span style={styles.statPillIcon}>🌰</span>
+            <span style={styles.statPillIcon}><img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 16, height: 16, objectFit: 'contain', verticalAlign: 'middle' }} /></span>
             <span style={styles.statPillValue}>{acorns}</span>
           </motion.div>
           <div style={styles.statPill} title={`Ударный режим: ${streak} дней`}>
@@ -734,10 +736,12 @@ export default function StudentHome({
                 <X size={20} color="#64748B" />
               </button>
 
-              {/* Modal Header */}
+              {/* Dynamic Subtitle with Real Class */}
               <div style={styles.profileHeader}>
                 <h2 style={styles.profileModalTitle}>Профиль исследователя</h2>
-                <p style={styles.profileModalSub}>Твоя статистика и дивизион в Роще 5А класса</p>
+                <p style={styles.profileModalSub}>
+                  {className ? `Твоя статистика и дивизион в Роще ${className} класса` : 'Твоя статистика и дивизион в Роще'}
+                </p>
               </div>
 
               {/* Hero Avatar with Division Frame */}
@@ -745,7 +749,7 @@ export default function StudentHome({
                 <div style={{ ...styles.avatarGlowWrap, borderColor: activeDivision.color }}>
                   <FramedAvatar
                     avatarKey={selectedAvatar}
-                    division={division}
+                    division={earnedDivision}
                     size={114}
                     glow={true}
                   />
@@ -786,30 +790,54 @@ export default function StudentHome({
                 </div>
               </div>
 
-              {/* Division Switcher (3 Tabs) */}
-              <div style={styles.divisionSwitchRow}>
+              {/* Division League Roadmap (Read-only, calculated by XP) */}
+              <div style={{ display: 'flex', gap: 6, width: '100%', marginBottom: 16 }}>
                 {(['sprout_keepers', 'forest_guardians', 'council_of_groves'] as DivisionType[]).map((divKey) => {
                   const dMeta = DIVISION_META[divKey];
-                  const isSelected = division === divKey;
+                  const isCurrent = earnedDivision === divKey;
+                  const isLocked = (divKey === 'forest_guardians' && xp < 600) || (divKey === 'council_of_groves' && xp < 1200);
+
                   return (
-                    <button
+                    <div
                       key={divKey}
-                      onClick={() => {
-                        haptics.selection();
-                        soundManager.playTap();
-                        setDivision(divKey);
-                        sessionStorage.setItem('lisquiz_student_division', divKey);
-                      }}
                       style={{
-                        ...styles.divisionTabBtn,
-                        backgroundColor: isSelected ? dMeta.color : '#FFFFFF',
-                        borderColor: isSelected ? dMeta.color : '#E2E8F0',
-                        color: isSelected ? '#FFFFFF' : '#475569',
+                        flex: 1,
+                        padding: '8px 6px',
+                        borderRadius: 12,
+                        backgroundColor: isCurrent ? dMeta.lightBg : '#F8FAFC',
+                        border: isCurrent ? `2px solid ${dMeta.color}` : '1.5px solid #E2E8F0',
+                        opacity: isLocked ? 0.6 : 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 2,
+                        textAlign: 'center',
+                        position: 'relative',
                       }}
                     >
-                      <span>{dMeta.badge}</span>
-                      <span style={{ fontSize: 11, fontWeight: 800 }}>{dMeta.title.split(' ')[0]}</span>
-                    </button>
+                      <span style={{ fontSize: 16 }}>{dMeta.badge}</span>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: isCurrent ? dMeta.color : '#64748B' }}>
+                        {dMeta.title.split(' ')[0]}
+                      </span>
+                      <span style={{ fontSize: 9, fontWeight: 600, color: '#94A3B8' }}>
+                        {divKey === 'sprout_keepers' ? '0+ XP' : divKey === 'forest_guardians' ? '600+ XP' : '1200+ XP'}
+                      </span>
+                      {isCurrent && (
+                        <div style={{
+                          position: 'absolute',
+                          top: -6,
+                          right: -4,
+                          background: dMeta.color,
+                          color: '#fff',
+                          borderRadius: 999,
+                          fontSize: 8,
+                          fontWeight: 900,
+                          padding: '1px 5px',
+                        }}>
+                          ТЕКУЩИЙ
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -819,7 +847,7 @@ export default function StudentHome({
                 {/* 1. Acorns */}
                 <div style={styles.statBentoCard}>
                   <div style={styles.statBentoTop}>
-                    <span style={{ fontSize: 18 }}>🌰</span>
+                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 20, height: 20, objectFit: 'contain' }} />
                     <span style={styles.statBentoLabel}>Жёлуди</span>
                   </div>
                   <span style={styles.statBentoVal}>{acorns}</span>
@@ -1007,12 +1035,10 @@ export default function StudentHome({
                         setXp(0);
                         setStreak(0);
                         setQuizzesCount(0);
-                        setDivision('sprout_keepers');
                         sessionStorage.setItem('lisquiz_user_acorns', '0');
                         sessionStorage.setItem('lisquiz_user_xp', '0');
                         sessionStorage.setItem('lisquiz_user_streak', '0');
                         sessionStorage.setItem('lisquiz_user_quizzes', '0');
-                        sessionStorage.setItem('lisquiz_student_division', 'sprout_keepers');
                       }}
                       style={{
                         flex: '1 1 auto',

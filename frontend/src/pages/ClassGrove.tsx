@@ -43,6 +43,10 @@ interface ClassGroveProps {
   onOpenLeaderboard?: () => void;
   onOpenStats?: () => void;
   classId?: string;
+  className?: string;
+  studentsCount?: number;
+  quizzesCount?: number;
+  accuracy?: number;
   appMode?: 'user' | 'dev';
 }
 
@@ -51,7 +55,11 @@ export default function ClassGrove({
   onStartQuiz: _onStartQuiz,
   onOpenLeaderboard: _onOpenLeaderboard,
   onOpenStats: _onOpenStats,
-  classId = '5A',
+  classId = '',
+  className = '',
+  studentsCount,
+  quizzesCount,
+  accuracy,
   appMode = 'user',
 }: ClassGroveProps) {
   const isDevMode = appMode === 'dev';
@@ -62,7 +70,7 @@ export default function ClassGrove({
   const [inventory, setInventory] = useState<StudentInventoryResponse>(() => {
     try {
       const savedAcorns = sessionStorage.getItem('lisquiz_user_acorns');
-      const acorns = savedAcorns !== null ? parseInt(savedAcorns, 10) : (isDevMode ? 924 : 0);
+      const acorns = savedAcorns !== null ? parseInt(savedAcorns, 10) : (isDevMode ? 100 : 0);
       return {
         student_id: 'current_student',
         acorns_balance: isNaN(acorns) ? 0 : acorns,
@@ -74,7 +82,7 @@ export default function ClassGrove({
     } catch {
       return {
         student_id: 'current_student',
-        acorns_balance: isDevMode ? 924 : 0,
+        acorns_balance: isDevMode ? 100 : 0,
         collection_progress: '0/16 (0%)',
         unique_cards_count: 0,
         catalog_total: 16,
@@ -86,16 +94,16 @@ export default function ClassGrove({
   // UI & Interaction State
   const [activeSheet, setActiveSheet] = useState<ActiveSheetType>(null);
   const [activeDivisionTab, setActiveDivisionTab] = useState<'council' | 'guardians' | 'sprouts'>('guardians');
-  const [points, setPoints] = useState<number>(() => isDevMode ? 320 : 0);
+  const [points, setPoints] = useState<number>(0);
   const maxPoints = 500;
-  const [waterCount, setWaterCount] = useState<number>(() => isDevMode ? 248 : 0);
-  const soilCount = isDevMode ? 186 : 0;
-  const sunCount = isDevMode ? 132 : 0;
+  const [waterCount, setWaterCount] = useState<number>(0);
+  const soilCount = 0;
+  const sunCount = 0;
   const [isWatering, setIsWatering] = useState<boolean>(false);
   const [bubbleMessage, setBubbleMessage] = useState<string | null>(null);
 
-  // Dev override stage (0..5). In user mode, stage is fixed to Stage 1 ("Росток")
-  const [devStageOverride, setDevStageOverride] = useState<number | null>(() => isDevMode ? 4 : 1);
+  // Dev override stage (0..5). Defaults to null so the real class level is always displayed
+  const [devStageOverride, setDevStageOverride] = useState<number | null>(null);
 
   // Canvas ref
   const particlesRef = useRef<WaterParticlesCanvasHandle | null>(null);
@@ -104,9 +112,10 @@ export default function ClassGrove({
   // Load Data
   const loadGroveData = useCallback(async () => {
     try {
+      const targetId = classId || '7А';
       const [stateData, lbData, invData] = await Promise.all([
-        fetchGroveState(classId),
-        fetchGroveLeaderboard(classId),
+        fetchGroveState(targetId),
+        fetchGroveLeaderboard(targetId),
         fetchStudentInventory('current_student'),
       ]);
       setGrove(stateData);
@@ -127,8 +136,10 @@ export default function ClassGrove({
   }, []);
 
   // Active tree stage (0..5)
-  // In user mode: locked to real class progress (Stage 1 = Росток for new class), no user override
-  const activeTreeStage: number = isDevMode ? (devStageOverride ?? 1) : (grove.stage_level ?? 1);
+  // Stage 0: Семечко Познания (0 XP), Stage 1: Зелёный Росток, etc.
+  const backendStageLevel = grove.stage_level ?? 1;
+  const realTreeStage = Math.max(0, Math.min(5, backendStageLevel - 1));
+  const activeTreeStage: number = devStageOverride !== null ? devStageOverride : realTreeStage;
 
   // Interactive watering action
   const handleWaterTree = async () => {
@@ -424,62 +435,92 @@ export default function ClassGrove({
         />
 
         {/* Content Inside "Наш класс" Board */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '36%',
-            left: '17%',
-            right: '12%',
-            bottom: '14%',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            gap: 7,
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Users size={12} color="#5C3317" />
-            <span
+        {(() => {
+          const rawClassName = className || classId || (grove?.class_id !== '7А' ? grove?.class_id : '') || '';
+          const hasClass = Boolean(rawClassName && rawClassName.trim().length > 0);
+          const displayClassName = hasClass ? rawClassName : 'Без класса';
+          const displayStudents = studentsCount ?? (leaderboard?.total_students || 0);
+          const displayQuizzes = quizzesCount ?? (grove?.weekly_quizzes_completed || 0);
+          const displayAcc = accuracy ?? (displayQuizzes > 0 ? 82 : 0);
+
+          return (
+            <div
               style={{
-                fontFamily: 'system-ui, sans-serif',
-                fontWeight: 800,
-                fontSize: 'clamp(9px, 1.6vw, 11px)',
-                color: '#4A2306',
-                whiteSpace: 'nowrap',
+                position: 'absolute',
+                top: '38%',
+                left: '12%',
+                right: '12%',
+                bottom: '12%',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-start',
+                gap: 5,
+                boxSizing: 'border-box',
               }}
             >
-              26 учеников
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Layers size={12} color="#5C3317" />
-            <span
-              style={{
-                fontFamily: 'system-ui, sans-serif',
-                fontWeight: 800,
-                fontSize: 'clamp(9px, 1.6vw, 11px)',
-                color: '#4A2306',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              48 викторин
-            </span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Award size={12} color="#EF4444" />
-            <span
-              style={{
-                fontFamily: 'system-ui, sans-serif',
-                fontWeight: 800,
-                fontSize: 'clamp(9px, 1.6vw, 11px)',
-                color: '#4A2306',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              78% точность
-            </span>
-          </div>
-        </div>
+              {/* Class title */}
+              <div style={{ textAlign: 'center', marginBottom: 2 }}>
+                <span
+                  style={{
+                    fontFamily: 'Comfortaa, system-ui, sans-serif',
+                    fontWeight: 900,
+                    fontSize: 'clamp(9.5px, 1.8vw, 11.5px)',
+                    color: hasClass ? '#E06D00' : '#8C5E32',
+                    letterSpacing: -0.2,
+                    whiteSpace: 'nowrap',
+                    display: 'block',
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {hasClass ? `${displayClassName} класс` : 'Вступите в класс'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Users size={12} color="#5C3317" style={{ flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontFamily: 'system-ui, sans-serif',
+                    fontWeight: 800,
+                    fontSize: 'clamp(9px, 1.6vw, 11px)',
+                    color: '#4A2306',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {displayStudents} {displayStudents === 1 ? 'ученик' : (displayStudents >= 2 && displayStudents <= 4 ? 'ученика' : 'учеников')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Layers size={12} color="#5C3317" style={{ flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontFamily: 'system-ui, sans-serif',
+                    fontWeight: 800,
+                    fontSize: 'clamp(9px, 1.6vw, 11px)',
+                    color: '#4A2306',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {displayQuizzes} {displayQuizzes === 1 ? 'квиз' : (displayQuizzes >= 2 && displayQuizzes <= 4 ? 'квиза' : 'квизов')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <Award size={12} color="#EF4444" style={{ flexShrink: 0 }} />
+                <span
+                  style={{
+                    fontFamily: 'system-ui, sans-serif',
+                    fontWeight: 800,
+                    fontSize: 'clamp(9px, 1.6vw, 11px)',
+                    color: '#4A2306',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {displayAcc > 0 ? `${displayAcc}% точность` : (hasClass ? 'Новый класс' : 'Вне рейтинга')}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
       </motion.div>
 
       {/* Top Right: Sound Mute / Unmute Toggle Button */}
@@ -689,7 +730,7 @@ export default function ClassGrove({
                 whiteSpace: 'nowrap',
               }}
             >
-              Стадия {activeTreeStage}. {STAGE_NAMES[activeTreeStage] ?? 'Росток'}
+              Стадия {activeTreeStage + 1}. {grove.stage_info?.title || STAGE_NAMES[activeTreeStage] || 'Семечко Познания'}
             </span>
             {isDevMode && <span style={{ fontSize: 10, color: '#8C531B' }}>▾</span>}
           </div>
@@ -703,7 +744,7 @@ export default function ClassGrove({
               onClick={(e) => {
                 e.stopPropagation();
                 soundManager.playKnock();
-                setDevStageOverride((s) => Math.min(5, (s ?? 1) + 1));
+                setDevStageOverride((s) => Math.min(5, (s ?? realTreeStage) + 1));
               }}
               disabled={activeTreeStage >= 5}
               style={{
@@ -733,17 +774,16 @@ export default function ClassGrove({
         {/* Dynamic Progress Bar & Numbers on Clean Parchment */}
         {(() => {
           const STAGE_XP: Record<number, { current: number; max: number }> = {
-            0: { current: 35, max: 100 },
-            1: { current: 180, max: 250 },
-            2: { current: 360, max: 500 },
-            3: { current: 750, max: 1000 },
-            4: { current: 1680, max: 2000 },
-            5: { current: 2000, max: 2000 },
+            0: { current: 0, max: 500 },
+            1: { current: 500, max: 1500 },
+            2: { current: 1500, max: 3500 },
+            3: { current: 3500, max: 7500 },
+            4: { current: 7500, max: 15000 },
+            5: { current: 15000, max: 20000 },
           };
-          const maxStageXp = STAGE_XP[activeTreeStage]?.max ?? 2000;
-          const baseStageXp = STAGE_XP[activeTreeStage]?.current ?? 1680;
-          const currentStageXp = Math.min(maxStageXp, baseStageXp + (points - 320));
-          const pct = Math.min(100, Math.round((currentStageXp / maxStageXp) * 100));
+          const maxStageXp = grove?.next_stage_info?.min_xp || STAGE_XP[activeTreeStage]?.max || 500;
+          const currentStageXp = Math.min(maxStageXp, (grove?.total_xp ?? 0) + points);
+          const pct = maxStageXp > 0 ? Math.min(100, Math.round((currentStageXp / maxStageXp) * 100)) : 0;
 
           return (
             <div

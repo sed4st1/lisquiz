@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ShieldCheck, X, Sparkles } from 'lucide-react';
 import { haptics } from '../services/haptics';
 
+import { TeacherPasswordModal } from '../components/TeacherPasswordModal';
+
 export interface RoleSelectScreenProps {
   currentRole?: 'student' | 'teacher';
   onSelectRole: (role: 'student' | 'teacher') => void;
@@ -15,8 +17,17 @@ export default function RoleSelectScreen({
   onClose,
 }: RoleSelectScreenProps) {
   const [selectedRoleState, setSelectedRoleState] = useState<'student' | 'teacher' | null>(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   const handleRoleClick = (role: 'student' | 'teacher') => {
+    if (role === 'teacher') {
+      const isUnlocked = localStorage.getItem('lisquiz_teacher_unlocked') === 'true';
+      if (!isUnlocked) {
+        setIsPasswordModalOpen(true);
+        return;
+      }
+    }
+
     setSelectedRoleState(role);
     haptics.impact('medium');
 
@@ -202,6 +213,22 @@ export default function RoleSelectScreen({
           <span style={styles.footerText}>Вход через Сферум / MAX</span>
         </motion.div>
       </div>
+
+      {/* Teacher Access Password Modal */}
+      <TeacherPasswordModal
+        isOpen={isPasswordModalOpen}
+        onSuccess={() => {
+          setIsPasswordModalOpen(false);
+          setSelectedRoleState('teacher');
+          setTimeout(() => {
+            onSelectRole('teacher');
+          }, 280);
+        }}
+        onCancel={() => {
+          setIsPasswordModalOpen(false);
+          setSelectedRoleState(null);
+        }}
+      />
     </div>
   );
 }

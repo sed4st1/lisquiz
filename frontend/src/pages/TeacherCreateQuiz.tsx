@@ -49,12 +49,42 @@ export interface BankTopicItem {
 
 const FALLBACK_TEXTBOOKS: TextbookItem[] = [
   { id: 'peryshkin_phys_7', subject: 'Физика', grade: 7, author: 'Пёрышкин А.В.', title: 'Физика 7 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'peryshkin_phys_8', subject: 'Физика', grade: 8, author: 'Пёрышкин А.В., Иванов А.И.', title: 'Физика 8 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'gabrielyan_chem_8', subject: 'Химия', grade: 8, author: 'Габриелян О.С., Остроумов И.Г.', title: 'Химия 8 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'gabrielyan_chem_9', subject: 'Химия', grade: 9, author: 'Габриелян О.С.', title: 'Химия 9 класс', publisher: 'Просвещение', chapters_count: 2 },
   { id: 'vilenkin_math_6', subject: 'Математика', grade: 6, author: 'Виленкин Н.Я.', title: 'Математика 6 класс', publisher: 'Просвещение', chapters_count: 3 },
   { id: 'merzlyak_math_6', subject: 'Математика', grade: 6, author: 'Мерзляк А.Г.', title: 'Математика 6 класс', publisher: 'Вентана-Граф', chapters_count: 2 },
-  { id: 'ladyzhenskaya_rus_6', subject: 'Русский язык', grade: 6, author: 'Ладыженская Т.А.', title: 'Русский язык 6 класс', publisher: 'Просвещение', chapters_count: 1 },
   { id: 'makarychev_alg_7', subject: 'Алгебра', grade: 7, author: 'Макарычев Ю.Н.', title: 'Алгебра 7 класс', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'makarychev_alg_8', subject: 'Алгебра', grade: 8, author: 'Макарычев Ю.Н.', title: 'Алгебра 8 класс', publisher: 'Просвещение', chapters_count: 3 },
   { id: 'atanasyan_geom_7_9', subject: 'Геометрия', grade: 7, author: 'Атанасян Л.С.', title: 'Геометрия 7–9 класс', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'atanasyan_geom_8', subject: 'Геометрия', grade: 8, author: 'Атанасян Л.С.', title: 'Геометрия 8 класс', publisher: 'Просвещение', chapters_count: 3 },
+  { id: 'pasechnik_bio_5_6', subject: 'Биология', grade: 5, author: 'Пасечник В.В.', title: 'Биология 5–6 класс (Линия Жизни)', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'pasechnik_bio_7', subject: 'Биология', grade: 7, author: 'Пасечник В.В.', title: 'Биология 7 класс (Животные)', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'ladyzhenskaya_rus_6', subject: 'Русский язык', grade: 6, author: 'Ладыженская Т.А.', title: 'Русский язык 6 класс', publisher: 'Просвещение', chapters_count: 1 },
+  { id: 'ladyzhenskaya_rus_7', subject: 'Русский язык', grade: 7, author: 'Ладыженская Т.А.', title: 'Русский язык 7 класс', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'bosova_inf_7', subject: 'Информатика', grade: 7, author: 'Босова Л.Л.', title: 'Информатика 7 класс', publisher: 'БИНОМ / Просвещение', chapters_count: 3 },
+  { id: 'bogolyubov_soc_6', subject: 'Обществознание', grade: 6, author: 'Боголюбов Л.Н.', title: 'Обществознание 6 класс', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'alekseev_geo_5_6', subject: 'География', grade: 5, author: 'Алексеев А.И.', title: 'География 5–6 класс', publisher: 'Просвещение', chapters_count: 2 },
+  { id: 'torsunov_hist_6', subject: 'История', grade: 6, author: 'Арсентьев Н.М., Данилов А.А.', title: 'История России 6 класс', publisher: 'Просвещение', chapters_count: 2 },
 ];
+
+export const SUBJECT_GRADE_MAP: Record<string, number[]> = {
+  'Математика': [1, 2, 3, 4, 5, 6],
+  'Алгебра': [7, 8, 9, 10, 11],
+  'Геометрия': [7, 8, 9, 10, 11],
+  'Вероятность и статистика': [7, 8, 9, 10, 11],
+  'Физика': [7, 8, 9, 10, 11],
+  'Химия': [8, 9, 10, 11],
+  'Биология': [5, 6, 7, 8, 9, 10, 11],
+  'География': [5, 6, 7, 8, 9, 10, 11],
+  'История': [5, 6, 7, 8, 9, 10, 11],
+  'Обществознание': [6, 7, 8, 9, 10, 11],
+  'Информатика': [7, 8, 9, 10, 11],
+  'Русский язык': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  'Литература': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  'Английский язык': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+  'Окружающий мир': [1, 2, 3, 4],
+};
 
 export interface TeacherCreateQuizProps {
   onBack?: () => void;
@@ -76,20 +106,20 @@ export interface SubjectConfig {
 
 export const SUBJECTS = [
   'Математика',
-  'Русский язык',
-  'Литература',
-  'Окружающий мир',
+  'Алгебра',
+  'Геометрия',
   'Физика',
   'Химия',
   'Биология',
+  'Русский язык',
+  'Литература',
   'История',
   'Обществознание',
   'География',
   'Информатика',
   'Английский язык',
-  'Алгебра',
-  'Геометрия',
   'Вероятность и статистика',
+  'Окружающий мир',
 ];
 
 export const SUBJECT_CONFIGS: Record<string, SubjectConfig> = {
@@ -215,24 +245,24 @@ export const SUBJECT_CONFIGS: Record<string, SubjectConfig> = {
   },
 };
 
-const SUBJECT_KEYS = Object.keys(SUBJECT_CONFIGS);
+const SUBJECT_KEYS = SUBJECTS.filter((s) => !!SUBJECT_CONFIGS[s]);
 const GRADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 const QUESTION_COUNTS = [3, 5, 8, 10];
 
 const TOPIC_PRESETS: Record<string, string[]> = {
-  'Математика': ['Обыкновенные дроби', 'Линейные уравнения', 'Треугольники', 'Проценты'],
-  'Алгебра': ['Квадратные уравнения', 'Производная функции', 'Тригонометрические уравнения', 'Логарифмы'],
-  'Геометрия': ['Теорема Пифагора', 'Признаки равенства треугольников', 'Многогранники', 'Площадь фигур'],
+  'Математика': ['Обыкновенные дроби', 'Десятичные дроби', 'Проценты', 'Пропорции и отношения'],
+  'Алгебра': ['Линейные уравнения', 'Формулы сокращенного умножения', 'Квадратные уравнения', 'Свойства степеней'],
+  'Геометрия': ['Признаки равенства треугольников', 'Смежные и вертикальные углы', 'Теорема Пифагора', 'Параллелограмм и трапеция'],
   'Вероятность и статистика': ['Классическая вероятность', 'Среднее арифметическое', 'Комбинаторика'],
-  'Физика': ['Законы Ньютона', 'Закон Ома', 'Давление и сила Архимеда', 'Электромагнитная индукция'],
-  'Химия': ['Периодический закон', 'Электролитическая диссоциация', 'Углеводороды', 'Оксиды и кислоты'],
-  'Биология': ['Строение клетки', 'Фотосинтез', 'Законы Менделя', 'Эволюция человека'],
-  'Информатика': ['Системы счисления', 'Алгоритмы на Python', 'Базы данных и SQL', 'Математическая логика'],
-  'Русский язык': ['Чередование корней', 'Сложные предложения', 'Правописание Н и НН', 'Спряжение глаголов'],
+  'Физика': ['Закон Ома', 'Плотность вещества', 'Давление и сила Архимеда', 'Тепловые явления'],
+  'Химия': ['Периодический закон', 'Оксиды и кислоты', 'Основания и соли', 'Электролитическая диссоциация'],
+  'Биология': ['Строение клетки', 'Ткани растений', 'Членистоногие', 'Класс Рыбы'],
+  'Информатика': ['Информация и её свойства', 'Двоичное кодирование', 'Файловая система', 'Алгоритмы на Python'],
+  'Русский язык': ['Чередование корней', 'Сложные предложения', 'Правописание Н и НН', 'Причастный оборот'],
   'Литература': ['Мир сказок', 'Евгений Онегин', 'Война и мир', 'Серебряный век'],
-  'История': ['Древняя Русь', 'Эпоха Петра I', 'Отечественная война 1812 года', 'Великая Отечественная война'],
-  'Обществознание': ['Формы государства', 'Спрос и предложение', 'Конституция РФ', 'Права человека'],
-  'География': ['Географические координаты', 'Природные зоны России', 'Страны мира', 'ТЭК России'],
+  'История': ['Образование Древней Руси', 'Крещение Руси', 'Ярослав Мудрый', 'Александр Невский'],
+  'Обществознание': ['Человек и личность', 'Семья и её роль', 'Труд и общество', 'Потребности человека'],
+  'География': ['Форма и размеры Земли', 'Географические координаты', 'Литосфера и рельеф', 'Атмосфера'],
   'Английский язык': ['Present Simple', 'Past Simple', 'Passive Voice', 'Conditionals'],
   'Окружающий мир': ['Времена года', 'Красная книга', 'Строение тела человека', 'Наша Родина Россия'],
 };
@@ -860,12 +890,19 @@ export default function TeacherCreateQuiz({
   }, [activeModal, curriculumTopics.length]);
 
 
+  // Auto-align grade with subject's allowed FRP grades
+  useEffect(() => {
+    const allowed = SUBJECT_GRADE_MAP[subject];
+    if (allowed && allowed.length > 0 && !allowed.includes(grade)) {
+      setGrade(allowed[0]!);
+    }
+  }, [subject, grade]);
+
   const isSubjectMatch = (subjA?: string, subjB?: string) => {
     const a = (subjA || '').trim().toLowerCase();
     const b = (subjB || '').trim().toLowerCase();
     if (a === b) return true;
     if ((a === 'литература' || a === 'литературное чтение') && (b === 'литература' || b === 'литературное чтение')) return true;
-    if ((a === 'математика' || a === 'алгебра' || a === 'геометрия' || a === 'вероятность и статистика') && (b === 'математика' || b === 'алгебра' || b === 'геометрия' || b === 'вероятность и статистика')) return true;
     if ((a === 'окружающий мир' || a === 'природоведение' || a === 'естествознание') && (b === 'окружающий мир' || b === 'природоведение' || b === 'естествознание')) return true;
     return false;
   };
@@ -1282,6 +1319,10 @@ export default function TeacherCreateQuiz({
                       onClick={() => {
                         haptics.selection();
                         setSubject(key);
+                        const allowed = SUBJECT_GRADE_MAP[key] || GRADES;
+                        if (!allowed.includes(grade)) {
+                          setGrade(allowed[0]!);
+                        }
                         const presets = TOPIC_PRESETS[key];
                         if (presets && presets.length > 0) {
                           setTopic(presets[0]!);
@@ -1309,7 +1350,7 @@ export default function TeacherCreateQuiz({
               </div>
             </div>
 
-            {/* 2. SECTION: КЛАСС (1-11) */}
+            {/* 2. SECTION: КЛАСС (Динамический фильтр по ФРП) */}
             <div style={styles.sectionBlock}>
               <div style={styles.sectionHeaderRow}>
                 <img
@@ -1318,10 +1359,18 @@ export default function TeacherCreateQuiz({
                   style={styles.leafIconSm}
                 />
                 <span style={styles.sectionTitleText}>Класс</span>
+                {(() => {
+                  const valid = SUBJECT_GRADE_MAP[subject] || GRADES;
+                  return (
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#A16207', backgroundColor: '#FEF9C3', border: '1px solid #FDE047', borderRadius: 999, padding: '2px 8px', marginLeft: 8 }}>
+                      {valid[0]}–{valid[valid.length - 1]} класс
+                    </span>
+                  );
+                })()}
               </div>
 
               <div style={styles.gradesRow}>
-                {GRADES.map((g) => {
+                {(SUBJECT_GRADE_MAP[subject] || GRADES).map((g) => {
                   const isSelected = grade === g;
                   return (
                     <motion.button
@@ -1361,12 +1410,94 @@ export default function TeacherCreateQuiz({
                 <span style={styles.sectionTitleText}>Тема урока</span>
               </div>
 
+              {/* Selected Textbook & Paragraph Banner */}
+              {selectedTextbook && selectedParagraph && (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  borderRadius: 14,
+                  backgroundColor: '#EFF6FF',
+                  border: '1.5px solid #93C5FD',
+                  marginBottom: 10,
+                  boxShadow: '0 2px 8px rgba(37, 99, 235, 0.08)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                    <div style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      backgroundColor: '#DBEAFE',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}>
+                      <BookOpen size={18} color="#2563EB" />
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#1E40AF', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {selectedTextbook.title} ({selectedTextbook.author})
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#2563EB', marginTop: 1 }}>
+                        § {selectedParagraph.num}. {selectedParagraph.title}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.selection();
+                        setInspectingTextbook(selectedTextbook);
+                        setTextbookModalStep('paragraphs');
+                        setActiveModal('textbook');
+                      }}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 8,
+                        backgroundColor: '#FFFFFF',
+                        border: '1px solid #BFDBFE',
+                        color: '#1D4ED8',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Сменить §
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        haptics.selection();
+                        setSelectedTextbook(null);
+                        setSelectedParagraph(null);
+                      }}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: 8,
+                        backgroundColor: '#FEE2E2',
+                        border: '1px solid #FECACA',
+                        color: '#DC2626',
+                        fontSize: 12,
+                        fontWeight: 900,
+                        cursor: 'pointer',
+                      }}
+                      title="Сбросить учебник"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div style={styles.topicInputWrapper}>
                 <input
                   type="text"
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
-                  placeholder={subject === 'Математика' ? 'Например: Обыкновенные дроби' : 'Например: Законы Ньютона'}
+                  placeholder={subject === 'Химия' ? 'Например: Периодический закон' : (subject === 'Физика' ? 'Например: Закон Ома' : 'Например: Обыкновенные дроби')}
                   style={styles.topicTextInput}
                 />
               </div>
@@ -1397,7 +1528,7 @@ export default function TeacherCreateQuiz({
               )}
 
               {/* Rubricator & Textbooks triggers */}
-              <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button
                   type="button"
                   onClick={() => {
@@ -1408,7 +1539,7 @@ export default function TeacherCreateQuiz({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
-                    padding: '6px 12px',
+                    padding: '8px 14px',
                     borderRadius: 999,
                     backgroundColor: '#FFF5EA',
                     border: '1.5px solid #FF9126',
@@ -1419,7 +1550,7 @@ export default function TeacherCreateQuiz({
                   }}
                 >
                   <GraduationCap size={15} color="#D95800" />
-                  <span>Рубрикатор ФРП ({curriculumTopics.length || '593 темы'})</span>
+                  <span>Рубрикатор ФРП ({filteredCurriculumTopics.length} тем)</span>
                 </button>
 
                 <button
@@ -1433,18 +1564,18 @@ export default function TeacherCreateQuiz({
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 6,
-                    padding: '6px 12px',
+                    padding: '8px 14px',
                     borderRadius: 999,
                     backgroundColor: '#EFF6FF',
-                    border: '1.5px solid #60A5FA',
-                    color: '#2563EB',
+                    border: '1.5px solid #3B82F6',
+                    color: '#1D4ED8',
                     fontSize: 12,
                     fontWeight: 800,
                     cursor: 'pointer',
                   }}
                 >
-                  <BookOpen size={14} color="#2563EB" />
-                  <span>Каталог учебников</span>
+                  <BookOpen size={15} color="#2563EB" />
+                  <span>Учебники РФ ({textbooks.length || 18})</span>
                 </button>
               </div>
             </div>
@@ -1722,38 +1853,56 @@ export default function TeacherCreateQuiz({
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 320, overflowY: 'auto' }}>
-                        {textbooks.map((tb) => {
-                          const isSubjectMatch = !subject || tb.subject.toLowerCase() === subject.toLowerCase() ||
-                            (subject === 'Математика' && (tb.subject === 'Алгебра' || tb.subject === 'Геометрия')) ||
-                            (subject === 'Алгебра' && tb.subject === 'Математика') ||
-                            (subject === 'Геометрия' && tb.subject === 'Математика');
-                          return (
-                            <button
-                              key={tb.id}
-                              onClick={() => handleSelectTextbookForInspection(tb)}
-                              style={{
-                                ...styles.modalOptionBtn,
-                                borderColor: isSubjectMatch ? 'rgba(59, 130, 246, 0.45)' : 'rgba(255, 255, 255, 0.1)',
-                                backgroundColor: isSubjectMatch ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                              }}
-                            >
-                              <div style={{ textAlign: 'left' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                  <span style={{ color: '#FFFFFF', fontWeight: 700 }}>
-                                    {tb.title}
-                                  </span>
-                                  <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 6, backgroundColor: '#1E293B', color: '#60A5FA', fontWeight: 800 }}>
-                                    {tb.subject}
+                        {[...textbooks]
+                          .sort((a, b) => {
+                            const matchA = a.subject.toLowerCase() === subject.toLowerCase();
+                            const matchB = b.subject.toLowerCase() === subject.toLowerCase();
+                            if (matchA && !matchB) return -1;
+                            if (!matchA && matchB) return 1;
+                            const gradeA = a.grade === grade;
+                            const gradeB = b.grade === grade;
+                            if (matchA && matchB) {
+                              if (gradeA && !gradeB) return -1;
+                              if (!gradeA && gradeB) return 1;
+                            }
+                            return 0;
+                          })
+                          .map((tb) => {
+                            const isExactMatch = tb.subject.toLowerCase() === subject.toLowerCase() && tb.grade === grade;
+                            const isSubjectMatch = tb.subject.toLowerCase() === subject.toLowerCase();
+                            return (
+                              <button
+                                key={tb.id}
+                                onClick={() => handleSelectTextbookForInspection(tb)}
+                                style={{
+                                  ...styles.modalOptionBtn,
+                                  borderColor: isExactMatch ? 'rgba(34, 197, 94, 0.6)' : (isSubjectMatch ? 'rgba(59, 130, 246, 0.45)' : 'rgba(255, 255, 255, 0.1)'),
+                                  backgroundColor: isExactMatch ? 'rgba(34, 197, 94, 0.12)' : (isSubjectMatch ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.04)'),
+                                }}
+                              >
+                                <div style={{ textAlign: 'left' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                    <span style={{ color: '#FFFFFF', fontWeight: 700 }}>
+                                      {tb.title}
+                                    </span>
+                                    {isExactMatch ? (
+                                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 6, backgroundColor: '#064E3B', color: '#34D399', fontWeight: 800 }}>
+                                        ★ Для вашего урока
+                                      </span>
+                                    ) : (
+                                      <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 6, backgroundColor: '#1E293B', color: '#60A5FA', fontWeight: 800 }}>
+                                        {tb.subject}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span style={{ color: '#9CA3AF', fontSize: 11 }}>
+                                    {tb.author} • {tb.grade} класс
                                   </span>
                                 </div>
-                                <span style={{ color: '#9CA3AF', fontSize: 11 }}>
-                                  {tb.author} • {tb.grade} класс
-                                </span>
-                              </div>
-                              <ChevronRight size={18} color="#9CA3AF" />
-                            </button>
-                          );
-                        })}
+                                <ChevronRight size={18} color="#9CA3AF" />
+                              </button>
+                            );
+                          })}
                       </div>
                     )}
                   </div>
@@ -1767,6 +1916,10 @@ export default function TeacherCreateQuiz({
                       onClick={() => {
                         haptics.selection();
                         setSubject(item);
+                        const allowed = SUBJECT_GRADE_MAP[item] || GRADES;
+                        if (!allowed.includes(grade)) {
+                          setGrade(allowed[0]!);
+                        }
                         setSelectedTextbook(null);
                         setSelectedParagraph(null);
                         const presets = TOPIC_PRESETS[item];
@@ -1788,7 +1941,7 @@ export default function TeacherCreateQuiz({
 
                 {/* Modal: Grade */}
                 {activeModal === 'grade' &&
-                  GRADES.map((item) => (
+                  (SUBJECT_GRADE_MAP[subject] || GRADES).map((item) => (
                     <button
                       key={item}
                       onClick={() => {
@@ -2334,6 +2487,13 @@ export default function TeacherCreateQuiz({
               setSavedQuizzes(list);
               setIsEditorOpen(false);
               setEditingQuiz(null);
+            }}
+            onLaunch={async (updated) => {
+              const list = quizStorage.upsertQuiz(updated);
+              setSavedQuizzes(list);
+              setIsEditorOpen(false);
+              setEditingQuiz(null);
+              await handleLaunchSavedQuiz(updated);
             }}
           />
         )}

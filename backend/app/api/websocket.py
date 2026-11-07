@@ -31,13 +31,16 @@ async def broadcast_question(room_code: str, q_idx: int):
     q_teacher["is_boss"] = is_boss
     q_teacher["time_limit_sec"] = time_limit_sec
 
-    # Для учеников скрываем правильный ответ от инспектора сети
-    q_student = cur_q.model_copy(deep=True).model_dump()
-    q_student["tier"] = tier
-    q_student["is_boss"] = is_boss
-    q_student["time_limit_sec"] = time_limit_sec
-    for opt in q_student["options"]:
-        opt["is_correct"] = False
+    # Санитизированный список всех вопросов викторины для учеников
+    sanitized_questions = []
+    for idx, q in enumerate(room.quiz.questions):
+        q_copy = q.model_copy(deep=True).model_dump()
+        q_copy["tier"] = getattr(q, "tier", 2) or 2
+        q_copy["is_boss"] = getattr(q, "is_boss", False) or (idx == len(room.quiz.questions) - 1 and len(room.quiz.questions) >= 3)
+        q_copy["time_limit_sec"] = getattr(q, "time_limit_sec", 25)
+        for opt in q_copy.get("options", []):
+            opt["is_correct"] = False
+        sanitized_questions.append(q_copy)
 
     active_students = len([p for p in room.players.values() if p.connected])
     class_name = f"{room.quiz.grade}А"
@@ -48,6 +51,7 @@ async def broadcast_question(room_code: str, q_idx: int):
             "question_index": q_idx,
             "total_questions": len(room.quiz.questions),
             "question": q_teacher,
+            "questions": [q.model_dump() for q in room.quiz.questions],
             "tier": tier,
             "is_boss": is_boss,
             "time_limit_sec": time_limit_sec,
@@ -66,6 +70,7 @@ async def broadcast_question(room_code: str, q_idx: int):
             "question_index": q_idx,
             "total_questions": len(room.quiz.questions),
             "question": q_student,
+            "questions": sanitized_questions,
             "tier": tier,
             "is_boss": is_boss,
             "time_limit_sec": time_limit_sec,
@@ -281,11 +286,39 @@ async def websocket_room_endpoint(
                         "ANSWER_COLLECTED",
                         {
                             "player_id": session.player_id,
-                            "answered_count": len(room.answered_player_ids),
+                            "player_name": session.name,
+                            "answered_count": res.get("answered_count", 1),
+                            "total_questions": res.get("total_questions", len(room.quiz.questions)),
+                            "is_finished": res.get("is_player_finished", False),
+                            "points_earned": res.get("points_awarded", 0),
                             "total_players": len([p for p in room.players.values() if p.connected]),
                             "all_answered": res.get("all_answered", False),
                         },
                     )
+
+                    # Если все ученики завершили викторину, автоматически отправляем GAME_FINISHED
+                    if res.get("all_answered", False):
+                        gap_rep = await room_state_engine.generate_gap_report(room_code)
+                        sorted_players = sorted(room.players.values(), key=lambda p: p.score, reverse=True)
+                        top_players = [
+                            {
+                                "rank": idx + 1,
+                                "id": p.id,
+                                "name": p.name,
+                                "avatar": p.avatar,
+                                "score": p.score,
+                                "streak": p.streak,
+                            }
+                            for idx, p in enumerate(sorted_players)
+                        ]
+                        await ws_manager.broadcast_room(
+                            room_code,
+                            "GAME_FINISHED",
+                            {
+                                "gap_report": gap_rep.model_dump() if gap_rep else {},
+                                "top_players": top_players,
+                            },
+                        )
 
                 elif event == "CHEAT_SUSPECTED":
                     # Фиксация расфокуса окна

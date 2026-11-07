@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Wrench,
@@ -12,25 +12,56 @@ import {
 import { authService, UserProfile } from './services/authService';
 import { getWebApp } from './services/maxBridge';
 
-// Pages
-import ClassGrove from './pages/ClassGrove';
-import StudentHome from './pages/StudentHome';
-import StudentWaitingLobby from './pages/StudentWaitingLobby';
-import StudentLeaderboard from './pages/StudentLeaderboard';
-import StudentStats from './pages/StudentStats';
-import StudentGameQuestion from './pages/StudentGameQuestion';
-import FeedbackStreak from './pages/FeedbackStreak';
-import TeacherCreateQuiz from './pages/TeacherCreateQuiz';
-import TeacherHomeScreen from './pages/TeacherHomeScreen';
-import TeacherLobby from './pages/TeacherLobby';
-import TeacherGapReport from './pages/TeacherGapReport';
-import TeacherLiveGame from './pages/TeacherLiveGame';
-import StudentRoundWait from './pages/StudentRoundWait';
-import StudentQuizFinish from './pages/StudentQuizFinish';
-import SleepScreen from './pages/SleepScreen';
-import TeacherClassManagement from './pages/TeacherClassManagement';
-import StudentClassView from './pages/StudentClassView';
+// Eagerly loaded entry pages
 import RoleSelectScreen from './pages/RoleSelectScreen';
+import StudentHome from './pages/StudentHome';
+
+// Lazily loaded screens (code-split chunks)
+const ClassGrove = lazy(() => import('./pages/ClassGrove'));
+const StudentWaitingLobby = lazy(() => import('./pages/StudentWaitingLobby'));
+const StudentLeaderboard = lazy(() => import('./pages/StudentLeaderboard'));
+const StudentStats = lazy(() => import('./pages/StudentStats'));
+const StudentGameQuestion = lazy(() => import('./pages/StudentGameQuestion'));
+const FeedbackStreak = lazy(() => import('./pages/FeedbackStreak'));
+const TeacherCreateQuiz = lazy(() => import('./pages/TeacherCreateQuiz'));
+const TeacherHomeScreen = lazy(() => import('./pages/TeacherHomeScreen'));
+const TeacherLobby = lazy(() => import('./pages/TeacherLobby'));
+const TeacherGapReport = lazy(() => import('./pages/TeacherGapReport'));
+const TeacherLiveGame = lazy(() => import('./pages/TeacherLiveGame'));
+const StudentRoundWait = lazy(() => import('./pages/StudentRoundWait'));
+const StudentQuizFinish = lazy(() => import('./pages/StudentQuizFinish'));
+const SleepScreen = lazy(() => import('./pages/SleepScreen'));
+const TeacherClassManagement = lazy(() => import('./pages/TeacherClassManagement'));
+const StudentClassView = lazy(() => import('./pages/StudentClassView'));
+
+function ScreenLoadingFallback() {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '45vh',
+        gap: '12px',
+        color: '#9CA3AF',
+      }}
+    >
+      <div
+        style={{
+          width: '32px',
+          height: '32px',
+          border: '3px solid rgba(255, 122, 0, 0.2)',
+          borderTopColor: '#FF7A00',
+          borderRadius: '50%',
+          animation: 'spin 0.8s linear infinite',
+        }}
+      />
+      <span style={{ fontSize: '13px', fontWeight: 600 }}>Загрузка экрана...</span>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
 import { classApi } from './services/classApi';
 import { testHarness } from './services/testHarness';
 import { roomApi } from './services/roomApi';
@@ -38,6 +69,7 @@ import { haptics } from './services/haptics';
 import { socketService } from './services/socketService';
 import SoundToggleButton from './components/SoundToggleButton';
 import { soundManager } from './services/soundManager';
+import { TeacherPasswordModal } from './components/TeacherPasswordModal';
 
 type TabType = 'home' | 'grove' | 'leaderboard' | 'stats';
 type SubScreenType =
@@ -60,17 +92,22 @@ type SubScreenType =
 export default function App() {
   const [role, setRole] = useState<'teacher' | 'student'>(() => {
     try {
+      const isTeacherUnlocked = localStorage.getItem('lisquiz_teacher_unlocked') === 'true';
       const params = new URLSearchParams(window.location.search);
       const r = params.get('role');
       const s = params.get('screen') || params.get('subScreen');
-      if (r === 'teacher') return 'teacher';
+      if (r === 'teacher' && isTeacherUnlocked) return 'teacher';
       if (r === 'student') return 'student';
       const savedRole = (localStorage.getItem('lisquiz_user_role') || sessionStorage.getItem('lisquiz_role')) as 'teacher' | 'student';
-      if (savedRole === 'teacher' || savedRole === 'student') return savedRole;
-      if (s === 'teacher_quizzes' || s === 'teacher_game' || s === 'teacher_waiting' || s === 'teacher_report' || s === 'stats') return 'teacher';
+      if (savedRole === 'teacher') return isTeacherUnlocked ? 'teacher' : 'student';
+      if (savedRole === 'student') return 'student';
+      if ((s === 'teacher_quizzes' || s === 'teacher_game' || s === 'teacher_waiting' || s === 'teacher_report' || s === 'stats') && isTeacherUnlocked) {
+        return 'teacher';
+      }
     } catch {}
     return 'student';
   });
+  const [teacherPasswordModalOpen, setTeacherPasswordModalOpen] = useState(false);
   const [tab, setTab] = useState<TabType>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -163,7 +200,7 @@ export default function App() {
   const [quizFinishData, setQuizFinishData] = useState<any>(null);
   const [quizSubject, setQuizSubject] = useState<string>('Математика');
   const [quizGrade, setQuizGrade] = useState<number>(7);
-  const [quizClass, setQuizClass] = useState<string>('7А');
+  const [quizClass, setQuizClass] = useState<string>('');
   const [quizClassId, setQuizClassId] = useState<string | undefined>(undefined);
   const [classModalInitialOpen, setClassModalInitialOpen] = useState<boolean>(false);
   const [quizTitle, setQuizTitle] = useState<string>('Викторина по математике');
@@ -359,22 +396,60 @@ export default function App() {
     }
 
     // 3. Restore existing session or create dev user
-    authService.getMe().then((user) => {
+    authService.getMe().then(async (user) => {
       if (user) {
         setCurrentUser(user);
         setRole(user.role);
-        if (user.role === 'student' && user.display_name) {
-          setStudentName(user.display_name);
+        if (user.role === 'student') {
+          if (user.display_name) setStudentName(user.display_name);
+          try {
+            const studentCls = await classApi.getStudentClass();
+            if (studentCls) {
+              setQuizClass(studentCls.name);
+              setQuizClassId(studentCls.id);
+            }
+          } catch {}
         }
       } else {
         authService.quickLogin('student', 'Иван К', 'fox_smart')
-          .then((res) => setCurrentUser(res.user))
+          .then(async (res) => {
+            setCurrentUser(res.user);
+            try {
+              const studentCls = await classApi.getStudentClass();
+              if (studentCls) {
+                setQuizClass(studentCls.name);
+                setQuizClassId(studentCls.id);
+              }
+            } catch {}
+          })
           .catch(() => {});
       }
     });
+
+    // Idle-preload primary screens so tab navigation is instant (0 ms latency)
+    const preloadScreens = () => {
+      import('./pages/ClassGrove');
+      import('./pages/TeacherCreateQuiz');
+      import('./pages/TeacherLobby');
+      import('./pages/TeacherLiveGame');
+      import('./pages/StudentGameQuestion');
+      import('./pages/TeacherGapReport');
+    };
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(preloadScreens);
+    } else {
+      setTimeout(preloadScreens, 600);
+    }
   }, []);
 
   const handleRoleSwitch = (newRole: 'teacher' | 'student') => {
+    if (newRole === 'teacher') {
+      const isUnlocked = localStorage.getItem('lisquiz_teacher_unlocked') === 'true';
+      if (!isUnlocked) {
+        setTeacherPasswordModalOpen(true);
+        return;
+      }
+    }
     haptics.impact('light');
     try {
       soundManager.playTap();
@@ -382,6 +457,7 @@ export default function App() {
     setRole(newRole);
     try {
       sessionStorage.setItem('lisquiz_role', newRole);
+      localStorage.setItem('lisquiz_user_role', newRole);
     } catch {}
     setSubScreen(null);
     setTab('home');
@@ -579,6 +655,24 @@ export default function App() {
         if (s === 'square') return 'square';
         return shapeMap[idx % 4] || 'circle';
       };
+      const rawQuestions = currentQuestionData?.questions || (qObj ? [qObj] : null);
+      const formattedQuestions = rawQuestions?.map((q: any, idx: number) => ({
+        id: q.id ?? `q_${idx + 1}`,
+        number: idx + 1,
+        text: q.text,
+        latex: q.latex,
+        time_limit_sec: q.time_limit_sec || 25,
+        tier: q.tier || 1,
+        is_boss: q.is_boss || false,
+        options: q.options?.map((opt: any, optIdx: number) => ({
+          id: `opt_${opt.id}`,
+          text: opt.text,
+          color: normalizeColor(opt.color, optIdx),
+          shape: normalizeShape(opt.symbol || opt.shape, optIdx),
+          isCorrect: opt.is_correct,
+        })) || [],
+      })) || undefined;
+
       const options = qObj?.options?.map((opt: any, idx: number) => ({
         id: `opt_${opt.id}`,
         text: opt.text,
@@ -588,14 +682,15 @@ export default function App() {
 
       return (
         <StudentGameQuestion
-          key={`q_${qIndex}_${qObj?.id || 0}`}
+          key={`quiz_${activePin}_${formattedQuestions?.length || 0}`}
           questionNumber={qIndex + 1}
-          totalQuestions={totalQ}
+          totalQuestions={formattedQuestions?.length || totalQ}
           subjectTitle={currentQuestionData?.subject || quizSubject}
           classNameTitle={currentQuestionData?.class_name || quizClass}
           questionText={qObj?.text}
           latex={qObj?.latex}
           options={options}
+          questions={formattedQuestions}
           tier={currentQuestionData?.tier || 2}
           is_boss={currentQuestionData?.is_boss || false}
           timeLimitSec={currentQuestionData?.time_limit_sec || 25}
@@ -625,19 +720,19 @@ export default function App() {
             });
             setSubScreen('student_quiz_finish');
           }}
-          onAnswerSubmit={(optionId, _isCorrect, responseTimeMs, tabBlurred) => {
-            const parsed = parseInt(optionId.replace('opt_', ''), 10);
+          onAnswerSubmit={(optionId, _isCorrect, responseTimeMs, tabBlurred, questionId) => {
+            const parsed = parseInt(String(optionId).replace('opt_', ''), 10);
             const rawId = isNaN(parsed) ? 0 : parsed;
+            const parsedQ = parseInt(String(questionId).replace('q_', ''), 10);
+            const rawQId = isNaN(parsedQ) ? (questionId ?? qObj?.id ?? 1) : parsedQ;
             if (socketService.isConnected()) {
               socketService.send('SUBMIT_ANSWER', {
-                question_id: qObj?.id ?? 1,
+                question_id: rawQId,
                 option_id: rawId,
                 time_taken_sec: responseTimeMs / 1000,
                 tab_blurred: tabBlurred,
               });
             }
-            // Transition directly to student_round_wait, keeping in sync with teacher
-            setSubScreen('student_round_wait');
           }}
         />
       );
@@ -788,12 +883,16 @@ export default function App() {
               onGoToClasses={() => setSubScreen('student_class')}
               onSwitchToTeacher={() => setSubScreen('role_select')}
               appMode={appMode}
+              className={quizClass}
+              classId={quizClassId}
             />
           );
         case 'grove':
           return (
             <ClassGrove
               appMode={appMode}
+              classId={quizClassId || quizClass || ''}
+              className={quizClass || ''}
               onBack={() => handleTabChange('home')}
               onStartQuiz={() => setSubScreen('student_game')}
               onOpenLeaderboard={() => handleTabChange('leaderboard')}
@@ -850,6 +949,9 @@ export default function App() {
         case 'grove':
           return (
             <ClassGrove
+              appMode={appMode}
+              classId={quizClassId || quizClass || ''}
+              className={quizClass || ''}
               onBack={() => handleTabChange('home')}
               onStartQuiz={() => handleTabChange('leaderboard')}
               onOpenLeaderboard={() => handleTabChange('leaderboard')}
@@ -1203,10 +1305,11 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.985 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.985 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
               style={styles.screenWrapper}
             >
-              {renderTabContent()}
+              <Suspense fallback={<ScreenLoadingFallback />}>
+                {renderTabContent()}
+              </Suspense>
             </motion.div>
           </AnimatePresence>
         </main>
@@ -1650,6 +1753,18 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* Teacher Password Access Modal */}
+      <TeacherPasswordModal
+        isOpen={teacherPasswordModalOpen}
+        onSuccess={() => {
+          setTeacherPasswordModalOpen(false);
+          handleRoleSwitch('teacher');
+        }}
+        onCancel={() => {
+          setTeacherPasswordModalOpen(false);
+        }}
+      />
       </div>
     </div>
   );

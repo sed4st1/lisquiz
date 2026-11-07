@@ -2,8 +2,10 @@ import io
 import csv
 import re
 from typing import Optional
-from fastapi import APIRouter, HTTPException, status, Response
+from fastapi import APIRouter, HTTPException, status, Response, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+from ..db.session import get_db
 from ..models.schemas import Quiz, Question, AnswerOption, GameRoom, RoomStatus, GapReport
 from ..services.room_state_engine import room_state_engine
 from ..services.ws_manager import ws_manager
@@ -376,6 +378,84 @@ async def export_gap_report_csv(room_code: str):
             "Content-Disposition": f'attachment; filename="{filename}"',
         },
     )
+
+
+class SendReportRequest(BaseModel):
+    class_id: Optional[str] = None
+
+
+@router.post("/{room_code}/send-report")
+async def send_room_gap_report(
+    room_code: str,
+    req: Optional[SendReportRequest] = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Отправка аналитического отчета по викторине в привязанный чат класса Сферума / MAX.
+    Если чат еще не подключен, возвращает need_chat_connection: True с инвайт-кодом и инструкцией.
+    """
+    report = await room_state_engine.generate_gap_report(room_code)
+    room = await room_state_engine.get_room(room_code)
+    if not report or not room:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Отчет для комнаты {room_code} не найден",
+        )
+
+    # 1. Определяем класс
+    target_class_id = (req.class_id if req and req.class_id else None) or room.class_id
+    from ..services.class_service import get_class_by_id, get_classes_by_teacher
+    from ..services.max_bot_service import max_bot_service
+
+    cls_obj = None
+    if target_class_id:
+        cls_obj = await get_class_by_id(db, target_class_id)
+    if not cls_obj and room.host_pseudonym_id:
+        classes = await get_classes_by_teacher(db, room.host_pseudonym_id)
+        if classes:
+            cls_obj = await get_class_by_id(db, classes[0]["id"])
+
+    # Расчет желудей и капель
+    n_part = max(1, report.total_participants)
+    acc = report.class_accuracy_percent
+    acorns = int(round(n_part * 50 + (acc / 100.0) * n_part * 30))
+    drops = int(round(n_part * 2 + (acc / 100.0) * n_part * 3))
+
+    if not cls_obj or not cls_obj.max_chat_id:
+        # Чат еще не привязан к классу
+        return {
+            "success": True,
+            "sent_to_chat": False,
+            "need_chat_connection": True,
+            "class_name": cls_obj.name if cls_obj else f"{room.quiz.grade} класс",
+            "invite_code": cls_obj.invite_code if cls_obj else "LIS-CLASS",
+            "bot_username": max_bot_service.bot_username or "@ideya_fiks_131_bot",
+            "message": "Чат класса в Сферуме/MAX ещё не привязан к боту",
+        }
+
+    # Чат привязан -> отправляем отчет
+    sent = await max_bot_service.send_gap_report_to_chat(
+        chat_id=cls_obj.max_chat_id,
+        quiz_title=report.quiz_title,
+        topic=room.quiz.topic,
+        total_participants=report.total_participants,
+        accuracy_percent=acc,
+        acorns_earned=acorns,
+        drops_earned=drops,
+        weak_topics=report.topics_to_review or [],
+        homework_rec=report.homework_recommendation,
+        room_code=room_code,
+    )
+
+    return {
+        "success": sent,
+        "sent_to_chat": True,
+        "need_chat_connection": False,
+        "chat_id": cls_obj.max_chat_id,
+        "class_name": cls_obj.name,
+        "message": f"Отчёт успешно отправлен в чат класса «{cls_obj.name}» в Сферуме!",
+    }
+
 
 
 class RoomControlRequest(BaseModel):

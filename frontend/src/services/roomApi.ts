@@ -129,6 +129,23 @@ export const roomApi = {
     return res.json();
   },
 
+  async sendReportToChat(roomCode: string, classId?: string): Promise<{
+    success: boolean;
+    sent_to_chat: boolean;
+    need_chat_connection?: boolean;
+    class_name?: string;
+    invite_code?: string;
+    bot_username?: string;
+    message?: string;
+  }> {
+    const res = await fetch(`/api/rooms/${roomCode}/send-report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ class_id: classId }),
+    });
+    return res.json();
+  },
+
   getExportCsvUrl(roomCode: string): string {
     return `/api/rooms/${roomCode}/export/csv`;
   },

@@ -126,8 +126,18 @@ class AuthService:
         session: AsyncSession,
         ticket_code: str,
     ) -> Optional[UserModel]:
-        """Погашение тикета и создание/возврат пользователя."""
-        stmt = select(AuthTicketModel).where(AuthTicketModel.ticket == ticket_code)
+        clean = ticket_code.strip()
+        norm = clean.replace("-", "").replace(" ", "").upper()
+        formatted = f"{norm[:3]}-{norm[3:]}" if len(norm) == 6 else clean
+
+        from sqlalchemy import or_
+        stmt = select(AuthTicketModel).where(
+            or_(
+                AuthTicketModel.ticket == clean,
+                AuthTicketModel.ticket == norm,
+                AuthTicketModel.ticket == formatted,
+            )
+        )
         result = await session.execute(stmt)
         ticket = result.scalars().first()
 

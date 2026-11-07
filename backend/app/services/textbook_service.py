@@ -281,6 +281,8 @@ class TextbookService:
         return {
             "textbook_id": textbook_id,
             "textbook_title": tb["title"],
+            "subject": tb.get("subject"),
+            "grade": tb.get("grade"),
             "paragraph_num": para_info["paragraph_num"],
             "paragraph_title": para_info["title"],
             "chapter": para_info["chapter"],

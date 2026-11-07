@@ -126,6 +126,19 @@ export const authService = {
     return data;
   },
 
+  getDeviceId(): string {
+    try {
+      let devId = localStorage.getItem('lisquiz_device_id');
+      if (!devId) {
+        devId = 'dev_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+        localStorage.setItem('lisquiz_device_id', devId);
+      }
+      return devId;
+    } catch {
+      return 'dev_fallback';
+    }
+  },
+
   /**
    * Instant dev login / role switch (creates or recovers user in DB with Zero-PII).
    */
@@ -141,6 +154,7 @@ export const authService = {
         quick_role: role,
         display_name: displayName,
         avatar: avatar,
+        device_id: this.getDeviceId(),
       }),
     });
 

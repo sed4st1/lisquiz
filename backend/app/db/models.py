@@ -105,6 +105,7 @@ class ClassModel(Base):
     subject: Mapped[str] = mapped_column(String(100), default="Математика", nullable=False)
     grade: Mapped[int] = mapped_column(Integer, default=7, nullable=False)
     invite_code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)  # e.g. "7A-4829"
+    max_chat_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)  # Chat ID in MAX/Sferum
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Связи

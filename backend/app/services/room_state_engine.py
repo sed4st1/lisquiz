@@ -495,11 +495,32 @@ class RoomStateEngine:
             if not player:
                 return {"status": "error", "code": "PLAYER_NOT_FOUND", "message": "Игрок не найден"}
 
-            # Защита от повторного ответа
-            if sub.player_id in room.answered_player_ids:
-                return {"status": "error", "code": "ALREADY_ANSWERED", "message": "Ответ уже отправлен"}
+            # 1. Поиск вопроса: по id, по индексу либо текущий
+            cur_q = None
+            q_idx = 0
+            for idx, q in enumerate(room.quiz.questions):
+                if q.id == sub.question_id or str(q.id) == str(sub.question_id):
+                    cur_q = q
+                    q_idx = idx
+                    break
+            if not cur_q and 0 <= sub.question_id < len(room.quiz.questions):
+                cur_q = room.quiz.questions[sub.question_id]
+                q_idx = sub.question_id
+            if not cur_q:
+                q_idx = min(room.current_question_index, len(room.quiz.questions) - 1)
+                cur_q = room.quiz.questions[q_idx]
 
-            room.answered_player_ids.append(sub.player_id)
+            # 2. Защита от повторного ответа на ОДИН И ТОТ ЖЕ вопрос
+            prev_answers = self.answers.get(sub.room_code, [])
+            already_answered_this_q = any(
+                a.player_id == sub.player_id and (a.question_id == cur_q.id or a.question_id == q_idx)
+                for a in prev_answers
+            )
+            if already_answered_this_q:
+                return {"status": "error", "code": "ALREADY_ANSWERED", "message": "Ответ на этот вопрос уже отправлен"}
+
+            if sub.player_id not in room.answered_player_ids:
+                room.answered_player_ids.append(sub.player_id)
             if sub.room_code not in self.answers:
                 self.answers[sub.room_code] = []
             self.answers[sub.room_code].append(sub)
@@ -507,8 +528,7 @@ class RoomStateEngine:
             if sub.tab_blurred:
                 player.blurred_count += 1
 
-            # Проверка правильности
-            cur_q = room.quiz.questions[room.current_question_index]
+            # 3. Проверка правильности для найденного вопроса
             correct_opt = next((o for o in cur_q.options if o.is_correct), None)
             is_correct = bool(correct_opt and (correct_opt.id == sub.option_id))
 
@@ -545,9 +565,22 @@ class RoomStateEngine:
                 step = max(1, int(100 / (total_q * total_p)))
                 room.grove_energy = min(100, room.grove_energy + step)
 
-            # Проверка, ответили ли все активные игроки
+            # Подсчет ответов игрока и проверка завершения викторины
+            player_all_answers = [
+                a for a in self.answers.get(sub.room_code, [])
+                if a.player_id == sub.player_id
+            ]
+            player_answered_count = len(player_all_answers)
+            is_player_finished = player_answered_count >= len(room.quiz.questions)
+
+            # Проверка, завершили ли викторину все активные подключенные игроки
             active_players = [p for p in room.players.values() if p.connected]
-            all_answered = len(room.answered_player_ids) >= len(active_players)
+            all_finished = False
+            if active_players and len(room.quiz.questions) > 0:
+                all_finished = all(
+                    len([a for a in self.answers.get(sub.room_code, []) if a.player_id == p.id]) >= len(room.quiz.questions)
+                    for p in active_players
+                )
 
             await self._sync_room_to_redis(room)
 
@@ -558,7 +591,10 @@ class RoomStateEngine:
                 "speed_bonus": speed_bonus,
                 "total_score": player.score,
                 "streak": player.streak,
-                "all_answered": all_answered,
+                "answered_count": player_answered_count,
+                "total_questions": len(room.quiz.questions),
+                "is_player_finished": is_player_finished,
+                "all_answered": all_finished,
                 "grove_energy": room.grove_energy,
                 "blurred_count": player.blurred_count,
             }

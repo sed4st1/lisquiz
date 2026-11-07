@@ -4,6 +4,11 @@ import {
   CheckCircle2,
   ArrowLeft,
   AlertTriangle,
+  Copy,
+  Check,
+  MessageSquare,
+  Bot,
+  X,
 } from 'lucide-react';
 import { roomApi } from '../services/roomApi';
 import { haptics } from '../services/haptics';
@@ -43,6 +48,7 @@ export interface CheatingAuditItem {
 
 export interface TeacherGapReportProps {
   roomCode?: string;
+  classId?: string;
   quizTitle?: string;
   topic?: string;
   grade?: number;
@@ -56,10 +62,11 @@ export interface TeacherGapReportProps {
 
 export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   roomCode,
+  classId,
   quizTitle: _quizTitle = 'Обыкновенные дроби: сложение и вычитание',
   topic: _topic = 'Математика',
   grade = 7,
-  totalStudents = 24,
+  totalStudents = 0,
   questions: initialQuestions,
   topMisconceptions: _topMisconceptions,
   cheatingAuditLog: initialCheatingLog,
@@ -70,6 +77,7 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
     if (initialQuestions && initialQuestions.length > 0) return initialQuestions;
     return [];
   });
+  const [actualParticipants, setActualParticipants] = useState<number>(totalStudents || 0);
   const [cheatingLog, setCheatingLog] = useState<CheatingAuditItem[]>(() => {
     if (initialCheatingLog && initialCheatingLog.length > 0) return initialCheatingLog;
     return [];
@@ -77,6 +85,14 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
   const [expandedTier, setExpandedTier] = useState<number | null>(null);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
   const [isRemedialSent, setIsRemedialSent] = useState(false);
+  const [isSendingToChat, setIsSendingToChat] = useState(false);
+  const [connectChatModalOpen, setConnectChatModalOpen] = useState(false);
+  const [connectChatData, setConnectChatData] = useState<{
+    className: string;
+    inviteCode: string;
+    botUsername: string;
+  } | null>(null);
+  const [hasCopiedConnect, setHasCopiedConnect] = useState(false);
   const [_isLoading, setIsLoading] = useState(false);
   const [serverHomeworkRec, setServerHomeworkRec] = useState<string | null>(null);
 
@@ -116,6 +132,10 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
           setQuestions(mapped);
         }
 
+        if (report.total_participants !== undefined && report.total_participants > 0) {
+          setActualParticipants(report.total_participants);
+        }
+
         if (report.homework_recommendation) {
           setServerHomeworkRec(report.homework_recommendation);
         }
@@ -153,16 +173,18 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
     return Math.round(sum / questions.length);
   }, [questions]);
 
+  const effectiveStudents = actualParticipants > 0 ? actualParticipants : (totalStudents || 0);
+
   // Gamification acorns and drops earned by the class
   const totalAcorns = useMemo(() => {
     if (questions.length === 0) return 0;
-    return Math.max(0, totalStudents * 60 + Math.round((avgAccuracy / 100) * 350));
-  }, [totalStudents, avgAccuracy, questions.length]);
+    return Math.max(0, effectiveStudents * 60 + Math.round((avgAccuracy / 100) * 350));
+  }, [effectiveStudents, avgAccuracy, questions.length]);
 
   const totalDrops = useMemo(() => {
     if (questions.length === 0) return 0;
-    return Math.max(0, totalStudents * 7 + Math.round((avgAccuracy / 100) * 30));
-  }, [totalStudents, avgAccuracy, questions.length]);
+    return Math.max(0, effectiveStudents * 7 + Math.round((avgAccuracy / 100) * 30));
+  }, [effectiveStudents, avgAccuracy, questions.length]);
 
   // Tier metrics
   const tier1Questions = useMemo(() => questions.filter((q) => q.tier === 1 || q.correctPercentage >= 80), [questions]);
@@ -205,6 +227,46 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
     const weak = questions.filter((q) => q.correctPercentage < 75).map((q) => q.topic);
     if (onSendReviewTasks) {
       onSendReviewTasks(weak.length > 0 ? weak : ['Обыкновенные дроби']);
+    }
+  };
+
+  const handleSendToChat = async () => {
+    if (isSendingToChat) return;
+    setIsSendingToChat(true);
+    haptics.impact('medium');
+    try {
+      const result = await roomApi.sendReportToChat(roomCode!, classId);
+      if (result?.need_chat_connection) {
+        setConnectChatData({
+          className: result.class_name || `${grade}А класс`,
+          inviteCode: result.invite_code || '',
+          botUsername: result.bot_username || 'ideya_fiks_131_bot',
+        });
+        setConnectChatModalOpen(true);
+      } else if (result?.success) {
+        haptics.notification('success');
+        setIsRemedialSent(true);
+        const weak = questions.filter((q) => q.correctPercentage < 75).map((q) => q.topic);
+        if (onSendReviewTasks) onSendReviewTasks(weak.length > 0 ? weak : ['Обыкновенные дроби']);
+      } else {
+        // No chat linked — show connect modal
+        setConnectChatData({
+          className: `${grade}А класс`,
+          inviteCode: roomCode || '',
+          botUsername: 'ideya_fiks_131_bot',
+        });
+        setConnectChatModalOpen(true);
+      }
+    } catch (err) {
+      // Network error — show connect modal as fallback
+      setConnectChatData({
+        className: `${grade}А класс`,
+        inviteCode: roomCode || '',
+        botUsername: 'ideya_fiks_131_bot',
+      });
+      setConnectChatModalOpen(true);
+    } finally {
+      setIsSendingToChat(false);
     }
   };
 
@@ -316,7 +378,7 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
               <img src="/assets/teacher/icon_people.png" alt="Участников" style={styles.statIconImg} />
             </div>
             <span style={styles.statLabel}>Участников</span>
-            <span style={styles.statValue}>{totalStudents}</span>
+            <span style={styles.statValue}>{effectiveStudents}</span>
           </motion.div>
 
           {/* Card 3: Жёлудей */}
@@ -664,25 +726,218 @@ export const TeacherGapReport: React.FC<TeacherGapReportProps> = ({
             <div style={styles.remedialSuccessBox}>
               <CheckCircle2 size={22} color="#15803D" strokeWidth={2.5} />
               <div style={styles.remedialSuccessText}>
-                <strong>Работа над ошибками сформирована!</strong>
-                <span>Персонализированные карточки отправлены ученикам в чат Сферума</span>
+                <strong>Работа над ошибками отправлена!</strong>
+                <span>Отчёт и карточки повторения отправлены в чат класса в Сферуме</span>
               </div>
             </div>
           ) : (
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.96 }}
-              onClick={handleGenerateRemedial}
-              style={styles.remedialBtn}
-            >
-              <img
-                src="/assets/teacher/btn_remedial_report.png"
-                alt="Сформировать работу над ошибками"
-                style={styles.remedialBtnImg}
-              />
-            </motion.button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
+              {/* Primary: send to Sferum chat */}
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
+                onClick={handleSendToChat}
+                disabled={isSendingToChat || !roomCode}
+                style={{
+                  ...styles.remedialBtn,
+                  background: isSendingToChat ? '#9CA3AF' : '#1A7F5A',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 14,
+                  padding: '14px 18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  fontSize: 15,
+                  fontWeight: 700,
+                  cursor: isSendingToChat ? 'wait' : 'pointer',
+                  width: '100%',
+                  boxShadow: '0 4px 0 #14603E',
+                  backgroundImage: 'none',
+                }}
+              >
+                {isSendingToChat ? (
+                  <>
+                    <span style={{ fontSize: 16 }}>⏳</span>
+                    Отправка...
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare size={18} />
+                    Отправить отчёт в чат Сферума
+                  </>
+                )}
+              </motion.button>
+              {/* Secondary: local generate only */}
+              <motion.button
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={handleGenerateRemedial}
+                style={{
+                  background: 'transparent',
+                  border: '1.5px solid #B08850',
+                  borderRadius: 12,
+                  padding: '10px 18px',
+                  color: '#7A5C30',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                Сформировать только локально
+              </motion.button>
+            </div>
           )}
         </motion.div>
+
+        {/* ========================================================
+            CONNECT CHAT MODAL — shown when chat is not linked
+           ======================================================== */}
+        <AnimatePresence>
+          {connectChatModalOpen && connectChatData && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.55)',
+                zIndex: 999,
+                display: 'flex',
+                alignItems: 'flex-end',
+                justifyContent: 'center',
+                padding: '0 0 env(safe-area-inset-bottom, 0px)',
+              }}
+              onClick={() => setConnectChatModalOpen(false)}
+            >
+              <motion.div
+                initial={{ y: 80, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 80, opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 300, damping: 28 }}
+                style={{
+                  background: '#FFF8EE',
+                  borderRadius: '20px 20px 0 0',
+                  padding: '20px 20px 32px',
+                  width: '100%',
+                  maxWidth: 480,
+                  boxShadow: '0 -8px 40px rgba(0,0,0,0.2)',
+                  boxSizing: 'border-box',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Bot size={22} color="#1A7F5A" />
+                    <span style={{ fontWeight: 700, fontSize: 16, color: '#2D2D2D' }}>
+                      Добавьте бота в чат класса
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setConnectChatModalOpen(false)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+                  >
+                    <X size={20} color="#888" />
+                  </button>
+                </div>
+
+                {/* Explanation */}
+                <p style={{ fontSize: 13, color: '#555', lineHeight: 1.5, margin: '0 0 16px' }}>
+                  Чтобы отправлять отчёты и работу над ошибками напрямую в групповой чат{' '}
+                  <strong>{connectChatData.className}</strong> в Сферуме:
+                </p>
+
+                {/* Steps */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                  {[
+                    { n: '1', text: `Добавьте бота @${connectChatData.botUsername} в групповой чат класса` },
+                    { n: '2', text: 'Напишите в чат команду для привязки:' },
+                  ].map((step) => (
+                    <div key={step.n} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                      <span style={{
+                        background: '#1A7F5A',
+                        color: '#fff',
+                        borderRadius: '50%',
+                        width: 22,
+                        height: 22,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        flexShrink: 0,
+                        marginTop: 2,
+                      }}>
+                        {step.n}
+                      </span>
+                      <span style={{ fontSize: 13, color: '#444', lineHeight: 1.4 }}>{step.text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Copy command */}
+                <div style={{
+                  background: '#1C2D22',
+                  borderRadius: 12,
+                  padding: '12px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 20,
+                }}>
+                  <code style={{ color: '#4ADE80', fontFamily: 'monospace', fontSize: 15, fontWeight: 700, letterSpacing: 1 }}>
+                    /connect {connectChatData.inviteCode}
+                  </code>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`/connect ${connectChatData.inviteCode}`);
+                      setHasCopiedConnect(true);
+                      setTimeout(() => setHasCopiedConnect(false), 2000);
+                    }}
+                    style={{
+                      background: hasCopiedConnect ? '#15803D' : '#2D4A35',
+                      border: 'none',
+                      borderRadius: 8,
+                      padding: '6px 10px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'background 0.2s',
+                    }}
+                  >
+                    {hasCopiedConnect ? <Check size={14} color="#fff" /> : <Copy size={14} color="#9CA3AF" />}
+                    <span style={{ color: hasCopiedConnect ? '#fff' : '#9CA3AF', fontSize: 12 }}>
+                      {hasCopiedConnect ? 'Скопировано!' : 'Копировать'}
+                    </span>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => setConnectChatModalOpen(false)}
+                  style={{
+                    width: '100%',
+                    background: '#E8DEC8',
+                    border: 'none',
+                    borderRadius: 12,
+                    padding: '12px',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: '#7A5C30',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Закрыть
+                </button>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
           </>
         )}
       </div>

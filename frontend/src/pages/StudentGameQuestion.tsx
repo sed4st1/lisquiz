@@ -17,6 +17,7 @@ export interface StudentGameQuestionProps {
   questionText?: string;
   latex?: string;
   options?: QuizOption[];
+  questions?: any[];
   correctOptionId?: string;
   timeLimitSec?: number;
   tier?: number;
@@ -24,7 +25,7 @@ export interface StudentGameQuestionProps {
   answeredCount?: number;
   totalStudents?: number;
   onAnswer?: (isCorrect: boolean) => void;
-  onAnswerSubmit?: (optionId: string, isCorrect: boolean, responseTimeMs: number, tabBlurred: boolean) => void;
+  onAnswerSubmit?: (optionId: string, isCorrect: boolean, responseTimeMs: number, tabBlurred: boolean, questionId?: string | number) => void;
   onTimeUp?: () => void;
   onBack?: () => void;
   onGameFinished?: (data?: any) => void;
@@ -36,6 +37,8 @@ export interface QuestionItem {
   text: string;
   latex?: string;
   timeLimit: number;
+  tier?: number;
+  is_boss?: boolean;
   options: {
     id: string;
     text: string;
@@ -212,15 +215,52 @@ export default function StudentGameQuestion({
   questionText,
   latex,
   options,
+  questions,
   timeLimitSec,
+  tier = 1,
+  is_boss = false,
   answeredCount = 0,
   totalStudents = 0,
   onAnswerSubmit,
   onBack,
   onGameFinished,
 }: StudentGameQuestionProps) {
-  // If parent provided a single dynamic question, use it, otherwise use our multi-question set
-  const isControlledMode = Boolean(questionText);
+  // Normalize dynamic question list if provided, otherwise fallback to single question or demo set
+  const activeQuestionsList: QuestionItem[] = (questions && questions.length > 0)
+    ? questions.map((q: any, idx: number) => ({
+        id: String(q.id ?? `q_${idx + 1}`),
+        number: idx + 1,
+        text: q.text || '',
+        latex: q.latex,
+        timeLimit: q.time_limit_sec || q.timeLimit || 25,
+        tier: q.tier || tier,
+        is_boss: q.is_boss || (idx === questions.length - 1 && is_boss),
+        options: (q.options || []).map((opt: any, optIdx: number) => ({
+          id: String(opt.id),
+          text: opt.text || '',
+          color: opt.color || (['red', 'blue', 'yellow', 'green'] as const)[optIdx % 4],
+          shape: opt.shape || (['triangle', 'diamond', 'circle', 'square'] as const)[optIdx % 4],
+          isCorrect: opt.isCorrect ?? opt.is_correct ?? false,
+        })),
+      }))
+    : (questionText
+        ? [{
+            id: 'q1',
+            number: questionNumber || 1,
+            text: questionText,
+            latex: latex,
+            timeLimit: timeLimitSec || 25,
+            tier: tier,
+            is_boss: is_boss,
+            options: (options || []).map((opt: any, optIdx: number) => ({
+              id: String(opt.id),
+              text: opt.text,
+              color: opt.color || (['red', 'blue', 'yellow', 'green'] as const)[optIdx % 4],
+              shape: opt.shape || (['triangle', 'diamond', 'circle', 'square'] as const)[optIdx % 4],
+              isCorrect: false,
+            })),
+          }]
+        : DEFAULT_QUIZ_QUESTIONS);
 
   // In multi-question mode, track current question index
   const [currentQIndex, setCurrentQIndex] = useState<number>(0);
@@ -234,11 +274,11 @@ export default function StudentGameQuestion({
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
 
   // Live timer for current question
-  const currentQ = DEFAULT_QUIZ_QUESTIONS[currentQIndex] || DEFAULT_QUIZ_QUESTIONS[0]!;
-  const effectiveTotalQ = isControlledMode ? (totalQuestions || 1) : DEFAULT_QUIZ_QUESTIONS.length;
-  const effectiveCurrentNumber = isControlledMode ? (questionNumber || 1) : (currentQIndex + 1);
+  const currentQ = activeQuestionsList[currentQIndex] || activeQuestionsList[0]!;
+  const effectiveTotalQ = activeQuestionsList.length || totalQuestions || 1;
+  const effectiveCurrentNumber = currentQIndex + 1;
 
-  const activeTimeLimit = isControlledMode ? (timeLimitSec || 25) : currentQ.timeLimit;
+  const activeTimeLimit = currentQ.timeLimit || timeLimitSec || 25;
   const [timeLeft, setTimeLeft] = useState<number>(activeTimeLimit);
 
   const startTimeRef = useRef<number>(Date.now());
@@ -276,7 +316,7 @@ export default function StudentGameQuestion({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [currentQIndex, isControlledMode, activeTimeLimit, isFinishedWaiting]);
+  }, [currentQIndex, activeTimeLimit, isFinishedWaiting]);
 
   // Handle when time runs out on question
   const handleTimeUp = () => {
@@ -292,17 +332,12 @@ export default function StudentGameQuestion({
     soundManager.playTap();
 
     const responseTimeMs = Date.now() - startTimeRef.current;
-    const isCorrect = isControlledMode
-      ? false
-      : Boolean(currentQ.options.find((o) => o.id === optId)?.isCorrect);
+    const isCorrect = Boolean(currentQ.options.find((o) => o.id === optId)?.isCorrect);
 
-    // If socket is connected, transmit to server
-    if (onAnswerSubmit && isControlledMode) {
-      onAnswerSubmit(optId, isCorrect, responseTimeMs, hasBlurredRef.current);
-      return;
-    }
-
-    if (socketService.isConnected()) {
+    // Call submit callback to transmit via socket
+    if (onAnswerSubmit) {
+      onAnswerSubmit(optId, isCorrect, responseTimeMs, hasBlurredRef.current, currentQ.id);
+    } else if (socketService.isConnected()) {
       socketService.send('SUBMIT_ANSWER', {
         question_id: currentQ.id,
         option_id: optId,
@@ -311,13 +346,9 @@ export default function StudentGameQuestion({
       });
     }
 
-    // Per user specification:
-    // "ученик может не ждать остальных и отвечать на вопросы быстрее,
-    // когда он ответит, то перейдет на страницу ожидания,
-    // все результаты появятся когда все пройдут викторину."
-    // We give a brief 550ms feedback so the tap is physically felt, then move immediately!
+    // Smooth 450ms physical feedback, then advance to next question
     setTimeout(() => {
-      if (currentQIndex + 1 < DEFAULT_QUIZ_QUESTIONS.length) {
+      if (currentQIndex + 1 < activeQuestionsList.length) {
         soundManager.playKnock();
         setCurrentQIndex((prev) => prev + 1);
       } else {
@@ -325,15 +356,13 @@ export default function StudentGameQuestion({
         soundManager.playVictory();
         setIsFinishedWaiting(true);
       }
-    }, 550);
+    }, 450);
   };
 
   // Determine active question and options
-  const displayedText = isControlledMode ? questionText : currentQ.text;
-  const displayedLatex = isControlledMode ? latex : currentQ.latex;
-  const displayedOptions = isControlledMode && options
-    ? options
-    : currentQ.options;
+  const displayedText = currentQ.text;
+  const displayedLatex = currentQ.latex;
+  const displayedOptions = currentQ.options;
 
 
   // Render LaTeX if available
@@ -472,16 +501,91 @@ export default function StudentGameQuestion({
               </div>
             </div>
 
-            {/* 2. QUESTION CARD */}
+            {/* 2. QUESTION CARD (With Boss Tier 3 Animation and visual aura) */}
             <AnimatePresence mode="wait">
               <motion.div
                 key={`q_card_${effectiveCurrentNumber}`}
-                initial={{ opacity: 0, x: 25 }}
-                animate={{ opacity: 1, x: 0 }}
+                initial={{ opacity: 0, scale: currentQ.is_boss || (currentQ.tier || tier) === 3 ? 0.94 : 1, y: 15 }}
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                  y: 0,
+                  boxShadow: (currentQ.is_boss || (currentQ.tier || tier) === 3)
+                    ? '0 0 25px rgba(239, 68, 68, 0.35), 0 6px 0 #991B1B, 0 12px 24px rgba(153, 27, 27, 0.2)'
+                    : '0 4px 0 #D8BEA3, 0 8px 18px rgba(130, 80, 30, 0.08)',
+                }}
                 exit={{ opacity: 0, x: -25 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-                style={styles.questionCard}
+                transition={{ duration: 0.28, ease: 'easeOut' }}
+                style={{
+                  ...styles.questionCard,
+                  borderColor: (currentQ.is_boss || (currentQ.tier || tier) === 3) ? '#EF4444' : '#E5C39E',
+                  background: (currentQ.is_boss || (currentQ.tier || tier) === 3)
+                    ? 'radial-gradient(circle at 50% 0%, #FFF5F5 0%, #FFFDF9 100%)'
+                    : '#FFFDF9',
+                }}
               >
+                {/* Boss / Tier Badge */}
+                {(currentQ.is_boss || (currentQ.tier || tier) === 3) ? (
+                  <motion.div
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ repeat: Infinity, duration: 1.5, ease: 'easeInOut' }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      background: 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)',
+                      color: '#FFFFFF',
+                      padding: '5px 14px',
+                      borderRadius: 999,
+                      fontSize: 12,
+                      fontWeight: 900,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      marginBottom: 12,
+                      boxShadow: '0 2px 8px rgba(220, 38, 38, 0.35)',
+                    }}
+                  >
+                    <span>🔥</span>
+                    <span>Сложный вопрос · БОСС (х2 очков)</span>
+                  </motion.div>
+                ) : (currentQ.tier || tier) === 2 ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: '#FEF3C7',
+                      color: '#B45309',
+                      padding: '4px 10px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <span>⚡</span>
+                    <span>Уровень 2 · Практика</span>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: '#ECFDF5',
+                      color: '#047857',
+                      padding: '4px 10px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 800,
+                      marginBottom: 10,
+                    }}
+                  >
+                    <span>🌱</span>
+                    <span>Уровень 1 · Базовый</span>
+                  </div>
+                )}
+
                 <div style={styles.questionText}>{displayedText}</div>
 
                 {renderedLatex && (

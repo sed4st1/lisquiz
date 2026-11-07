@@ -1,15 +1,29 @@
 import os
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_PROJECT_ROOT = _BACKEND_DIR.parent
+_ENV_PATHS = (
+    str(_BACKEND_DIR / ".env"),
+    str(_PROJECT_ROOT / ".env"),
+    ".env",
+    "../.env",
+)
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="allow")
+    model_config = SettingsConfigDict(
+        env_file=_ENV_PATHS,
+        extra="allow",
+        env_file_encoding="utf-8"
+    )
 
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     DEBUG: bool = True
     SECRET_KEY: str = "lisquiz-secret-key-2026-super-secure-zero-pii"
-    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://dev.max.ru"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:5173,https://dev.max.ru,https://web.max.ru,https://lisquiz.daniel.crazedns.ru,http://lisquiz.daniel.crazedns.ru"
 
     # MAX Platform
     MAX_BOT_TOKEN: str = ""

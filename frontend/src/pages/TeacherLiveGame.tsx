@@ -119,28 +119,32 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
       if (!studentId && !studentName) return;
 
       setStudents((prev) => {
+        const incomingCount = typeof data?.answered_count === 'number' ? data.answered_count : null;
+        const incomingFinished = typeof data?.is_finished === 'boolean' ? data.is_finished : null;
         const idx = prev.findIndex((s) => (studentId && s.id === studentId) || (studentName && s.name === studentName));
         if (idx === -1) {
+          const answered = incomingCount ?? 1;
           return [
             ...prev,
             {
               id: studentId || String(Date.now()),
               name: studentName || 'Ученик',
               avatar: data?.avatar || 'fox',
-              answeredCount: 1,
+              answeredCount: answered,
               totalQuestions,
-              isFinished: 1 >= totalQuestions,
+              isFinished: incomingFinished ?? (answered >= totalQuestions),
               score: data?.points_earned || 100,
             },
           ];
         }
         return prev.map((s, i) => {
           if (i === idx) {
-            const nextAnswered = Math.min(totalQuestions, s.answeredCount + 1);
+            const nextAnswered = incomingCount ?? Math.min(totalQuestions, s.answeredCount + 1);
+            const finished = incomingFinished ?? (nextAnswered >= totalQuestions);
             return {
               ...s,
               answeredCount: nextAnswered,
-              isFinished: nextAnswered >= totalQuestions,
+              isFinished: finished,
               score: (s.score || 0) + (data?.points_earned || 100),
             };
           }

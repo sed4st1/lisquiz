@@ -10,6 +10,7 @@ import {
   Sparkles,
   ChevronLeft,
   ChevronRight,
+  Rocket,
 } from 'lucide-react';
 import { SavedQuiz, QuizQuestion } from '../services/quizStorage';
 import { TactileButton } from './TactileButton';
@@ -20,6 +21,7 @@ export interface QuizQuestionEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (updatedQuiz: SavedQuiz) => void;
+  onLaunch?: (updatedQuiz: SavedQuiz) => void;
 }
 
 const OPTION_THEMES = [
@@ -34,6 +36,7 @@ export default function QuizQuestionEditorModal({
   isOpen,
   onClose,
   onSave,
+  onLaunch,
 }: QuizQuestionEditorModalProps) {
   const [title, setTitle] = useState(quiz.title);
   const [groupLabel, setGroupLabel] = useState(quiz.group_label || 'Основной');
@@ -358,14 +361,37 @@ export default function QuizQuestionEditorModal({
             Отмена
           </button>
 
-          <TactileButton
-            theme="green"
-            size="md"
-            onClick={handleSaveAndApply}
-            iconBefore={<Save size={16} />}
-          >
-            Сохранить викторину
-          </TactileButton>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TactileButton
+              theme="green"
+              size="md"
+              onClick={handleSaveAndApply}
+              iconBefore={<Save size={16} />}
+            >
+              Сохранить
+            </TactileButton>
+
+            {onLaunch && (
+              <TactileButton
+                theme="orange"
+                size="md"
+                onClick={() => {
+                  haptics.notification('success');
+                  const updated: SavedQuiz = {
+                    ...quiz,
+                    title: title.trim() || quiz.title,
+                    group_label: groupLabel.trim() || 'Основной',
+                    questions: questions.map((q, idx) => ({ ...q, id: idx + 1 })),
+                    updated_at: new Date().toISOString(),
+                  };
+                  onLaunch(updated);
+                }}
+                iconBefore={<Rocket size={16} />}
+              >
+                Запустить в класс
+              </TactileButton>
+            )}
+          </div>
         </div>
       </motion.div>
     </div>

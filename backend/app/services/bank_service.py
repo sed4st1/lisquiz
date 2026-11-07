@@ -210,13 +210,17 @@ class BankService:
             search_term = canonical_db_topic if canonical_db_topic else clean_topic
             fts_query = f"{search_term}*" if search_term else "*"
             
+            is_math_branch = subject in ("Алгебра", "Геометрия", "Вероятность и статистика")
+            subj_q = "(q.subject = ? OR q.subject = 'Математика')" if is_math_branch else "q.subject = ?"
+            subj_plain = "(subject = ? OR subject = 'Математика')" if is_math_branch else "subject = ?"
+
             exclude_clause = " AND q.meta_source != 'ru_mmlu'" if grade <= 9 else ""
             rows = []
             try:
                 cursor.execute(f"""
                     SELECT q.* FROM questions q
                     JOIN questions_fts f ON q.id = f.question_id
-                    WHERE questions_fts MATCH ? AND q.subject = ? AND q.grade = ? {exclude_clause}
+                    WHERE questions_fts MATCH ? AND {subj_q} AND q.grade = ? {exclude_clause}
                     LIMIT ?
                 """, (fts_query, subject, grade, count * 3))
                 rows = [dict(r) for r in cursor.fetchall()]
@@ -228,7 +232,7 @@ class BankService:
                 exclude_clause2 = " AND meta_source != 'ru_mmlu'" if grade <= 9 else ""
                 cursor.execute(f"""
                     SELECT * FROM questions
-                    WHERE subject = ? AND grade = ? AND (topic LIKE ? OR topic LIKE ? OR question_text LIKE ?) {exclude_clause2}
+                    WHERE {subj_plain} AND grade = ? AND (topic LIKE ? OR topic LIKE ? OR question_text LIKE ?) {exclude_clause2}
                     LIMIT ?
                 """, (subject, grade, f"%{clean_topic}%", f"%{search_term}%", f"%{clean_topic}%", count * 3))
                 like_rows = [dict(r) for r in cursor.fetchall()]
@@ -238,8 +242,8 @@ class BankService:
                         rows.append(lr)
                         seen.add(lr["id"])
 
-            # Шаг 3: Если предмет Математика или Физика — синтезируем недостающие задачи через SymPy CAS
-            if len(rows) < count and subject in ("Математика", "Физика"):
+            # Шаг 3: Если предмет Математика/Алгебра/Геометрия или Физика — синтезируем недостающие задачи через SymPy CAS
+            if len(rows) < count and subject in ("Математика", "Алгебра", "Геометрия", "Вероятность и статистика", "Физика"):
                 try:
                     from .sympy_math_engine import sympy_math_engine
                     needed = count - len(rows)
@@ -280,7 +284,7 @@ class BankService:
                 exclude_clause3 = " AND meta_source != 'ru_mmlu'" if grade <= 9 else ""
                 cursor.execute(f"""
                     SELECT * FROM questions
-                    WHERE subject = ? AND grade = ? {exclude_clause3}
+                    WHERE {subj_plain} AND grade = ? {exclude_clause3}
                     ORDER BY RANDOM()
                     LIMIT ?
                 """, (subject, grade, count * 3))
@@ -296,7 +300,7 @@ class BankService:
                 exclude_clause4 = " AND meta_source != 'ru_mmlu'" if grade <= 9 else ""
                 cursor.execute(f"""
                     SELECT * FROM questions
-                    WHERE subject = ? AND grade IN (?, ?) {exclude_clause4}
+                    WHERE {subj_plain} AND grade IN (?, ?) {exclude_clause4}
                     ORDER BY RANDOM()
                     LIMIT ?
                 """, (subject, max(1, grade - 1), grade + 1, count * 3))
@@ -361,7 +365,10 @@ class BankService:
             params = [fts_query]
 
             if subject:
-                conditions.append("q.subject = ?")
+                if subject in ("Алгебра", "Геометрия", "Вероятность и статистика"):
+                    conditions.append("(q.subject = ? OR q.subject = 'Математика')")
+                else:
+                    conditions.append("q.subject = ?")
                 params.append(subject)
             if grade:
                 conditions.append("q.grade = ?")
@@ -393,7 +400,10 @@ class BankService:
         conditions = []
         params = []
         if subject:
-            conditions.append("subject = ?")
+            if subject in ("Алгебра", "Геометрия", "Вероятность и статистика"):
+                conditions.append("(subject = ? OR subject = 'Математика')")
+            else:
+                conditions.append("subject = ?")
             params.append(subject)
         if grade:
             conditions.append("grade = ?")

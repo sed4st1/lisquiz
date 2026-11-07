@@ -28,9 +28,10 @@ class BotSimulateStartRequest(BaseModel):
 
 
 class ExchangeTicketRequest(BaseModel):
-    ticket: Optional[str] = Field(None, description="Одноразовый тикет из ссылки /start (?ticket=...)")
+    ticket: Optional[str] = Field(None, description="Одноразовый тикет из ссылки /start (?ticket=...) или 6-значный код ПК")
     init_data: Optional[str] = Field(None, description="Параметры initData из Sferum WebView")
     quick_role: Optional[str] = Field(None, description="Быстрый вход для тестов: teacher | student")
+    device_id: Optional[str] = Field(None, description="Уникальный ID браузера/устройства для изоляции аккаунтов")
     name: Optional[str] = Field(None, description="Имя для быстрого входа")
     avatar: Optional[str] = Field(None, description="Аватар для быстрого входа")
 
@@ -174,13 +175,17 @@ async def exchange_auth(
             },
         )
 
-    # 3. Быстрый Dev-вход (1 клик для переключения учитель/ученик)
+    # 3. Быстрый Dev-вход / браузерный вход (изоляция аккаунтов по устройствам)
     role = req.quick_role or "teacher"
     default_name = "Ангелина Валерьевна" if role == "teacher" else "Иван К."
     default_avatar = "fox_smart" if role == "teacher" else "raccoon"
     name = req.name or default_name
     avatar = req.avatar or default_avatar
-    pid = auth_service.get_pseudonym_id(f"dev_{role}_{name.replace(' ', '_')}")
+
+    if req.device_id:
+        pid = auth_service.get_pseudonym_id(f"{role}_{req.device_id.strip()}")
+    else:
+        pid = auth_service.get_pseudonym_id(f"dev_{role}_{name.replace(' ', '_')}")
 
     user = await auth_service.get_or_create_user(
         session=db,

@@ -70,6 +70,7 @@ async def validate_init_data(req: InitDataValidateRequest):
 async def max_webhook(request: Request):
     """
     Прием входящих событий и сообщений от платформы MAX (вебхук бота).
+    Поддерживает: bot_started, message_created, message_callback.
     """
     try:
         payload = await request.json()
@@ -78,7 +79,32 @@ async def max_webhook(request: Request):
 
     logger.info(f"Получен MAX вебхук: {payload}")
 
-    # Извлечение параметров сообщения из типичной структуры MAX webhook
+    update_type = payload.get("update_type")
+
+    # Обработка события bot_started (пользователь нажал кнопку Старт в боте)
+    if update_type == "bot_started":
+        chat_id = str(payload.get("chat_id") or payload.get("user", {}).get("user_id", ""))
+        sender_id = str(payload.get("user", {}).get("user_id", chat_id))
+        start_payload = str(payload.get("payload") or "").strip()
+        if start_payload.startswith("quiz_") or start_payload.isdigit():
+            pin = start_payload.replace("quiz_", "")
+            res = await max_bot_service.handle_bot_command(sender_id, chat_id, f"/quiz {pin}")
+        else:
+            res = await max_bot_service.handle_bot_command(sender_id, chat_id, "/start")
+        return {"ok": True, "event": "bot_started", "result": res}
+
+    # Обработка callback нажатия кнопок
+    if update_type == "message_callback":
+        cb = payload.get("callback", {})
+        sender_id = str(cb.get("user", {}).get("user_id", "guest"))
+        msg = payload.get("message", {})
+        chat_id = str(msg.get("recipient", {}).get("chat_id") or sender_id)
+        cb_payload = str(cb.get("payload") or "").strip()
+        if cb_payload:
+            res = await max_bot_service.handle_bot_command(sender_id, chat_id, cb_payload)
+            return {"ok": True, "event": "message_callback", "result": res}
+
+    # Обработка обычных сообщений (message_created)
     message = payload.get("message", {})
     sender = message.get("sender", {})
     recipient = message.get("recipient", {})
@@ -87,6 +113,30 @@ async def max_webhook(request: Request):
     sender_id = str(sender.get("user_id") or payload.get("user_id", "guest"))
     chat_id = str(recipient.get("chat_id") or payload.get("chat_id", sender_id))
     text = str(body.get("text") or payload.get("text", "")).strip()
+
+    # Авто-создание класса при получении сообщения из группового чата MAX / Сферум
+    chat_title = (
+        payload.get("chat", {}).get("title")
+        or recipient.get("title")
+        or payload.get("title")
+        or ""
+    )
+    is_group = bool(
+        payload.get("chat", {}).get("type") in ("group", "supergroup", "channel")
+        or recipient.get("chat_type") in ("group", "supergroup", "channel")
+        or (chat_id and sender_id and str(chat_id) != str(sender_id))
+    )
+    if is_group and chat_id and chat_title:
+        try:
+            from ..db.session import async_session_maker
+            from ..services.class_service import get_class_by_chat_id, auto_create_class_for_chat
+            async with async_session_maker() as session:
+                existing_cls = await get_class_by_chat_id(session, chat_id)
+                if not existing_cls:
+                    teacher_pid = max_bot_service.get_pseudonym_id(sender_id)
+                    await auto_create_class_for_chat(session, chat_id, chat_title, teacher_pid)
+        except Exception as e:
+            logger.warning(f"Notice auto-creating class from chat {chat_id}: {e}")
 
     if text:
         res = await max_bot_service.handle_bot_command(

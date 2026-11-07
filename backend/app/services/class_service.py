@@ -374,3 +374,101 @@ async def get_class_gap_heatmap(
         "systemic_gaps": systemic_gaps,
         "spaced_repetition_boosters": boosters,
     }
+
+
+async def get_class_by_id(
+    db: AsyncSession,
+    class_id: str,
+) -> Optional[ClassModel]:
+    """Поиск класса по ID."""
+    stmt = select(ClassModel).where(ClassModel.id == class_id)
+    res = await db.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def get_class_by_code(
+    db: AsyncSession,
+    code: str,
+) -> Optional[ClassModel]:
+    """Поиск класса по инвайт-коду."""
+    clean = code.strip().upper()
+    stmt = select(ClassModel).where(ClassModel.invite_code == clean)
+    res = await db.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def get_class_by_chat_id(
+    db: AsyncSession,
+    chat_id: str,
+) -> Optional[ClassModel]:
+    """Поиск класса, привязанного к чату MAX/Сферума."""
+    stmt = select(ClassModel).where(ClassModel.max_chat_id == str(chat_id).strip())
+    res = await db.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def connect_chat_to_class(
+    db: AsyncSession,
+    code_or_id: str,
+    chat_id: str,
+) -> Optional[ClassModel]:
+    """Привязка группового чата MAX к существующему классу."""
+    clean = code_or_id.strip().upper()
+    stmt = select(ClassModel).where(
+        (ClassModel.invite_code == clean) | (ClassModel.id == code_or_id.strip())
+    )
+    res = await db.execute(stmt)
+    cls_obj = res.scalar_one_or_none()
+    if not cls_obj:
+        return None
+
+    cls_obj.max_chat_id = str(chat_id).strip()
+    await db.commit()
+    await db.refresh(cls_obj)
+    return cls_obj
+
+
+async def auto_create_class_for_chat(
+    db: AsyncSession,
+    chat_id: str,
+    chat_title: str,
+    teacher_pid: str,
+) -> ClassModel:
+    """
+    Автоматическое создание класса при добавлении бота в чат класса в MAX/Сферуме.
+    """
+    existing = await get_class_by_chat_id(db, chat_id)
+    if existing:
+        return existing
+
+    # Извлечение номера класса и буквы из названия чата (например, "7А Математика" -> 7, "7А")
+    import re
+    grade = 7
+    match = re.search(r'(\d{1,2})', chat_title)
+    if match:
+        try:
+            g_val = int(match.group(1))
+            if 1 <= g_val <= 11:
+                grade = g_val
+        except ValueError:
+            pass
+
+    clean_name = chat_title.strip() if chat_title else f"{grade}А"
+    if len(clean_name) > 30:
+        clean_name = clean_name[:30]
+
+    code = generate_invite_code(clean_name)
+    cls_obj = ClassModel(
+        id=f"cls_{uuid.uuid4().hex[:8]}",
+        teacher_pseudonym_id=teacher_pid,
+        name=clean_name,
+        subject="Математика",
+        grade=grade,
+        invite_code=code,
+        max_chat_id=str(chat_id).strip(),
+    )
+    db.add(cls_obj)
+    await db.commit()
+    await db.refresh(cls_obj)
+    return cls_obj
+

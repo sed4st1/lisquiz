@@ -7,13 +7,69 @@
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" href="/assets/mascot/app_icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#347F9B" />
+    <link rel="preload" as="image" href="/loading_logo.webp" type="image/webp" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@700;900&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@700;900&family=Nunito:wght@700;800;900&display=swap" media="print" onload="this.media='all'" />
+    <noscript>
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@700;900&family=Nunito:wght@700;800;900&display=swap" />
+    </noscript>
     <title>Лисквиз — Интерактивные викторины в Сферуме</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { width: 100%; min-height: 100%; margin: 0; background: #347F9B; }
+      #root-loader {
+        min-height: 100svh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justifyContent: center;
+        overflow: hidden;
+        background: #347F9B;
+        background: radial-gradient(ellipse at center, #438EAA 0%, #347F9B 58%, #24566B 100%);
+      }
+      .loading-logo {
+        display: block;
+        width: min(92vw, 1100px);
+        height: auto;
+        object-fit: contain;
+        animation: gentleFade 2.4s ease-in-out infinite;
+        will-change: opacity;
+        user-select: none;
+        -webkit-user-drag: none;
+      }
+      .loading-pulse {
+        width: 38px;
+        height: 38px;
+        margin-top: 18px;
+        border: 3.5px solid rgba(255, 255, 255, 0.25);
+        border-top-color: #FFFFFF;
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+      @keyframes gentleFade {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: .72; transform: scale(0.99); }
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .loading-logo, .loading-pulse { animation: none; }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="root-loader">
+        <picture>
+          <source srcset="/loading_logo.webp" type="image/webp" />
+          <img class="loading-logo" src="/loading_logo.png" alt="ЛисКвиз — Загрузка" />
+        </picture>
+        <div class="loading-pulse"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

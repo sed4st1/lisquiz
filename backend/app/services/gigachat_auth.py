@@ -26,8 +26,14 @@ class GigaChatAuthManager:
         """
         Возвращает Authorization Key в формате Base64(Client_ID:Client_Secret).
         """
-        if settings.GIGACHAT_CREDENTIALS:
-            return settings.GIGACHAT_CREDENTIALS.strip()
+        if settings.GIGACHAT_CREDENTIALS and not settings.GIGACHAT_CREDENTIALS.strip().startswith("your_"):
+            val = settings.GIGACHAT_CREDENTIALS.strip()
+            try:
+                decoded = base64.b64decode(val).decode("utf-8")
+                if ":" in decoded:
+                    return val
+            except Exception:
+                logger.warning("GIGACHAT_CREDENTIALS не является валидным Base64(Client_ID:Client_Secret), пробуем CLIENT_ID/SECRET")
         
         if settings.GIGACHAT_CLIENT_ID and settings.GIGACHAT_CLIENT_SECRET:
             raw = f"{settings.GIGACHAT_CLIENT_ID.strip()}:{settings.GIGACHAT_CLIENT_SECRET.strip()}"

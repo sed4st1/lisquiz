@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from .config import settings
@@ -25,6 +26,9 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Сжатие ответов (GZip) для быстрой загрузки фронтенда и API
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Настройка CORS
 app.add_middleware(
@@ -97,12 +101,18 @@ if frontend_dist:
 
     @app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
     async def serve_spa(full_path: str):
-        # Если запрошен существующий статический файл (favicon, картинки)
+        # Если запрошен существующий статический файл (favicon, картинки, шрифты)
         target = os.path.join(frontend_dist, full_path)
         if full_path and os.path.isfile(target):
-            return FileResponse(target)
-        # Иначе отдаем точку входа SPA index.html для client-side routing
-        return FileResponse(os.path.join(frontend_dist, "index.html"))
+            # Кэшируем неизменяемые медиа-ресурсы для мгновенной загрузки в Sferum
+            is_media = any(full_path.endswith(ext) for ext in (".webp", ".png", ".jpg", ".jpeg", ".svg", ".woff2", ".woff", ".ttf", ".mp3", ".wav"))
+            headers = {"Cache-Control": "public, max-age=604800, immutable"} if is_media else {}
+            return FileResponse(target, headers=headers)
+        # Иначе отдаем точку входа SPA index.html для client-side routing (без кэша, чтобы обновления влетали сразу)
+        return FileResponse(
+            os.path.join(frontend_dist, "index.html"),
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"}
+        )
 
 
 

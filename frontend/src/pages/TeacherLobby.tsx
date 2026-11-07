@@ -622,12 +622,38 @@ export default function TeacherLobby({
       </div>
 
       {/* 4. Golden Start Quiz Button */}
-      <div style={{ width: '100%', maxWidth: 420, display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+      <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <LobbyStartButton
           onClick={handleStartGame}
           disabled={!activeQuiz}
           countdown={countdown}
         />
+
+        {activeQuiz && (
+          <button
+            type="button"
+            onClick={() => handleEditQuiz(activeQuiz)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              background: 'rgba(255, 255, 255, 0.85)',
+              border: '1.5px solid #D4B08C',
+              borderRadius: 999,
+              padding: '8px 16px',
+              color: '#5C3317',
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(92, 51, 23, 0.08)',
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <BookOpen size={14} color="#855F3F" />
+            <span>Посмотреть и отредактировать вопросы ({activeQuiz.questions?.length || 0})</span>
+          </button>
+        )}
       </div>
 
       {/* 5. Developer & Demo Helpers Toolbar (Strictly hidden for regular teachers) */}
