@@ -1249,7 +1249,10 @@ export default function StudentHome({
                     <div style={styles.questTitle}>Дроби и проценты</div>
                     <div style={styles.questDesc}>Пройди викторину от учителя на уроке</div>
                   </div>
-                  <div style={styles.questReward}>+40 🌰</div>
+                  <div style={styles.questReward}>
+                    <span>+40</span>
+                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                  </div>
                 </div>
 
                 <div style={styles.questItem}>
@@ -1258,7 +1261,10 @@ export default function StudentHome({
                     <div style={styles.questTitle}>Забота о Роще</div>
                     <div style={styles.questDesc}>Полей Древо 5А класса 1 раз сегодня</div>
                   </div>
-                  <div style={styles.questReward}>+20 🌰</div>
+                  <div style={styles.questReward}>
+                    <span>+20</span>
+                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                  </div>
                 </div>
 
                 <div style={styles.questItem}>
@@ -1267,7 +1273,10 @@ export default function StudentHome({
                     <div style={styles.questTitle}>Серия 5 дней</div>
                     <div style={styles.questDesc}>Решай викторины каждый день без пропусков</div>
                   </div>
-                  <div style={styles.questReward}>+60 🌰</div>
+                  <div style={styles.questReward}>
+                    <span>+60</span>
+                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                  </div>
                 </div>
               </div>
 
@@ -1336,8 +1345,10 @@ export default function StudentHome({
                     textAlign: 'center',
                   }}
                 >
-                  <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase' }}>
-                    🎉 {pulledCardResult.is_duplicate ? 'Повторная карточка (Кэшбэк +25 🌰)' : 'Новая карточка!'}
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#B45309', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                    <span>🎉 {pulledCardResult.is_duplicate ? 'Повторная карточка (Кэшбэк +25' : 'Новая карточка!'}</span>
+                    {pulledCardResult.is_duplicate && <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 14, height: 14, objectFit: 'contain' }} />}
+                    {pulledCardResult.is_duplicate && <span>)</span>}
                   </div>
                   <div style={{ fontSize: 16, fontWeight: 900, color: '#78350F', marginTop: 3 }}>
                     {pulledCardResult.card.card_name}
@@ -1400,7 +1411,10 @@ export default function StudentHome({
                 }}
               >
                 <span>{isPulling ? 'Открываем пак...' : 'Открыть пак'}</span>
-                <span style={styles.gachaCost}>50 🌰</span>
+                <span style={{ ...styles.gachaCost, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <span>50</span>
+                  <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 14, height: 14, objectFit: 'contain' }} />
+                </span>
               </motion.button>
             </motion.div>
           </div>
@@ -2139,6 +2153,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     fontWeight: 900,
     color: '#D97706',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
   },
 
   // Gacha showcase
