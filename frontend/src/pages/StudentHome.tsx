@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   ArrowRight,
-  BookOpen,
   User,
   Check,
 } from 'lucide-react';
@@ -14,6 +13,7 @@ import { roomApi, JoinRoomResponse } from '../services/roomApi';
 import { pullKnowledgeCard, fetchStudentInventory, KnowledgeCard } from '../services/groveApi';
 import MascotPuppet from '../components/MascotPuppet';
 import { authService } from '../services/authService';
+import StudentQuestsModal from '../components/StudentQuestsModal';
 
 export interface JoinRoomPayload {
   pin: string;
@@ -1212,87 +1212,40 @@ export default function StudentHome({
       {/* ========================================================
           5. QUESTS & PRACTICE MODAL ("ЗАДАНИЯ")
          ======================================================== */}
-      <AnimatePresence>
-        {isQuestsModalOpen && (
-          <div style={styles.modalOverlay}>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 30 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              style={styles.modalBox}
-            >
-              <button
-                onClick={() => {
-                  soundManager.playKnock();
-                  setIsQuestsModalOpen(false);
-                }}
-                style={styles.modalCloseBtn}
-              >
-                <X size={20} color="#64748B" />
-              </button>
-
-              <div style={styles.modalHeader}>
-                <div style={styles.modalIconWrap}>
-                  <BookOpen size={24} color="#0284C7" />
-                </div>
-                <div>
-                  <h2 style={styles.modalTitle}>Квесты и Задания</h2>
-                  <p style={styles.modalSub}>Выполняй задания и поливай Рощу класса!</p>
-                </div>
-              </div>
-
-              <div style={styles.questList}>
-                <div style={styles.questItem}>
-                  <div style={styles.questIcon}>🎯</div>
-                  <div style={styles.questInfo}>
-                    <div style={styles.questTitle}>Дроби и проценты</div>
-                    <div style={styles.questDesc}>Пройди викторину от учителя на уроке</div>
-                  </div>
-                  <div style={styles.questReward}>
-                    <span>+40</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                  </div>
-                </div>
-
-                <div style={styles.questItem}>
-                  <div style={styles.questIcon}>💧</div>
-                  <div style={styles.questInfo}>
-                    <div style={styles.questTitle}>Забота о Роще</div>
-                    <div style={styles.questDesc}>Полей Древо 5А класса 1 раз сегодня</div>
-                  </div>
-                  <div style={styles.questReward}>
-                    <span>+20</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                  </div>
-                </div>
-
-                <div style={styles.questItem}>
-                  <div style={styles.questIcon}>🔥</div>
-                  <div style={styles.questInfo}>
-                    <div style={styles.questTitle}>Серия 5 дней</div>
-                    <div style={styles.questDesc}>Решай викторины каждый день без пропусков</div>
-                  </div>
-                  <div style={styles.questReward}>
-                    <span>+60</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                  </div>
-                </div>
-              </div>
-
-              <button
-                onClick={() => {
-                  soundManager.playKnock();
-                  setIsQuestsModalOpen(false);
-                }}
-                style={{ ...styles.gachaPullBtn, backgroundColor: '#0284C7', borderBottom: '4px solid #0369A1' }}
-              >
-                Понятно!
-              </button>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* ========================================================
+          5. QUESTS & PRACTICE MODAL ("ЗАДАНИЯ")
+         ======================================================== */}
+      <StudentQuestsModal
+        isOpen={isQuestsModalOpen}
+        onClose={() => setIsQuestsModalOpen(false)}
+        acorns={acorns}
+        streak={streak}
+        className={className || '5А'}
+        onAddAcorns={(amount) => {
+          setAcorns((prev) => {
+            const next = prev + amount;
+            try {
+              localStorage.setItem('lisquiz_student_acorns', String(next));
+              sessionStorage.setItem('lisquiz_user_acorns', String(next));
+            } catch {}
+            return next;
+          });
+        }}
+        onAddXp={(amount) => {
+          setXp((prev) => {
+            const next = prev + amount;
+            try {
+              localStorage.setItem('lisquiz_student_xp', String(next));
+              sessionStorage.setItem('lisquiz_user_xp', String(next));
+            } catch {}
+            return next;
+          });
+        }}
+        onGoToGrove={onGoToGrove}
+        onJoinGameWithPin={(pin) => {
+          setDigits(pin.split('').slice(0, 6));
+        }}
+      />
 
       {/* ========================================================
           6. KNOWLEDGE CARDS GACHA MODAL
