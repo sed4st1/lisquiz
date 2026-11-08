@@ -58,6 +58,12 @@ async def _ensure_sqlite_columns():
                     await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN streak_days INTEGER NOT NULL DEFAULT 1")
                 if "last_active_date" not in cols:
                     await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN last_active_date VARCHAR(10)")
+            # Проверка столбцов в classes
+            res_cls = await conn.exec_driver_sql("PRAGMA table_info(classes)")
+            cols_cls = [row[1] for row in res_cls.fetchall()]
+            if cols_cls:
+                if "max_chat_id" not in cols_cls:
+                    await conn.exec_driver_sql("ALTER TABLE classes ADD COLUMN max_chat_id VARCHAR(64)")
             # Проверка столбцов в spaced_repetition_queue
             res_sr = await conn.exec_driver_sql("PRAGMA table_info(spaced_repetition_queue)")
             cols_sr = [row[1] for row in res_sr.fetchall()]
