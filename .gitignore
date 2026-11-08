@@ -27,11 +27,10 @@ dist-ssr/
 *.swo
 .DS_Store
 Thumbs.db
+*.code-workspace
 
 # Logs & temp
 *.log
-*.db
-*.sqlite3
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -39,19 +38,42 @@ yarn-error.log*
 .coverage
 htmlcov/
 
-# Hackathon organizers guide (large file)
-docs/guide/
-
-# Local design references
-образцы дизайна/
-
 # Databases
 *.db
 *.sqlite3
 !backend/data/question_bank.db
+!backend/data/pilot_skills.db
 
-*.code-workspace
+# Design references & raw packs
+образцы дизайна/
+"образцы дизайна"/
+frontend/public/assets/**/ref_*
+frontend/public/assets/**/*_ref.png
+
+# Documentation archives & guides
+docs/
+
+# AI agent & skill configs
+.agents/
+agent/
+.claude/
+.cursor/
 .mcp.json
+mcp_config.json
+skills-lock.json
+SESSION_CONTEXT.md
+TOPICS_COUNT_TABLE.md
+topics_count.csv
+
+# Dev runner scripts & temporary tools
+scripts/
+run_dev.bat
+run_dev.ps1
+music/
+
+# Root puppeteer config (frontend has its own package.json)
+/package.json
+/package-lock.json
 
 # Local FRP PDFs & downloads
 downloads/
