@@ -223,7 +223,6 @@ export const TeacherLiveGame: React.FC<TeacherLiveGameProps> = ({
     if (socketService.isConnected()) {
       socketService.send('TEACHER_ACTION', { action: 'FINISH_GAME', room_code: roomCode });
     }
-    fetch(`/api/rooms/${roomCode}/close`, { method: 'POST' }).catch(() => {});
 
     setTimeout(() => {
       onFinishQuiz();

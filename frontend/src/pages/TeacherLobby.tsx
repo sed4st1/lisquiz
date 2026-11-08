@@ -39,6 +39,7 @@ export interface TeacherLobbyProps {
   subject?: string;
   grade?: number;
   classNameTitle?: string;
+  classId?: string;
   maxStudents?: number;
   onStartQuiz?: (connectedStudents?: ConnectedStudent[]) => void;
   onRoomReady?: (pin: string, token: string) => void;
@@ -94,6 +95,7 @@ export default function TeacherLobby({
   subject = 'Математика',
   grade = 7,
   classNameTitle,
+  classId,
   maxStudents,
   onStartQuiz,
   onRoomReady,
@@ -213,7 +215,11 @@ export default function TeacherLobby({
             setActivePin('');
             setStudents([]);
           }
-          const res = await roomApi.createRoom();
+          const res = await roomApi.createRoom({
+            class_id: classId,
+            subject: subject,
+            grade: grade,
+          });
           code = res.room_code;
           token = res.teacher_token;
           if (isMounted) {

@@ -223,6 +223,7 @@ export default function App() {
   const [quizCreateInitialTab, setQuizCreateInitialTab] = useState<'create' | 'saved'>('create');
   const [liveGameStudents, setLiveGameStudents] = useState<Array<{ id: string; name: string; avatar: string }>>([]);
   const studentQuizStatsRef = useRef<{ correct: number; wrong: number; total: number; score: number }>({ correct: 0, wrong: 0, total: 3, score: 0 });
+  const isFinishingQuizRef = useRef<boolean>(false);
 
   // Listen to incoming WebSocket events
   useEffect(() => {
@@ -287,10 +288,6 @@ export default function App() {
           return;
         }
 
-        // Если ученик играл, сразу разрываем соединение с комнатой, чтобы не висеть в сокетах
-        socketService.disconnect();
-        setActivePin('');
-
         const topPlayers = data?.top_players || [];
         const myPlayer = topPlayers.find((p: any) =>
           (studentPlayerId && p.id === studentPlayerId) ||
@@ -305,6 +302,8 @@ export default function App() {
         const totalQ = currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3;
         const correctQ = studentQuizStatsRef.current.correct;
         const wrongQ = Math.max(studentQuizStatsRef.current.wrong, totalQ - correctQ);
+        
+        isFinishingQuizRef.current = true;
         setQuizFinishData({
           top_players: topPlayers,
           myScore: myScore,
@@ -314,11 +313,20 @@ export default function App() {
           totalQuestions: totalQ,
         });
         setSubScreen('student_quiz_finish');
+
+        // Отложенное мягкое отключение сокета, чтобы не сбросить экран в гонке рендера
+        setTimeout(() => {
+          socketService.disconnect();
+          setActivePin('');
+        }, 800);
       }
     };
 
     const handleStudentKickOrClose = (data: any) => {
       if (role === 'student' && subScreen) {
+        if (subScreen === 'student_quiz_finish' || subScreen === 'student_leaderboard' || isFinishingQuizRef.current) {
+          return;
+        }
         socketService.disconnect();
         setActivePin('');
         setSubScreen(null);
@@ -329,7 +337,10 @@ export default function App() {
     };
 
     const handleStudentDisconnect = (_data?: any) => {
-      if (role === 'student' && subScreen && subScreen !== 'student_quiz_finish') {
+      if (role === 'student' && subScreen) {
+        if (subScreen === 'student_quiz_finish' || subScreen === 'student_leaderboard' || isFinishingQuizRef.current) {
+          return;
+        }
         socketService.disconnect();
         setActivePin('');
         setSubScreen(null);
@@ -877,13 +888,17 @@ export default function App() {
           wrongCount={quizFinishData?.wrongCount ?? 1}
           totalQuestions={quizFinishData?.totalQuestions ?? 5}
           onGoToLeaderboard={(earnedPoints, rank) => {
+            isFinishingQuizRef.current = true;
             socketService.disconnect();
             setActivePin('');
             setLeaderboardBoostPoints(earnedPoints || quizFinishData?.myScore || 150);
             setLeaderboardBoostRank(rank || quizFinishData?.myRank || null);
             setSubScreen('student_leaderboard');
           }}
-          onBackToHome={() => setSubScreen(null)}
+          onBackToHome={() => {
+            isFinishingQuizRef.current = false;
+            setSubScreen(null);
+          }}
         />
       );
     }
@@ -1041,6 +1056,7 @@ export default function App() {
               quizTitle={quizTitle}
               subject={quizSubject}
               grade={quizGrade}
+              classId={quizClassId}
               classNameTitle={quizClassId ? quizClass : undefined}
               maxStudents={quizClassId ? quizClassStudentsCount : undefined}
               isDev={isDevMode}

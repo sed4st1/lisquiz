@@ -680,37 +680,305 @@ class RoomStateEngine:
                     "status": room.status.value,
                 }
             else:
-                await self.transition_state(room_code, RoomStatus.FINISHED)
-                # Связка с Классной Рощей 2.0 (Ivan's Class Grove & Liebig Balance)
-                try:
-                    from .grove_service import grove_service
-                    class_id = f"class_{room.quiz.grade}a"
-                    room_answers = self.answers.get(room_code, [])
-                    student_results = []
-                    for p in room.players.values():
-                        p_answers = [a for a in room_answers if a.player_id == p.id]
-                        t1_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 1)
-                        t2_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 2)
-                        t3_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 3)
-                        student_results.append({
-                            "student_id": p.id,
-                            "student_name": p.name,
-                            "avatar": p.avatar or "hedgehog",
-                            "points_earned": p.score,
-                            "tier1_correct": t1_corr,
-                            "tier2_correct": t2_corr,
-                            "tier3_correct": t3_corr,
-                            "total_questions": len(room.quiz.questions),
-                        })
-                    if student_results:
-                        grove_service.apply_quiz_session(class_id=class_id, student_results=student_results)
-                except Exception as ge:
-                    logger.warning("Grove service integration error on FINISHED: %s", ge)
-
+                finish_data = await self.finish_room(room_code)
                 return {
                     "has_next": False,
                     "status": room.status.value,
+                    "finish_data": finish_data,
                 }
+
+    async def finish_room(self, room_code: str) -> Dict:
+        """
+        Завершение игровой сессии викторины с полным сохранением в БД SQLite:
+        1. Перевод статуса комнаты в FINISHED.
+        2. Определение и привязка class_id (если комната создана без него).
+        3. Транзакционное сохранение:
+           - GameRoomModel (status='finished', finished_at=now, class_id)
+           - Quizzes & Questions (если еще не были сохранены в БД, для валидных FK и аналитики)
+           - RoomParticipantModel (pseudonym_id, score, streak, blurred_count, connected)
+           - PlayerAnswerModel (room_code, participant_id, question_id, option_id, is_correct, points_awarded)
+           - ClassStudentModel (привязка учеников к классу, если еще не привязаны)
+           - UserModel (обновление суммарных очков и сыгранных викторин)
+        4. Начисление очков, баланса Либиха (Вода/Гумус/Свет) и Желудей гачи в Классную Рощу 2.0 (grove_service).
+        5. Формирование Gap Report и списка лучших игроков (top_players) для экранов финиша и подиума.
+        """
+        async with self.get_room_lock(room_code):
+            room = await self.get_room(room_code)
+            if not room:
+                raise ValueError(f"Комната {room_code} не найдена")
+
+            # Переводим статус в FINISHED в памяти
+            room.status = RoomStatus.FINISHED
+            await self._sync_room_to_redis(room)
+
+            from ..db.session import async_session_maker
+            from ..db.models import (
+                GameRoomModel,
+                RoomParticipantModel,
+                PlayerAnswerModel,
+                QuizModel,
+                QuestionModel,
+                ClassModel,
+                ClassStudentModel,
+                UserModel,
+            )
+            from sqlalchemy import select, func, desc
+            from datetime import datetime, timezone
+
+            now_utc = datetime.now(timezone.utc)
+            class_name_for_grove = None
+
+            # 1. Попытка восстановить/определить class_id, если он не был передан при создании
+            try:
+                async with async_session_maker() as db:
+                    if not room.class_id:
+                        # 1a. Ищем по зарегистрированным классам участников
+                        pids = [p.pseudonym_id for p in room.players.values() if p.pseudonym_id]
+                        if pids:
+                            c_stmt = (
+                                select(ClassStudentModel.class_id, func.count().label("cnt"))
+                                .where(ClassStudentModel.pseudonym_id.in_(pids))
+                                .group_by(ClassStudentModel.class_id)
+                                .order_by(desc("cnt"))
+                                .limit(1)
+                            )
+                            c_res = await db.execute(c_stmt)
+                            c_row = c_res.first()
+                            if c_row:
+                                room.class_id = c_row[0]
+
+                        # 1b. Если все еще нет, берем последний класс учителя
+                        if not room.class_id and room.teacher_pseudonym_id:
+                            t_stmt = (
+                                select(ClassModel.id)
+                                .where(ClassModel.teacher_pseudonym_id == room.teacher_pseudonym_id)
+                                .order_by(desc(ClassModel.created_at))
+                                .limit(1)
+                            )
+                            t_res = await db.execute(t_stmt)
+                            t_row = t_res.first()
+                            if t_row:
+                                room.class_id = t_row[0]
+
+                    # Получаем имя класса для синхронизации с Рощей
+                    if room.class_id:
+                        cls_meta = await db.scalar(select(ClassModel).where(ClassModel.id == room.class_id))
+                        if cls_meta:
+                            class_name_for_grove = cls_meta.name
+            except Exception as e:
+                logger.warning(f"Failed to infer class_id for room {room_code}: {e}", exc_info=True)
+
+            # 2. Транзакционное сохранение игровой сессии в SQLite
+            try:
+                async with async_session_maker() as db:
+                    async with db.begin():
+                        # 2a. Проверяем / создаем QuizModel и QuestionModel в БД
+                        question_id_map: Dict[int, int] = {}
+                        if room.quiz:
+                            db_quiz = await db.scalar(select(QuizModel).where(QuizModel.id == room.quiz.id))
+                            if not db_quiz:
+                                db_quiz = QuizModel(
+                                    id=room.quiz.id,
+                                    title=room.quiz.title,
+                                    subject=room.quiz.subject,
+                                    grade=room.quiz.grade,
+                                    topic=room.quiz.topic,
+                                    is_verified=True,
+                                )
+                                db.add(db_quiz)
+                                await db.flush()
+
+                            for idx, q in enumerate(room.quiz.questions):
+                                existing_q = await db.scalar(
+                                    select(QuestionModel).where(QuestionModel.quiz_id == db_quiz.id, QuestionModel.order_index == idx)
+                                )
+                                if not existing_q:
+                                    existing_q = await db.scalar(
+                                        select(QuestionModel).where(QuestionModel.id == q.id)
+                                    )
+                                if existing_q:
+                                    question_id_map[q.id] = existing_q.id
+                                else:
+                                    new_q = QuestionModel(
+                                        id=q.id if not await db.scalar(select(QuestionModel.id).where(QuestionModel.id == q.id)) else None,
+                                        quiz_id=db_quiz.id,
+                                        order_index=idx,
+                                        text=q.text,
+                                        explanation=getattr(q, "explanation", "") or "",
+                                        time_limit_sec=getattr(q, "time_limit_sec", 20) or 20,
+                                        tier=getattr(q, "tier", 1) or 1,
+                                        is_boss=getattr(q, "is_boss", False) or False,
+                                        topic=getattr(q, "topic", db_quiz.topic) or db_quiz.topic,
+                                    )
+                                    db.add(new_q)
+                                    await db.flush()
+                                    question_id_map[q.id] = new_q.id
+
+                        # 2b. Сохраняем / обновляем GameRoomModel
+                        db_room = await db.scalar(select(GameRoomModel).where(GameRoomModel.room_code == room_code))
+                        if db_room:
+                            db_room.status = "finished"
+                            db_room.class_id = room.class_id
+                            db_room.finished_at = now_utc
+                        else:
+                            db_room = GameRoomModel(
+                                room_code=room_code,
+                                quiz_id=room.quiz.id if room.quiz else None,
+                                class_id=room.class_id,
+                                status="finished",
+                                teacher_pseudonym_id=room.teacher_pseudonym_id,
+                                finished_at=now_utc,
+                            )
+                            db.add(db_room)
+                        await db.flush()
+
+                        # 2c. Сохраняем участников room_participants
+                        for p in room.players.values():
+                            p_pseudonym = p.pseudonym_id or f"anon_{p.id}"
+                            existing_part = await db.scalar(
+                                select(RoomParticipantModel).where(
+                                    RoomParticipantModel.room_code == room_code,
+                                    RoomParticipantModel.id == p.id,
+                                )
+                            )
+                            if not existing_part:
+                                existing_part = await db.scalar(
+                                    select(RoomParticipantModel).where(
+                                        RoomParticipantModel.room_code == room_code,
+                                        RoomParticipantModel.pseudonym_id == p_pseudonym,
+                                    )
+                                )
+                            if existing_part:
+                                existing_part.score = p.score
+                                existing_part.streak = p.streak
+                                existing_part.blurred_count = p.blurred_count
+                                existing_part.connected = p.connected
+                            else:
+                                new_part = RoomParticipantModel(
+                                    id=p.id,
+                                    room_code=room_code,
+                                    pseudonym_id=p_pseudonym,
+                                    name=p.name,
+                                    avatar=p.avatar,
+                                    score=p.score,
+                                    streak=p.streak,
+                                    blurred_count=p.blurred_count,
+                                    connected=p.connected,
+                                )
+                                db.add(new_part)
+
+                            # Обновляем / создаем пользователя UserModel
+                            if p.pseudonym_id:
+                                u_row = await db.scalar(select(UserModel).where(UserModel.pseudonym_id == p.pseudonym_id))
+                                if u_row:
+                                    if p.name and p.name != "Ученик":
+                                        u_row.display_name = p.name
+                                    if p.avatar:
+                                        u_row.avatar = p.avatar
+                                else:
+                                    db.add(UserModel(
+                                        pseudonym_id=p.pseudonym_id,
+                                        display_name=p.name,
+                                        avatar=p.avatar,
+                                        role="student",
+                                    ))
+
+                                # Привязываем ученика к классу, если еще не привязан
+                                if room.class_id:
+                                    enrolled = await db.scalar(
+                                        select(ClassStudentModel.id).where(
+                                            ClassStudentModel.class_id == room.class_id,
+                                            ClassStudentModel.pseudonym_id == p.pseudonym_id,
+                                        )
+                                    )
+                                    if not enrolled:
+                                        db.add(ClassStudentModel(
+                                            class_id=room.class_id,
+                                            pseudonym_id=p.pseudonym_id,
+                                        ))
+                        await db.flush()
+
+                        # 2d. Сохраняем ответы player_answers
+                        room_answers = self.answers.get(room_code, [])
+                        max_ans_id = (await db.scalar(select(func.max(PlayerAnswerModel.id)))) or 0
+                        for ans in room_answers:
+                            mapped_qid = question_id_map.get(ans.question_id, ans.question_id)
+                            existing_ans = await db.scalar(
+                                select(PlayerAnswerModel.id).where(
+                                    PlayerAnswerModel.room_code == room_code,
+                                    PlayerAnswerModel.participant_id == ans.player_id,
+                                    PlayerAnswerModel.question_id == mapped_qid,
+                                )
+                            )
+                            if not existing_ans:
+                                max_ans_id += 1
+                                db.add(PlayerAnswerModel(
+                                    id=max_ans_id,
+                                    room_code=room_code,
+                                    participant_id=ans.player_id,
+                                    question_id=mapped_qid,
+                                    option_id=int(ans.option_id),
+                                    is_correct=bool(ans.is_correct),
+                                    time_taken_sec=float(ans.time_taken_sec),
+                                    tab_blurred=bool(ans.tab_blurred),
+                                    points_awarded=int(getattr(ans, "points_awarded", 0)),
+                                ))
+            except Exception as dbe:
+                logger.error(f"Database persist error on room finish {room_code}: {dbe}", exc_info=True)
+
+            # 3. Применение результатов к Классной Роще 2.0 (Class Grove & Liebig Balance)
+            try:
+                from .grove_service import grove_service
+                target_grove_id = room.class_id or f"class_{room.quiz.grade}a"
+                room_answers = self.answers.get(room_code, [])
+                student_results = []
+                for p in room.players.values():
+                    p_answers = [a for a in room_answers if a.player_id == p.id]
+                    t1_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 1)
+                    t2_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 2)
+                    t3_corr = sum(1 for a in p_answers if getattr(a, "is_correct", False) and getattr(a, "tier", 1) == 3)
+                    student_results.append({
+                        "student_id": p.pseudonym_id or p.id,
+                        "student_name": p.name,
+                        "avatar": p.avatar or "hedgehog",
+                        "points_earned": p.score,
+                        "tier1_correct": t1_corr,
+                        "tier2_correct": t2_corr,
+                        "tier3_correct": t3_corr,
+                        "total_questions": len(room.quiz.questions),
+                    })
+                if student_results:
+                    grove_service.apply_quiz_session(class_id=target_grove_id, student_results=student_results)
+                    if class_name_for_grove and class_name_for_grove != target_grove_id:
+                        try:
+                            grove_service.apply_quiz_session(class_id=class_name_for_grove, student_results=student_results)
+                        except Exception:
+                            pass
+            except Exception as ge:
+                logger.warning("Grove service integration error on FINISHED: %s", ge, exc_info=True)
+
+            # 4. Формируем Gap Report и ранжированный список игроков
+            gap_rep = await self.generate_gap_report(room_code)
+            sorted_players = sorted(room.players.values(), key=lambda p: p.score, reverse=True)
+            top_players = [
+                {
+                    "rank": idx + 1,
+                    "id": p.id,
+                    "pseudonym_id": p.pseudonym_id,
+                    "name": p.name,
+                    "avatar": p.avatar,
+                    "score": p.score,
+                    "streak": p.streak,
+                }
+                for idx, p in enumerate(sorted_players)
+            ]
+
+            return {
+                "room_code": room_code,
+                "class_id": room.class_id,
+                "gap_report": gap_rep.model_dump() if gap_rep else {},
+                "top_players": top_players,
+            }
 
     async def close_room(self, room_code: str):
         """Полное закрытие комнаты, отключение игроков и очистка сессий."""

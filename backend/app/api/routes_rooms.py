@@ -544,13 +544,14 @@ async def control_room(room_code: str, req: RoomControlRequest):
                 },
             )
         else:
-            await ws_manager.broadcast_room(room_code, "GAME_FINISHED", {"room_code": room_code})
+            finish_payload = await room_state_engine.finish_room(room_code)
+            await ws_manager.broadcast_room(room_code, "GAME_FINISHED", finish_payload)
         return {"status": "ok", "action": action, "res": res}
 
     elif action == "FINISH":
-        await room_state_engine.transition_state(room_code, RoomStatus.FINISHED)
-        await ws_manager.broadcast_room(room_code, "GAME_FINISHED", {"room_code": room_code})
-        return {"status": "ok", "action": action, "room_status": "finished"}
+        finish_payload = await room_state_engine.finish_room(room_code)
+        await ws_manager.broadcast_room(room_code, "GAME_FINISHED", finish_payload)
+        return {"status": "ok", "action": action, "room_status": "finished", "finish_payload": finish_payload}
 
     else:
         raise HTTPException(status_code=400, detail=f"Неизвестное действие: {req.action}")

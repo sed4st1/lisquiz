@@ -230,7 +230,7 @@ class PlayerAnswerModel(Base):
     """Модель зафиксированного ответа ученика в процессе игры."""
     __tablename__ = "player_answers"
 
-    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     room_code: Mapped[str] = mapped_column(String(6), ForeignKey("game_rooms.room_code", ondelete="CASCADE"), nullable=False, index=True)
     participant_id: Mapped[str] = mapped_column(String(36), ForeignKey("room_participants.id", ondelete="CASCADE"), nullable=False, index=True)
     question_id: Mapped[int] = mapped_column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False, index=True)

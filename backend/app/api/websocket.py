@@ -234,54 +234,18 @@ async def websocket_room_endpoint(
                                     await broadcast_question(rc, idx)
                                 asyncio.create_task(_delayed_start_next(room_code, next_idx))
                             else:
-                                gap_rep = await room_state_engine.generate_gap_report(room_code)
-                                sorted_players = sorted(room.players.values(), key=lambda p: p.score, reverse=True)
-                                top_players = [
-                                    {
-                                        "rank": idx + 1,
-                                        "id": p.id,
-                                        "name": p.name,
-                                        "avatar": p.avatar,
-                                        "score": p.score,
-                                        "streak": p.streak,
-                                    }
-                                    for idx, p in enumerate(sorted_players)
-                                ]
+                                finish_payload = nxt.get("finish_data") or await room_state_engine.finish_room(room_code)
                                 await ws_manager.broadcast_room(
                                     room_code,
                                     "GAME_FINISHED",
-                                    {
-                                        "gap_report": gap_rep.model_dump() if gap_rep else {},
-                                        "top_players": top_players,
-                                    },
+                                    finish_payload,
                                 )
-                                # Принудительно отключаем учеников через 2 секунды (после доставки GAME_FINISHED)
-                                async def _delayed_kick(rc: str):
-                                    await asyncio.sleep(2.0)
-                                    await ws_manager.close_room_connections(rc, reason="Викторина завершена")
-                                    await room_state_engine.close_room(rc)
-                                asyncio.create_task(_delayed_kick(room_code))
                         elif action == "FINISH_GAME":
-                            gap_rep = await room_state_engine.generate_gap_report(room_code)
-                            sorted_players = sorted(room.players.values(), key=lambda p: p.score, reverse=True)
-                            top_players = [
-                                {
-                                    "rank": idx + 1,
-                                    "id": p.id,
-                                    "name": p.name,
-                                    "avatar": p.avatar,
-                                    "score": p.score,
-                                    "streak": p.streak,
-                                }
-                                for idx, p in enumerate(sorted_players)
-                            ]
+                            finish_payload = await room_state_engine.finish_room(room_code)
                             await ws_manager.broadcast_room(
                                 room_code,
                                 "GAME_FINISHED",
-                                {
-                                    "gap_report": gap_rep.model_dump() if gap_rep else {},
-                                    "top_players": top_players,
-                                },
+                                finish_payload,
                             )
                         elif action == "CLOSE_ROOM":
                             await ws_manager.close_room_connections(room_code, reason="Учитель закрыл комнату")
