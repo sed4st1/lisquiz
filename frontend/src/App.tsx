@@ -115,6 +115,10 @@ export default function App() {
       if (s === 'teacher_report' || s === 'stats') return 'stats';
       if (s === 'grove') return 'grove';
       if (s === 'leaderboard' || s === 'teacher_lobby' || s === 'teacher_waiting' || s === 'lobby') return 'leaderboard';
+      const savedTab = localStorage.getItem('lisquiz_active_tab') as TabType;
+      if (savedTab && ['home', 'grove', 'leaderboard', 'stats'].includes(savedTab)) {
+        return savedTab;
+      }
     } catch {}
     return 'home';
   });
@@ -140,6 +144,13 @@ export default function App() {
       const r = params.get('role');
       if (!savedRole && !r) {
         return 'role_select';
+      }
+
+      // Check saved active room state
+      const savedSub = localStorage.getItem('lisquiz_sub_screen') as SubScreenType;
+      const savedPin = localStorage.getItem('lisquiz_active_pin');
+      if (savedSub && savedPin) {
+        return savedSub;
       }
     } catch {}
     return null;
@@ -187,12 +198,89 @@ export default function App() {
   const [activePin, setActivePin] = useState<string>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      return params.get('pin') || '';
+      const p = params.get('pin');
+      if (p) return p;
+      return localStorage.getItem('lisquiz_active_pin') || '';
     } catch {}
     return '';
   });
-  const [teacherToken, setTeacherToken] = useState<string>('');
-  const [studentPlayerId, setStudentPlayerId] = useState<string>('');
+  const [teacherToken, setTeacherToken] = useState<string>(() => {
+    try {
+      return localStorage.getItem('lisquiz_teacher_token') || '';
+    } catch {}
+    return '';
+  });
+  const [studentPlayerId, setStudentPlayerId] = useState<string>(() => {
+    try {
+      return localStorage.getItem('lisquiz_student_player_id') || '';
+    } catch {}
+    return '';
+  });
+  const [studentSessionToken, setStudentSessionToken] = useState<string>(() => {
+    try {
+      return localStorage.getItem('lisquiz_student_token') || '';
+    } catch {}
+    return '';
+  });
+
+  // Keep active session in localStorage to survive tab minimizing / backgrounding in MAX
+  useEffect(() => {
+    try {
+      if (activePin) {
+        localStorage.setItem('lisquiz_active_pin', activePin);
+      } else {
+        localStorage.removeItem('lisquiz_active_pin');
+      }
+    } catch {}
+  }, [activePin]);
+
+  useEffect(() => {
+    try {
+      if (teacherToken) {
+        localStorage.setItem('lisquiz_teacher_token', teacherToken);
+      } else {
+        localStorage.removeItem('lisquiz_teacher_token');
+      }
+    } catch {}
+  }, [teacherToken]);
+
+  useEffect(() => {
+    try {
+      if (studentPlayerId) {
+        localStorage.setItem('lisquiz_student_player_id', studentPlayerId);
+      } else {
+        localStorage.removeItem('lisquiz_student_player_id');
+      }
+    } catch {}
+  }, [studentPlayerId]);
+
+  useEffect(() => {
+    try {
+      if (studentSessionToken) {
+        localStorage.setItem('lisquiz_student_token', studentSessionToken);
+      } else {
+        localStorage.removeItem('lisquiz_student_token');
+      }
+    } catch {}
+  }, [studentSessionToken]);
+
+  useEffect(() => {
+    try {
+      if (subScreen) {
+        localStorage.setItem('lisquiz_sub_screen', subScreen);
+      } else {
+        localStorage.removeItem('lisquiz_sub_screen');
+      }
+    } catch {}
+  }, [subScreen]);
+
+  useEffect(() => {
+    try {
+      if (tab) {
+        localStorage.setItem('lisquiz_active_tab', tab);
+      }
+    } catch {}
+  }, [tab]);
   const [studentName, setStudentName] = useState<string>(() => {
     try {
       return localStorage.getItem('lisquiz_student_name') || sessionStorage.getItem('lisquiz_student_name') || authService.getCachedUser()?.display_name || 'Ученик';
@@ -329,25 +417,25 @@ export default function App() {
         }
         socketService.disconnect();
         setActivePin('');
+        setStudentPlayerId('');
+        setStudentSessionToken('');
         setSubScreen(null);
         setPersonalAnswerResult(null);
         setCurrentQuestionData(null);
+        try {
+          localStorage.removeItem('lisquiz_active_pin');
+          localStorage.removeItem('lisquiz_student_token');
+          localStorage.removeItem('lisquiz_student_player_id');
+          localStorage.removeItem('lisquiz_sub_screen');
+        } catch {}
         setAuthFeedback(data?.reason || 'Викторина завершена учителем');
       }
     };
 
     const handleStudentDisconnect = (_data?: any) => {
-      if (role === 'student' && subScreen) {
-        if (subScreen === 'student_quiz_finish' || subScreen === 'student_leaderboard' || isFinishingQuizRef.current) {
-          return;
-        }
-        socketService.disconnect();
-        setActivePin('');
-        setSubScreen(null);
-        setPersonalAnswerResult(null);
-        setCurrentQuestionData(null);
-        setAuthFeedback('Соединение с викториной закрыто');
-      }
+      // При временном сворачивании вкладки (переход в чат Сферума) или нестабильной сети
+      // НЕ сбрасываем экран! socketService имеет встроенный авто-реконнект.
+      console.log('Socket disconnected temporarily, keeping session state active');
     };
 
     socketService.on('ROOM_SYNC', handleRoomSync);
@@ -480,6 +568,68 @@ export default function App() {
       setTimeout(preloadScreens, 600);
     }
   }, []);
+
+  // Session verification and auto-reconnect on tab resume (e.g. returning from MAX messenger / chat)
+  useEffect(() => {
+    const checkAndRestoreSession = async () => {
+      const savedPin = localStorage.getItem('lisquiz_active_pin');
+      const savedTeacherToken = localStorage.getItem('lisquiz_teacher_token');
+      const savedStudentToken = localStorage.getItem('lisquiz_student_token');
+      const savedRole = localStorage.getItem('lisquiz_user_role') || role;
+      const savedSubScreen = localStorage.getItem('lisquiz_sub_screen');
+
+      if (!savedPin) return;
+
+      try {
+        const info = await roomApi.getRoomInfo(savedPin);
+        if (!info || info.status === 'finished') {
+          // Комната закрыта или завершена
+          localStorage.removeItem('lisquiz_active_pin');
+          localStorage.removeItem('lisquiz_teacher_token');
+          localStorage.removeItem('lisquiz_student_token');
+          localStorage.removeItem('lisquiz_student_player_id');
+          localStorage.removeItem('lisquiz_sub_screen');
+          return;
+        }
+
+        // Комната активна! Восстанавливаем соединение, если сокет отключился в фоне
+        if (savedRole === 'teacher' && savedTeacherToken) {
+          if (!socketService.isConnected()) {
+            await socketService.connect(savedPin, savedTeacherToken).catch(() => {});
+          }
+          if (info.status === 'playing' && savedSubScreen === 'teacher_game') {
+            setSubScreen('teacher_game');
+          }
+        } else if (savedStudentToken) {
+          if (!socketService.isConnected()) {
+            await socketService.connect(savedPin, savedStudentToken).catch(() => {});
+          }
+          if (info.status === 'playing' && savedSubScreen !== 'student_quiz_finish' && savedSubScreen !== 'student_leaderboard') {
+            setSubScreen('student_game');
+          } else if (info.status === 'lobby' && !savedSubScreen) {
+            setSubScreen('student_waiting');
+          }
+        }
+      } catch (err) {
+        console.warn('Session check error:', err);
+      }
+    };
+
+    checkAndRestoreSession();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkAndRestoreSession();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, [role]);
 
   const handleRoleSwitch = (newRole: 'teacher' | 'student') => {
     if (newRole === 'teacher') {
@@ -942,6 +1092,9 @@ export default function App() {
                 setStudentAvatar(payload.avatar);
                 if (payload.joinData?.player_id) {
                   setStudentPlayerId(payload.joinData.player_id);
+                }
+                if (payload.joinData?.session_token) {
+                  setStudentSessionToken(payload.joinData.session_token);
                 }
                 socketService.connect(payload.pin, payload.joinData.session_token)
                   .then(() => {

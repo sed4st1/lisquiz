@@ -9,12 +9,18 @@
  */
 
 export interface UserProfile {
+  id?: string;
   pseudonym_id: string;
   role: 'teacher' | 'student';
   display_name: string;
   avatar?: string;
   auth_provider?: string;
+  streak_days?: number;
+  total_score?: number;
+  quizzes_played?: number;
+  acorns?: number;
   created_at?: string;
+  last_login_at?: string;
 }
 
 export interface ExchangeResponse {

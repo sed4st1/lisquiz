@@ -53,6 +53,29 @@ class AuthService:
         """Вычисление Zero-PII pseudonym_id по 152-ФЗ."""
         return max_bot_service.get_pseudonym_id(raw_user_id)
 
+    def update_user_streak(self, user: UserModel) -> None:
+        """Расчет и сохранение ежедневного стрика активности пользователя ('огоньки')."""
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if not getattr(user, "last_active_date", None):
+            user.streak_days = max(1, getattr(user, "streak_days", 1) or 1)
+            user.last_active_date = today_str
+        else:
+            try:
+                from datetime import date
+                last_d = date.fromisoformat(user.last_active_date)
+                today_d = date.fromisoformat(today_str)
+                diff = (today_d - last_d).days
+                if diff == 1:
+                    user.streak_days = (user.streak_days or 0) + 1
+                    user.last_active_date = today_str
+                elif diff > 1:
+                    user.streak_days = 1
+                    user.last_active_date = today_str
+                # diff == 0: уже учтено сегодня, стрик не меняется
+            except Exception:
+                user.streak_days = 1
+                user.last_active_date = today_str
+
     async def get_or_create_user(
         self,
         session: AsyncSession,
@@ -67,9 +90,13 @@ class AuthService:
         result = await session.execute(stmt)
         user = result.scalars().first()
 
+        now = datetime.now(timezone.utc)
+        today_str = now.strftime("%Y-%m-%d")
+
         if user:
-            # Обновление времени последнего входа
-            user.last_login_at = datetime.now(timezone.utc)
+            # Обновление времени последнего входа и ежедневного стрика
+            user.last_login_at = now
+            self.update_user_streak(user)
             if display_name and user.display_name != display_name:
                 user.display_name = display_name
             if avatar and user.avatar != avatar:
@@ -86,8 +113,10 @@ class AuthService:
             avatar=avatar,
             auth_provider=auth_provider,
             is_active=True,
-            created_at=datetime.now(timezone.utc),
-            last_login_at=datetime.now(timezone.utc),
+            streak_days=1,
+            last_active_date=today_str,
+            created_at=now,
+            last_login_at=now,
         )
         session.add(new_user)
         await session.commit()

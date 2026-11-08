@@ -39,11 +39,33 @@ async_session_maker = async_sessionmaker(
 )
 
 
+_sqlite_migrated = False
+
+
+async def _ensure_sqlite_columns():
+    global _sqlite_migrated
+    if _sqlite_migrated:
+        return
+    _sqlite_migrated = True
+    try:
+        async with engine.begin() as conn:
+            res = await conn.exec_driver_sql("PRAGMA table_info(users)")
+            cols = [row[1] for row in res.fetchall()]
+            if cols:
+                if "streak_days" not in cols:
+                    await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN streak_days INTEGER NOT NULL DEFAULT 1")
+                if "last_active_date" not in cols:
+                    await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN last_active_date VARCHAR(10)")
+    except Exception:
+        pass
+
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     FastAPI dependency для получения асинхронной сессии базы данных.
     Гарантирует закрытие сессии и откат при исключениях.
     """
+    await _ensure_sqlite_columns()
     async with async_session_maker() as session:
         try:
             yield session

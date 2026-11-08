@@ -270,16 +270,93 @@ export default function StudentHome({
   const [pulledCardResult, setPulledCardResult] = useState<any | null>(null);
   const [isPulling, setIsPulling] = useState(false);
 
-  // Sync cards from backend on modal open or mount
+  // Economy & Progression state: sync from persistent user profile & localStorage
+  const cachedUser = authService.getCachedUser();
+
+  const [acorns, setAcorns] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('lisquiz_student_acorns') || sessionStorage.getItem('lisquiz_user_acorns');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val)) return val;
+      }
+      if (cachedUser?.acorns != null) return cachedUser.acorns;
+    } catch {}
+    return 50;
+  });
+
+  const [xp, setXp] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('lisquiz_student_xp') || sessionStorage.getItem('lisquiz_user_xp');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val)) return val;
+      }
+      if (cachedUser?.total_score != null) return cachedUser.total_score;
+    } catch {}
+    return 0;
+  });
+
+  const [streak, setStreak] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('lisquiz_student_streak') || sessionStorage.getItem('lisquiz_user_streak');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val)) return val;
+      }
+      if (cachedUser?.streak_days != null) return cachedUser.streak_days;
+    } catch {}
+    return 1;
+  });
+
+  const [quizzesCount, setQuizzesCount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('lisquiz_student_quizzes') || sessionStorage.getItem('lisquiz_user_quizzes');
+      if (saved !== null) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val)) return val;
+      }
+      if (cachedUser?.quizzes_played != null) return cachedUser.quizzes_played;
+    } catch {}
+    return 0;
+  });
+
+  // Sync cards and stats from backend on modal open or mount
   useEffect(() => {
     let isMounted = true;
-    fetchStudentInventory('current_student')
+    const currentPid = authService.getCachedUser()?.pseudonym_id || 'current_student';
+
+    authService.getMe().then((me) => {
+      if (!isMounted || !me) return;
+      if (me.streak_days != null) {
+        setStreak(me.streak_days);
+        localStorage.setItem('lisquiz_student_streak', String(me.streak_days));
+        sessionStorage.setItem('lisquiz_user_streak', String(me.streak_days));
+      }
+      if (me.total_score != null) {
+        setXp(me.total_score);
+        localStorage.setItem('lisquiz_student_xp', String(me.total_score));
+        sessionStorage.setItem('lisquiz_user_xp', String(me.total_score));
+      }
+      if (me.quizzes_played != null) {
+        setQuizzesCount(me.quizzes_played);
+        localStorage.setItem('lisquiz_student_quizzes', String(me.quizzes_played));
+        sessionStorage.setItem('lisquiz_user_quizzes', String(me.quizzes_played));
+      }
+      if (me.acorns != null) {
+        setAcorns(me.acorns);
+        localStorage.setItem('lisquiz_student_acorns', String(me.acorns));
+        sessionStorage.setItem('lisquiz_user_acorns', String(me.acorns));
+      }
+    });
+
+    fetchStudentInventory(currentPid)
       .then((inv) => {
         if (!isMounted || !inv) return;
         if (inv.cards && inv.cards.length > 0) {
           setInventoryCards(inv.cards);
         }
-        if (inv.acorns_balance !== undefined && inv.acorns_balance > 0) {
+        if (inv.acorns_balance !== undefined && inv.acorns_balance >= 0) {
           setAcorns(inv.acorns_balance);
           sessionStorage.setItem('lisquiz_user_acorns', String(inv.acorns_balance));
           localStorage.setItem('lisquiz_student_acorns', String(inv.acorns_balance));
@@ -303,7 +380,8 @@ export default function StudentHome({
     try {
       setIsPulling(true);
       haptics.impact('medium');
-      const res = await pullKnowledgeCard('current_student', 50);
+      const currentPid = authService.getCachedUser()?.pseudonym_id || 'current_student';
+      const res = await pullKnowledgeCard(currentPid, 50);
       if (res.success && res.card) {
         soundManager.playCollect();
         haptics.notification('success');
@@ -313,7 +391,7 @@ export default function StudentHome({
         sessionStorage.setItem('lisquiz_user_acorns', String(nextAcorns));
         localStorage.setItem('lisquiz_student_acorns', String(nextAcorns));
 
-        const updated = await fetchStudentInventory('current_student');
+        const updated = await fetchStudentInventory(currentPid);
         if (updated?.cards) {
           setInventoryCards(updated.cards);
         }
@@ -328,51 +406,6 @@ export default function StudentHome({
       setIsPulling(false);
     }
   };
-
-  // Economy & Progression state (Fresh player begins with 0)
-  const [acorns, setAcorns] = useState<number>(() => {
-    try {
-      const saved = sessionStorage.getItem('lisquiz_user_acorns');
-      if (saved !== null) {
-        const val = parseInt(saved, 10);
-        return isNaN(val) ? 0 : val;
-      }
-    } catch {}
-    return 0;
-  });
-
-  const [xp, setXp] = useState<number>(() => {
-    try {
-      const saved = sessionStorage.getItem('lisquiz_user_xp');
-      if (saved !== null) {
-        const val = parseInt(saved, 10);
-        return isNaN(val) ? 0 : val;
-      }
-    } catch {}
-    return 0;
-  });
-
-  const [streak, setStreak] = useState<number>(() => {
-    try {
-      const saved = sessionStorage.getItem('lisquiz_user_streak');
-      if (saved !== null) {
-        const val = parseInt(saved, 10);
-        return isNaN(val) ? 0 : val;
-      }
-    } catch {}
-    return 0;
-  });
-
-  const [quizzesCount, setQuizzesCount] = useState<number>(() => {
-    try {
-      const saved = sessionStorage.getItem('lisquiz_user_quizzes');
-      if (saved !== null) {
-        const val = parseInt(saved, 10);
-        return isNaN(val) ? 0 : val;
-      }
-    } catch {}
-    return 0;
-  });
 
   // PIN inputs directly on hero card
   const [digits, setDigits] = useState<string[]>(() => {
@@ -986,6 +1019,7 @@ export default function StudentHome({
                         setStreak((s) => {
                           const next = s + 1;
                           sessionStorage.setItem('lisquiz_user_streak', String(next));
+                          localStorage.setItem('lisquiz_student_streak', String(next));
                           return next;
                         });
                       }}
@@ -1011,6 +1045,7 @@ export default function StudentHome({
                         setQuizzesCount((q) => {
                           const next = q + 1;
                           sessionStorage.setItem('lisquiz_user_quizzes', String(next));
+                          localStorage.setItem('lisquiz_student_quizzes', String(next));
                           return next;
                         });
                       }}
@@ -1035,12 +1070,16 @@ export default function StudentHome({
                         soundManager.playKnock();
                         setAcorns(0);
                         setXp(0);
-                        setStreak(0);
+                        setStreak(1);
                         setQuizzesCount(0);
                         sessionStorage.setItem('lisquiz_user_acorns', '0');
                         sessionStorage.setItem('lisquiz_user_xp', '0');
-                        sessionStorage.setItem('lisquiz_user_streak', '0');
+                        sessionStorage.setItem('lisquiz_user_streak', '1');
                         sessionStorage.setItem('lisquiz_user_quizzes', '0');
+                        localStorage.setItem('lisquiz_student_acorns', '0');
+                        localStorage.setItem('lisquiz_student_xp', '0');
+                        localStorage.setItem('lisquiz_student_streak', '1');
+                        localStorage.setItem('lisquiz_student_quizzes', '0');
                       }}
                       style={{
                         flex: '1 1 auto',

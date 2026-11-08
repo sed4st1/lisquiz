@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.session import get_db
+from ..db.models import UserModel
 from ..services.auth_service import auth_service
 from ..services.max_bot_service import max_bot_service
 
@@ -99,6 +100,42 @@ async def simulate_bot_start(
     }
 
 
+async def _build_user_profile_response(user: UserModel, db: AsyncSession) -> Dict[str, Any]:
+    from sqlalchemy import select, func
+    from ..db.models import RoomParticipantModel
+    from ..services.grove_service import grove_service
+
+    stats_stmt = select(
+        func.coalesce(func.sum(RoomParticipantModel.score), 0).label("total_score"),
+        func.count(RoomParticipantModel.id).label("quizzes_played"),
+    ).where(RoomParticipantModel.pseudonym_id == user.pseudonym_id)
+    stats_res = await db.execute(stats_stmt)
+    stats_row = stats_res.first()
+    total_score = int(stats_row.total_score) if stats_row else 0
+    quizzes_played = int(stats_row.quizzes_played) if stats_row else 0
+
+    try:
+        inv = grove_service.get_student_inventory(user.pseudonym_id)
+        acorns = int(inv.get("acorns_balance", 50))
+    except Exception:
+        acorns = 50
+
+    return {
+        "id": user.id,
+        "pseudonym_id": user.pseudonym_id,
+        "role": user.role,
+        "display_name": user.display_name,
+        "avatar": user.avatar,
+        "auth_provider": user.auth_provider,
+        "streak_days": getattr(user, "streak_days", 1) or 1,
+        "total_score": total_score,
+        "quizzes_played": quizzes_played,
+        "acorns": acorns,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
+    }
+
+
 @router.post("/exchange", response_model=TokenResponse)
 async def exchange_auth(
     req: ExchangeTicketRequest,
@@ -123,16 +160,10 @@ async def exchange_auth(
             "avatar": user.avatar,
         }
         token = auth_service.create_access_token(token_data)
+        profile = await _build_user_profile_response(user, db)
         return TokenResponse(
             access_token=token,
-            user={
-                "id": user.id,
-                "pseudonym_id": user.pseudonym_id,
-                "role": user.role,
-                "display_name": user.display_name,
-                "avatar": user.avatar,
-                "auth_provider": user.auth_provider,
-            },
+            user=profile,
         )
 
     # 2. Обмен по initData от WebView Сферума
@@ -163,16 +194,10 @@ async def exchange_auth(
             "avatar": user.avatar,
         }
         token = auth_service.create_access_token(token_data)
+        profile = await _build_user_profile_response(user, db)
         return TokenResponse(
             access_token=token,
-            user={
-                "id": user.id,
-                "pseudonym_id": user.pseudonym_id,
-                "role": user.role,
-                "display_name": user.display_name,
-                "avatar": user.avatar,
-                "auth_provider": user.auth_provider,
-            },
+            user=profile,
         )
 
     # 3. Быстрый Dev-вход / браузерный вход (изоляция аккаунтов по устройствам)
@@ -203,16 +228,10 @@ async def exchange_auth(
         "avatar": user.avatar,
     }
     token = auth_service.create_access_token(token_data)
+    profile = await _build_user_profile_response(user, db)
     return TokenResponse(
         access_token=token,
-        user={
-            "id": user.id,
-            "pseudonym_id": user.pseudonym_id,
-            "role": user.role,
-            "display_name": user.display_name,
-            "avatar": user.avatar,
-            "auth_provider": user.auth_provider,
-        },
+        user=profile,
     )
 
 
@@ -222,7 +241,7 @@ async def get_current_user_profile(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Получение профиля текущего авторизованного пользователя из БД.
+    Получение профиля текущего авторизованного пользователя из БД с расчетом статистики.
     """
     pid = payload.get("pseudonym_id")
     from sqlalchemy import select
@@ -240,18 +259,18 @@ async def get_current_user_profile(
             "display_name": payload.get("name", "Участник"),
             "avatar": payload.get("avatar", "fox_smart"),
             "auth_provider": "jwt_stateless",
+            "streak_days": 1,
+            "total_score": 0,
+            "quizzes_played": 0,
+            "acorns": 50,
         }
 
-    return {
-        "id": user.id,
-        "pseudonym_id": user.pseudonym_id,
-        "role": user.role,
-        "display_name": user.display_name,
-        "avatar": user.avatar,
-        "auth_provider": user.auth_provider,
-        "created_at": user.created_at.isoformat() if user.created_at else None,
-        "last_login_at": user.last_login_at.isoformat() if user.last_login_at else None,
-    }
+    # Проверяем и обновляем стрик активности за сегодняшний день
+    auth_service.update_user_streak(user)
+    await db.commit()
+    await db.refresh(user)
+
+    return await _build_user_profile_response(user, db)
 
 
 class UpdateProfileRequest(BaseModel):

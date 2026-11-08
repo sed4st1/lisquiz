@@ -148,6 +148,28 @@ export const roomApi = {
     return res.json();
   },
 
+  async notifyClass(roomCode: string): Promise<{
+    status: string;
+    message: string;
+    share_url: string;
+    chat_id?: string;
+    class_name?: string;
+  }> {
+    try {
+      const res = await fetch(`/api/rooms/${roomCode}/notify-class`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      return await res.json();
+    } catch (e: any) {
+      return {
+        status: 'error',
+        message: e?.message || 'Не удалось отправить оповещение',
+        share_url: `/?pin=${roomCode}`,
+      };
+    }
+  },
+
   getExportCsvUrl(roomCode: string): string {
     return `/api/rooms/${roomCode}/export/csv`;
   },

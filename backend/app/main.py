@@ -19,6 +19,17 @@ async def lifespan(app: FastAPI):
         from .db import models as _models  # noqa: F401
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            # Safe SQLite column migration for UserModel additions
+            try:
+                res = await conn.exec_driver_sql("PRAGMA table_info(users)")
+                cols = [row[1] for row in res.fetchall()]
+                if "streak_days" not in cols:
+                    await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN streak_days INTEGER NOT NULL DEFAULT 1")
+                if "last_active_date" not in cols:
+                    await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN last_active_date VARCHAR(10)")
+            except Exception as me:
+                import logging
+                logging.getLogger("lisquiz.main").warning(f"Users schema migration warning: {me}")
     except Exception as dbe:
         import logging
         logging.getLogger("lisquiz.main").warning(f"DB schema ensure warning: {dbe}")

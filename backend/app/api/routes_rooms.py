@@ -204,6 +204,30 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
         class_id=req.class_id if req else None,
     )
 
+    # Авто-оповещение привязанного чата класса в Сферуме / MAX
+    if room.class_id:
+        try:
+            from ..db.session import async_session_maker
+            from ..db.models import ClassModel
+            from ..services.max_bot_service import max_bot_service
+            from sqlalchemy import select
+            async with async_session_maker() as db_session:
+                c_stmt = select(ClassModel).where(ClassModel.id == room.class_id)
+                c_res = await db_session.execute(c_stmt)
+                cls_obj = c_res.scalars().first()
+                if cls_obj and cls_obj.max_chat_id:
+                    await max_bot_service.send_quiz_announcement(
+                        chat_id=cls_obj.max_chat_id,
+                        room_code=room.room_code,
+                        quiz_title=room.quiz.title,
+                        subject=room.quiz.subject,
+                        grade=room.quiz.grade,
+                        class_name=cls_obj.name,
+                    )
+        except Exception as ae:
+            import logging
+            logging.getLogger("lisquiz.rooms").warning(f"Failed to auto-announce quiz to class chat: {ae}")
+
     return {
         "room_code": room.room_code,
         "status": room.status.value,
@@ -215,6 +239,62 @@ async def create_room(req: Optional[RoomCreateRequest] = None):
         "teacher_token": teacher_token,
         "ws_url": f"/ws/rooms/{room.room_code}?token={teacher_token}",
         "quiz": room.quiz.model_dump(),
+    }
+
+
+@router.post("/{room_code}/notify-class")
+async def notify_class_chat(room_code: str):
+    """
+    Отправка анонса о викторине в привязанный чат Сферума / MAX.
+    """
+    from ..services.max_bot_service import max_bot_service
+    from ..config import settings
+    room = await room_state_engine.get_room(room_code)
+    if not room:
+        raise HTTPException(status_code=404, detail="Комната не найдена")
+
+    base_url = (settings.MAX_WEBAPP_URL or "https://lisquiz.daniel.crazedns.ru").rstrip("/")
+    share_url = f"{base_url}/?pin={room.room_code}&role=student"
+
+    if not room.class_id:
+        return {
+            "status": "no_class",
+            "message": "К комнате не привязан класс. Скопируйте ссылку для приглашения.",
+            "share_url": share_url,
+        }
+
+    from ..db.session import async_session_maker
+    from ..db.models import ClassModel
+    from sqlalchemy import select
+
+    async with async_session_maker() as db_session:
+        stmt = select(ClassModel).where(ClassModel.id == room.class_id)
+        res = await db_session.execute(stmt)
+        cls_obj = res.scalars().first()
+
+    if not cls_obj or not cls_obj.max_chat_id:
+        return {
+            "status": "no_chat_linked",
+            "class_name": cls_obj.name if cls_obj else "",
+            "message": f"Чат класса {cls_obj.name if cls_obj else ''} в Сферуме еще не привязан. Отправьте ссылку в чат вручную!",
+            "share_url": share_url,
+        }
+
+    sent = await max_bot_service.send_quiz_announcement(
+        chat_id=cls_obj.max_chat_id,
+        room_code=room.room_code,
+        quiz_title=room.quiz.title,
+        subject=room.quiz.subject,
+        grade=room.quiz.grade,
+        class_name=cls_obj.name,
+    )
+
+    return {
+        "status": "sent" if sent else "error",
+        "chat_id": cls_obj.max_chat_id,
+        "class_name": cls_obj.name,
+        "message": f"Оповещение успешно отправлено в чат {cls_obj.name}!",
+        "share_url": share_url,
     }
 
 

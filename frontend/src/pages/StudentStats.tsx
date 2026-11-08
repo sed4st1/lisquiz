@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Target, Zap, Flame, Award, Droplets, CheckCircle2, Lock, ArrowLeft } from 'lucide-react';
 import { haptics } from '../services/haptics';
@@ -31,10 +31,32 @@ export default function StudentStats({
   accuracy: propAccuracy,
 }: StudentStatsProps) {
   // Read real persisted student state or default to fresh zero-account
-  const xp = propXp ?? Number(localStorage.getItem('lisquiz_student_xp') || '0');
-  const acorns = propAcorns ?? Number(localStorage.getItem('lisquiz_student_acorns') || '0');
-  const streak = propStreak ?? Number(localStorage.getItem('lisquiz_student_streak') || '0');
-  const quizzesCount = propQuizzesCount ?? Number(localStorage.getItem('lisquiz_student_quizzes') || '0');
+  const initXp = propXp ?? Number(localStorage.getItem('lisquiz_student_xp') || '0');
+  const initAcorns = propAcorns ?? Number(localStorage.getItem('lisquiz_student_acorns') || '50');
+  const initStreak = propStreak ?? Number(localStorage.getItem('lisquiz_student_streak') || '1');
+  const initQuizzes = propQuizzesCount ?? Number(localStorage.getItem('lisquiz_student_quizzes') || '0');
+
+  const [xp, setXp] = useState(initXp);
+  const [acorns, setAcorns] = useState(initAcorns);
+  const [streak, setStreak] = useState(initStreak);
+  const [quizzesCount, setQuizzesCount] = useState(initQuizzes);
+
+  useEffect(() => {
+    let isMounted = true;
+    import('../services/authService').then(({ authService }) => {
+      authService.getMe().then((me) => {
+        if (!isMounted || !me) return;
+        if (me.total_score != null) setXp(me.total_score);
+        if (me.acorns != null) setAcorns(me.acorns);
+        if (me.streak_days != null) setStreak(me.streak_days);
+        if (me.quizzes_played != null) setQuizzesCount(me.quizzes_played);
+      });
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const accuracy = propAccuracy ?? (quizzesCount > 0 ? 85 : null);
 
   const achievements: AchievementItem[] = [

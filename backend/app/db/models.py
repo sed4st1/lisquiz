@@ -296,6 +296,8 @@ class UserModel(Base):
     avatar: Mapped[str] = mapped_column(String(50), default="fox_smart", nullable=False)
     auth_provider: Mapped[str] = mapped_column(String(30), default="dev_emulator", nullable=False)  # max_bot, dev_emulator
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    streak_days: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    last_active_date: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

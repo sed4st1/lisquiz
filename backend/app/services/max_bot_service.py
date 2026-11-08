@@ -385,6 +385,30 @@ class MaxBotService:
             await self.send_message(chat_id, reply_text, buttons)
             return {"command": "unknown", "status": "sent"}
 
+    async def send_quiz_announcement(
+        self,
+        chat_id: str,
+        room_code: str,
+        quiz_title: str,
+        subject: str,
+        grade: int,
+        class_name: Optional[str] = None,
+    ) -> bool:
+        """Отправка анонса о старте викторины в чат класса Сферума / MAX."""
+        app_base = (settings.MAX_WEBAPP_URL or "https://lisquiz.daniel.crazedns.ru").rstrip("/")
+        class_str = f" для **{class_name}**" if class_name else ""
+        text = (
+            f"🔔 **Началась викторина{class_str}!**\n\n"
+            f"📚 Предмет: **{subject}** ({grade} класс)\n"
+            f"🎯 Тема: **{quiz_title}**\n"
+            f"🔑 Код комнаты: `{room_code}`\n\n"
+            f"Подключайтесь скорее — правильные ответы класса растят нашу Классную Рощу! 🌳"
+        )
+        buttons = [
+            [{"text": f"🎮 Войти в викторину ({room_code})", "type": "open_app", "url": f"{app_base}/?pin={room_code}&role=student"}],
+        ]
+        return await self.send_message(chat_id, text, buttons)
+
     async def send_gap_report_to_chat(
         self,
         chat_id: str,

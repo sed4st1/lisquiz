@@ -140,6 +140,30 @@ export default function TeacherLobby({
     }, 3200);
   };
 
+  const [isNotifyingClass, setIsNotifyingClass] = useState(false);
+
+  const handleNotifyClass = async () => {
+    if (!activePin || isNotifyingClass) return;
+    setIsNotifyingClass(true);
+    haptics.impact('medium');
+    try {
+      const res = await roomApi.notifyClass(activePin);
+      if (res.status === 'sent') {
+        haptics.notification('success');
+        showToast(`🔔 Оповещение отправлено в чат ${res.class_name || ''}!`);
+      } else {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(gameJoinUrl || `${window.location.origin}/?pin=${activePin}`);
+        }
+        showToast(res.message || 'Ссылка на викторину скопирована!');
+      }
+    } catch {
+      showToast('Ссылка на викторину скопирована!');
+    } finally {
+      setIsNotifyingClass(false);
+    }
+  };
+
   // Generate real, scannable QR code matching game visual aesthetic
   useEffect(() => {
     const pin = activePin || '482915';
@@ -195,6 +219,18 @@ export default function TeacherLobby({
       let code = propPin && propPin !== '482915' ? propPin : '';
       let token = propToken && propToken !== 'mock_teacher_token' ? propToken : '';
 
+      // Fallback: restore active room PIN/token from localStorage if teacher minimized tab
+      if (!code || !token) {
+        try {
+          const savedP = localStorage.getItem('lisquiz_active_pin');
+          const savedT = localStorage.getItem('lisquiz_teacher_token');
+          if (savedP && savedT) {
+            code = savedP;
+            token = savedT;
+          }
+        } catch {}
+      }
+
       let validRoom = false;
       let existingRoomQuizTitle = '';
       if (code && token) {
@@ -203,6 +239,9 @@ export default function TeacherLobby({
           if (info && info.status === 'lobby') {
             validRoom = true;
             existingRoomQuizTitle = info.quiz_title || '';
+            if (isMounted) {
+              setActivePin(code);
+            }
           }
         } catch {
           validRoom = false;
@@ -222,6 +261,10 @@ export default function TeacherLobby({
           });
           code = res.room_code;
           token = res.teacher_token;
+          try {
+            localStorage.setItem('lisquiz_active_pin', code);
+            localStorage.setItem('lisquiz_teacher_token', token);
+          } catch {}
           if (isMounted) {
             setActivePin(code);
             setStudents([]);
@@ -666,31 +709,57 @@ export default function TeacherLobby({
           countdown={countdown}
         />
 
-        {activeQuiz && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button
             type="button"
-            onClick={() => handleEditQuiz(activeQuiz)}
+            onClick={handleNotifyClass}
+            disabled={isNotifyingClass}
             style={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 6,
-              background: 'rgba(255, 255, 255, 0.85)',
-              border: '1.5px solid #D4B08C',
+              background: 'linear-gradient(135deg, #059669, #10B981)',
+              border: '1.5px solid #059669',
               borderRadius: 999,
               padding: '8px 16px',
-              color: '#5C3317',
+              color: '#FFFFFF',
               fontSize: 13,
               fontWeight: 700,
               cursor: 'pointer',
-              boxShadow: '0 2px 8px rgba(92, 51, 23, 0.08)',
+              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)',
               transition: 'all 0.15s ease',
             }}
           >
-            <BookOpen size={14} color="#855F3F" />
-            <span>Посмотреть и отредактировать вопросы ({activeQuiz.questions?.length || 0})</span>
+            <span>📢 {isNotifyingClass ? 'Отправка...' : 'Оповестить класс в Сферуме'}</span>
           </button>
-        )}
+
+          {activeQuiz && (
+            <button
+              type="button"
+              onClick={() => handleEditQuiz(activeQuiz)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                background: 'rgba(255, 255, 255, 0.85)',
+                border: '1.5px solid #D4B08C',
+                borderRadius: 999,
+                padding: '8px 16px',
+                color: '#5C3317',
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(92, 51, 23, 0.08)',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <BookOpen size={14} color="#855F3F" />
+              <span>Посмотреть и отредактировать вопросы ({activeQuiz.questions?.length || 0})</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 5. Developer & Demo Helpers Toolbar (Strictly hidden for regular teachers) */}
@@ -997,6 +1066,32 @@ export default function TeacherLobby({
                   Копировать
                 </button>
               </div>
+
+              <button
+                type="button"
+                onClick={handleNotifyClass}
+                disabled={isNotifyingClass}
+                style={{
+                  width: '100%',
+                  marginTop: 10,
+                  marginBottom: 8,
+                  backgroundColor: '#10B981',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: 10,
+                  padding: '9px 16px',
+                  fontSize: 13,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)',
+                }}
+              >
+                <span>📢 {isNotifyingClass ? 'Отправка...' : 'Отправить анонс в чат Сферума'}</span>
+              </button>
 
               <p style={styles.qrInstructions}>
                 Ученики могут отсканировать этот код камерой смартфона в приложении Сферум / MAX и сразу перейти к викторине
