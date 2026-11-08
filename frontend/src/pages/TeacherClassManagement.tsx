@@ -10,8 +10,12 @@ import {
   GraduationCap,
   CheckCircle2,
   AlertCircle,
+  ClipboardList,
+  Plus,
+  Clock,
 } from 'lucide-react';
 import { classApi, ClassItem, StudentRanking, TopicHeatmapItem, SpacedRepetitionBooster } from '../services/classApi';
+import { assignmentApi, TeacherAssignment } from '../services/assignmentApi';
 import { haptics } from '../services/haptics';
 
 interface TeacherClassManagementProps {
@@ -36,7 +40,15 @@ export default function TeacherClassManagement({
 }: TeacherClassManagementProps) {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClass, setSelectedClass] = useState<ClassItem | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'roster' | 'leaderboard' | 'gaps'>('roster');
+  const [activeSubTab, setActiveSubTab] = useState<'roster' | 'leaderboard' | 'assignments' | 'gaps'>('roster');
+  const [classAssignments, setClassAssignments] = useState<TeacherAssignment[]>([]);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignTitle, setAssignTitle] = useState('');
+  const [assignSubject, setAssignSubject] = useState('Математика');
+  const [assignDeadlineDays, setAssignDeadlineDays] = useState(3);
+  const [assignRewardAcorns, setAssignRewardAcorns] = useState(50);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignSuccessToast, setAssignSuccessToast] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(() => {
     try {
@@ -120,17 +132,46 @@ export default function TeacherClassManagement({
   const loadClassDetails = async (classId: string) => {
     setDetailsLoading(true);
     try {
-      const [lbRes, analyticsRes] = await Promise.all([
+      const [lbRes, analyticsRes, assignRes] = await Promise.all([
         classApi.getClassLeaderboard(classId).catch(() => ({ leaderboard: [] })),
         classApi.getClassAnalytics(classId).catch(() => ({ topics_heatmap: [], spaced_repetition_boosters: [] })),
+        assignmentApi.getClassAssignments(classId).catch(() => []),
       ]);
       setLeaderboard(lbRes.leaderboard || []);
       setTopicsHeatmap(analyticsRes.topics_heatmap || []);
       setBoosters(analyticsRes.spaced_repetition_boosters || []);
+      setClassAssignments(assignRes || []);
     } catch (e) {
       console.warn('Failed to load class analytics:', e);
     } finally {
       setDetailsLoading(false);
+    }
+  };
+
+  const handleCreateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedClass || !assignTitle.trim()) return;
+    setAssignLoading(true);
+    try {
+      await assignmentApi.createClassAssignment(selectedClass.id, {
+        title: assignTitle.trim(),
+        subject: assignSubject,
+        grade: selectedClass.grade || 7,
+        deadline_days: assignDeadlineDays,
+        reward_acorns: assignRewardAcorns,
+        reward_xp: assignRewardAcorns * 2,
+      });
+      haptics.notification('success');
+      setAssignSuccessToast(`Задание «${assignTitle.trim()}» успешно выдано классу ${selectedClass.name}!`);
+      setIsAssignModalOpen(false);
+      setAssignTitle('');
+      const updated = await assignmentApi.getClassAssignments(selectedClass.id).catch(() => []);
+      setClassAssignments(updated);
+      setTimeout(() => setAssignSuccessToast(null), 3500);
+    } catch (err: any) {
+      alert(err.message || 'Ошибка выдачи задания');
+    } finally {
+      setAssignLoading(false);
     }
   };
 
@@ -469,6 +510,7 @@ export default function TeacherClassManagement({
             </div>
 
             {/* 3-Tab Segmented Pill Switcher */}
+            {/* 4-Tab Segmented Pill Switcher */}
             <div style={styles.tabSwitcherContainer}>
               <div style={styles.tabSwitcherBar}>
                 {/* Sliding active orange pill indicator */}
@@ -479,8 +521,15 @@ export default function TeacherClassManagement({
                     position: 'absolute',
                     top: 4,
                     bottom: 4,
-                    left: activeSubTab === 'roster' ? '1.5%' : activeSubTab === 'leaderboard' ? '34.5%' : '67.5%',
-                    width: '31%',
+                    left:
+                      activeSubTab === 'roster'
+                        ? '1%'
+                        : activeSubTab === 'leaderboard'
+                        ? '25.5%'
+                        : activeSubTab === 'assignments'
+                        ? '50%'
+                        : '74.5%',
+                    width: '24.5%',
                     background: 'linear-gradient(180deg, #FF9126 0%, #F56B00 100%)',
                     boxShadow: '0 3px 0 #C95000, 0 4px 10px rgba(245, 107, 0, 0.35)',
                     borderRadius: 999,
@@ -516,6 +565,21 @@ export default function TeacherClassManagement({
                   }}
                 >
                   Лидерборд
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    haptics.selection();
+                    setActiveSubTab('assignments');
+                  }}
+                  style={{
+                    ...styles.tabSwitcherBtn,
+                    color: activeSubTab === 'assignments' ? '#FFFFFF' : '#4A2E18',
+                    fontWeight: activeSubTab === 'assignments' ? 900 : 700,
+                  }}
+                >
+                  Задания
                 </button>
 
                 <button
@@ -608,6 +672,25 @@ export default function TeacherClassManagement({
                     <Share2 size={15} color="#4A2E18" style={{ flexShrink: 0 }} />
                     <span style={styles.inviteStudentsText}>Пригласить учеников</span>
                     <ChevronRight size={16} color="#855F3F" style={{ flexShrink: 0 }} />
+                  </motion.button>
+
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => {
+                      haptics.impact('light');
+                      setAssignSubject(selectedClass.subject || 'Математика');
+                      setIsAssignModalOpen(true);
+                    }}
+                    style={{
+                      ...styles.inviteStudentsBtn,
+                      backgroundColor: '#FFF4E6',
+                      borderColor: '#FFAF66',
+                    }}
+                  >
+                    <ClipboardList size={15} color="#D96500" style={{ flexShrink: 0 }} />
+                    <span style={{ ...styles.inviteStudentsText, color: '#9E4400' }}>Выдать задание</span>
+                    <Plus size={16} color="#D96500" style={{ flexShrink: 0 }} />
                   </motion.button>
 
                   {onSelectClassForQuiz && (
@@ -900,7 +983,182 @@ export default function TeacherClassManagement({
               </div>
             )}
 
-            {/* TAB 3: ДЕФИЦИТЫ (GAP DIAGNOSTICS & ANALYTICS) */}
+            {/* TAB 3: ЗАДАНИЯ КЛАССА (ASSIGNMENTS) */}
+            {activeSubTab === 'assignments' && (
+              <div style={styles.hubTabContent}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '0 4px' }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#4A2E18' }}>
+                    Задания класса ({classAssignments.length})
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => {
+                      haptics.impact('medium');
+                      setAssignSubject(selectedClass.subject || 'Математика');
+                      setIsAssignModalOpen(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 14px',
+                      borderRadius: 14,
+                      backgroundColor: '#FF7A00',
+                      color: '#FFFFFF',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      border: 'none',
+                      cursor: 'pointer',
+                      boxShadow: '0 3px 0 #C95000',
+                    }}
+                  >
+                    <Plus size={15} color="#FFF" />
+                    <span>Выдать задание</span>
+                  </motion.button>
+                </div>
+
+                {classAssignments.length === 0 ? (
+                  <div style={{
+                    backgroundColor: '#FFFBF5',
+                    borderRadius: 20,
+                    padding: '32px 20px',
+                    textAlign: 'center',
+                    border: '2px dashed #E8D5C6',
+                    marginTop: 10,
+                  }}>
+                    <img
+                      src="/assets/mascot/thinking.png"
+                      alt="Спринт думает"
+                      style={{ width: 64, height: 64, objectFit: 'contain', margin: '0 auto 12px' }}
+                    />
+                    <div style={{ fontSize: 16, fontWeight: 800, color: '#4A2E18', marginBottom: 6 }}>
+                      У этого класса пока нет активных заданий
+                    </div>
+                    <div style={{ fontSize: 13, color: '#855F3F', maxWidth: 320, margin: '0 auto 16px', lineHeight: 1.4 }}>
+                      Выдайте классу домашний тест или повторение пройденной темы. Ученики увидят его во вкладке «Задания»!
+                    </div>
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => {
+                        haptics.impact('medium');
+                        setAssignSubject(selectedClass.subject || 'Математика');
+                        setIsAssignModalOpen(true);
+                      }}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '10px 20px',
+                        borderRadius: 16,
+                        backgroundColor: '#FF7A00',
+                        color: '#FFFFFF',
+                        fontSize: 14,
+                        fontWeight: 800,
+                        border: 'none',
+                        cursor: 'pointer',
+                        boxShadow: '0 3px 0 #C95000',
+                      }}
+                    >
+                      <Plus size={16} color="#FFF" />
+                      <span>Выдать первое задание</span>
+                    </motion.button>
+                  </div>
+                ) : (
+                  <div style={styles.tabScrollableList}>
+                    {classAssignments.map((assign, idx) => (
+                      <motion.div
+                        key={assign.id}
+                        initial={{ opacity: 0, y: 15 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.05 }}
+                        style={{
+                          backgroundColor: '#FFFBF5',
+                          borderRadius: 18,
+                          padding: '14px 16px',
+                          border: '2px solid #F0DFCE',
+                          boxShadow: '0 2px 0 #E5D2C2',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 10,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span style={{ fontSize: 15, fontWeight: 900, color: '#4A2E18', lineHeight: 1.3 }}>
+                              {assign.title}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{
+                                fontSize: 11,
+                                fontWeight: 800,
+                                padding: '2px 8px',
+                                borderRadius: 8,
+                                backgroundColor: '#EBF5FF',
+                                color: '#1E40AF',
+                              }}>
+                                {assign.subject} • {assign.grade} кл
+                              </span>
+                              <span style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                fontSize: 12,
+                                color: '#855F3F',
+                                fontWeight: 600,
+                              }}>
+                                <Clock size={12} color="#855F3F" />
+                                Срок: {assign.deadline_days} дн.
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            backgroundColor: '#FFF2DE',
+                            padding: '4px 10px',
+                            borderRadius: 12,
+                            border: '1.5px solid #FFD9A8',
+                          }}>
+                            <img
+                              src="/assets/classes/v2/icon_acorn.png"
+                              alt="Желуди"
+                              style={{ width: 14, height: 14 }}
+                            />
+                            <span style={{ fontSize: 13, fontWeight: 900, color: '#C95000' }}>
+                              +{assign.reward_acorns}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          paddingTop: 8,
+                          borderTop: '1px solid #F4E8DC',
+                          fontSize: 12,
+                          color: '#16A34A',
+                          fontWeight: 700,
+                        }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <CheckCircle2 size={13} color="#16A34A" />
+                            Активно для всех учеников класса
+                          </span>
+                          <span style={{ color: '#855F3F', fontWeight: 500, fontSize: 11 }}>
+                            ⭐ +{assign.reward_xp || assign.reward_acorns * 2} XP
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 4: ДЕФИЦИТЫ (GAP DIAGNOSTICS & ANALYTICS) */}
             {activeSubTab === 'gaps' && (
               <div style={styles.hubTabContent}>
                 <div style={styles.tabScrollableList}>
@@ -1255,6 +1513,207 @@ export default function TeacherClassManagement({
                   </div>
                 </form>
               </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ========================================================
+            MODAL 3: "ВЫДАТЬ ЗАДАНИЕ КЛАССУ" (Teacher Assignment Modal)
+           ======================================================== */}
+        <AnimatePresence>
+          {isAssignModalOpen && selectedClass && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              style={styles.modalOverlay}
+            >
+              <motion.div
+                initial={{ y: 60, scale: 0.9, opacity: 0 }}
+                animate={{ y: 0, scale: 1, opacity: 1 }}
+                exit={{ y: 60, scale: 0.9, opacity: 0 }}
+                transition={{ type: 'spring', damping: 22, stiffness: 280 }}
+                style={styles.modalCard}
+              >
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsAssignModalOpen(false)}
+                  style={styles.modalCloseBtn}
+                  title="Закрыть"
+                >
+                  <X size={18} color="#6B4A2F" strokeWidth={2.4} />
+                </button>
+
+                <div style={styles.modalHeaderTitle}>
+                  Выдать задание классу {selectedClass.name}
+                </div>
+
+                <form onSubmit={handleCreateAssignment}>
+                  {/* Assignment Title */}
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>Тема или название задания:</label>
+                    <input
+                      type="text"
+                      value={assignTitle}
+                      onChange={(e) => setAssignTitle(e.target.value)}
+                      placeholder="например, §22 Плотность вещества или Повторение дробей"
+                      style={styles.modalTextInput}
+                      required
+                    />
+                  </div>
+
+                  {/* Subject Dropdown */}
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>Предмет:</label>
+                    <select
+                      value={assignSubject}
+                      onChange={(e) => setAssignSubject(e.target.value)}
+                      style={styles.modalSelect}
+                    >
+                      <option value="Математика">Математика</option>
+                      <option value="Физика">Физика</option>
+                      <option value="Русский язык">Русский язык</option>
+                      <option value="География">География</option>
+                      <option value="Биология">Биология</option>
+                      <option value="Химия">Химия</option>
+                      <option value="История">История</option>
+                      <option value="Обществознание">Обществознание</option>
+                      <option value="Информатика">Информатика</option>
+                      <option value="Литература">Литература</option>
+                      <option value="Английский язык">Английский язык</option>
+                    </select>
+                  </div>
+
+                  {/* Deadline Days Chips */}
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>Срок сдачи (дней):</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[1, 2, 3, 5, 7].map((d) => (
+                        <motion.button
+                          key={d}
+                          type="button"
+                          whileHover={{ scale: 1.06 }}
+                          whileTap={{ scale: 0.94 }}
+                          onClick={() => {
+                            haptics.selection();
+                            setAssignDeadlineDays(d);
+                          }}
+                          style={{
+                            flex: 1,
+                            padding: '8px 0',
+                            borderRadius: 12,
+                            border: assignDeadlineDays === d ? '2px solid #FFAF66' : '1.5px solid #E8D5C6',
+                            backgroundColor: assignDeadlineDays === d ? '#FF9126' : '#F7EDE4',
+                            color: assignDeadlineDays === d ? '#FFFFFF' : '#4A2E18',
+                            fontSize: 13,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: assignDeadlineDays === d ? '0 2px 0 #C95000' : 'none',
+                          }}
+                        >
+                          {d} дн.
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Reward Acorns Chips */}
+                  <div style={styles.formGroup}>
+                    <label style={styles.formLabel}>Награда ученикам (желуди):</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {[30, 50, 75, 100].map((ac) => (
+                        <motion.button
+                          key={ac}
+                          type="button"
+                          whileHover={{ scale: 1.06 }}
+                          whileTap={{ scale: 0.94 }}
+                          onClick={() => {
+                            haptics.selection();
+                            setAssignRewardAcorns(ac);
+                          }}
+                          style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            padding: '8px 0',
+                            borderRadius: 12,
+                            border: assignRewardAcorns === ac ? '2px solid #FFAF66' : '1.5px solid #E8D5C6',
+                            backgroundColor: assignRewardAcorns === ac ? '#FF9126' : '#F7EDE4',
+                            color: assignRewardAcorns === ac ? '#FFFFFF' : '#4A2E18',
+                            fontSize: 13,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            boxShadow: assignRewardAcorns === ac ? '0 2px 0 #C95000' : 'none',
+                          }}
+                        >
+                          <img
+                            src="/assets/classes/v2/icon_acorn.png"
+                            alt="Желуди"
+                            style={{ width: 14, height: 14 }}
+                          />
+                          <span>+{ac}</span>
+                        </motion.button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={styles.modalActionButtonsRow}>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.97 }}
+                      type="button"
+                      onClick={() => setIsAssignModalOpen(false)}
+                      style={styles.modalCancelBtn}
+                    >
+                      Отмена
+                    </motion.button>
+
+                    <motion.button
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.96 }}
+                      type="submit"
+                      disabled={assignLoading}
+                      style={styles.modalSubmitOrangeBtn}
+                    >
+                      {assignLoading ? 'Создание...' : '✨ Выдать классу'}
+                    </motion.button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Success Toast */}
+        <AnimatePresence>
+          {assignSuccessToast && (
+            <motion.div
+              initial={{ opacity: 0, y: -40 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -40 }}
+              style={{
+                position: 'fixed',
+                top: 24,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 99999,
+                backgroundColor: '#15803D',
+                color: '#FFFFFF',
+                padding: '12px 22px',
+                borderRadius: 16,
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                fontSize: 14,
+                fontWeight: 800,
+              }}
+            >
+              <CheckCircle2 size={18} color="#FFF" />
+              <span>{assignSuccessToast}</span>
             </motion.div>
           )}
         </AnimatePresence>

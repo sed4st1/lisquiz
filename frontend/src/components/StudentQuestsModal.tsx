@@ -1,9 +1,10 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check, Sparkles } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { haptics } from '../services/haptics';
 import { soundManager } from '../services/soundManager';
+import { assignmentApi, DailyQuestData, StudentMistake, TeacherAssignment } from '../services/assignmentApi';
 
 interface StudentQuestsModalProps {
   isOpen: boolean;
@@ -18,7 +19,7 @@ interface StudentQuestsModalProps {
 }
 
 interface QuestionChallenge {
-  id: string;
+  id: string | number;
   title: string;
   subject: string;
   text: string;
@@ -27,12 +28,13 @@ interface QuestionChallenge {
   explanation: string;
   rewardAcorns: number;
   rewardXp: number;
+  isMistake?: boolean;
 }
 
 export default function StudentQuestsModal({
   isOpen,
   onClose,
-  streak,
+  streak: propStreak,
   className = '5А',
   onAddAcorns,
   onAddXp,
@@ -41,100 +43,64 @@ export default function StudentQuestsModal({
 }: StudentQuestsModalProps) {
   // Tab state
   const [activeTab, setActiveTab] = useState<'daily' | 'redemption' | 'teacher'>('daily');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Today key for persistent quest progress (resets daily)
-  const todayKey = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  }, []);
+  // Real backend data
+  const [dailyData, setDailyData] = useState<DailyQuestData | null>(null);
+  const [mistakes, setMistakes] = useState<StudentMistake[]>([]);
+  const [assignments, setAssignments] = useState<TeacherAssignment[]>([]);
+  const [studentClassName, setStudentClassName] = useState<string>(className);
 
-  // Persistent Quest State in localStorage
-  const storageKey = `lisquiz_quests_state_${todayKey}`;
-  const [questState, setQuestState] = useState<{
-    warmupSolved: boolean;
-    warmupClaimed: boolean;
-    groveWatered: boolean;
-    groveClaimed: boolean;
-    quizPlayed: boolean;
-    quizClaimed: boolean;
-    chestClaimed: boolean;
-    redemptionSolved: boolean;
-    redemptionClaimed: boolean;
-    teacherDone: boolean;
-    teacherClaimed: boolean;
-  }>(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (saved) return JSON.parse(saved);
-    } catch {}
-    return {
-      warmupSolved: false,
-      warmupClaimed: false,
-      groveWatered: false,
-      groveClaimed: false,
-      quizPlayed: false,
-      quizClaimed: false,
-      chestClaimed: false,
-      redemptionSolved: false,
-      redemptionClaimed: false,
-      teacherDone: false,
-      teacherClaimed: false,
-    };
-  });
-
-  // Save changes to localStorage
-  const updateQuestState = (patch: Partial<typeof questState>) => {
-    setQuestState((prev) => {
-      const next = { ...prev, ...patch };
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-  };
-
-  // Interactive Question Challenge Modal state
+  // Active Challenge modal state
   const [activeChallenge, setActiveChallenge] = useState<QuestionChallenge | null>(null);
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [isAnswered, setIsAnswered] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
 
-  // Challenge definitions
-  const challenges: Record<'warmup' | 'redemption', QuestionChallenge> = {
-    warmup: {
-      id: 'warmup',
-      title: '⚡ Разминка от Спринта',
-      subject: 'Математика',
-      text: 'Чему равна дробь 6/8, если сократить её до несократимой?',
-      options: ['3/4', '1/2', '2/3', '3/8'],
-      correctIndex: 0,
-      explanation: 'Делим числитель и знаменатель на 2: 6:2 / 8:2 = 3/4!',
-      rewardAcorns: 20,
-      rewardXp: 50,
-    },
-    redemption: {
-      id: 'redemption',
-      title: '🛠 Работа над ошибками (§22)',
-      subject: 'Физика (7 класс)',
-      text: 'Брусок массой 800 г имеет объём 100 см³. Найдите его плотность:',
-      options: ['8 г/см³', '80 000 г·см³', '0.125 г/см³', '700 г/см³'],
-      correctIndex: 0,
-      explanation: 'Формула плотности: ρ = m / V. Делим массу на объём: 800 / 100 = 8 г/см³!',
-      rewardAcorns: 40,
-      rewardXp: 100,
-    },
-  };
+  // Load real data from DB whenever modal opens
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    setIsLoading(true);
 
-  // Daily Quests Progress calculation
+    Promise.allSettled([
+      assignmentApi.getDailyQuests(),
+      assignmentApi.getMistakes(),
+      assignmentApi.getMyAssignments(),
+    ]).then(([dailyRes, mistakesRes, asgRes]) => {
+      if (!isMounted) return;
+      if (dailyRes.status === 'fulfilled') {
+        setDailyData(dailyRes.value);
+      }
+      if (mistakesRes.status === 'fulfilled') {
+        setMistakes(mistakesRes.value);
+      }
+      if (asgRes.status === 'fulfilled') {
+        setAssignments(asgRes.value.assignments || []);
+        if (asgRes.value.class_name) {
+          setStudentClassName(asgRes.value.class_name);
+        }
+      }
+      setIsLoading(false);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen]);
+
+  // Derived daily progress
+  const quests = dailyData?.quests;
+  const streakDays = dailyData?.streak_days ?? propStreak ?? 1;
   const dailyTotal = 3;
   const dailyClaimedCount =
-    (questState.warmupClaimed ? 1 : 0) +
-    (questState.groveClaimed ? 1 : 0) +
-    (questState.quizClaimed ? 1 : 0);
+    (quests?.warmup_claimed ? 1 : 0) +
+    (quests?.grove_claimed ? 1 : 0) +
+    (quests?.quiz_claimed ? 1 : 0);
   const isAllDailyClaimed = dailyClaimedCount >= dailyTotal;
 
   // Handle Challenge Option Click
-  const handleSelectOption = (idx: number) => {
+  const handleSelectOption = async (idx: number) => {
     if (isAnswered || !activeChallenge) return;
     setSelectedOption(idx);
     setIsAnswered(true);
@@ -154,10 +120,26 @@ export default function StudentQuestsModal({
         });
       } catch {}
 
-      if (activeChallenge.id === 'warmup') {
-        updateQuestState({ warmupSolved: true });
-      } else if (activeChallenge.id === 'redemption') {
-        updateQuestState({ redemptionSolved: true });
+      if (activeChallenge.isMistake) {
+        // Resolve real mistake in DB
+        try {
+          const res = await assignmentApi.resolveMistake(Number(activeChallenge.id));
+          onAddAcorns(res.reward_acorns || 40);
+          if (onAddXp) onAddXp(100);
+          // Remove from local list
+          setMistakes((prev) => prev.filter((m) => m.id !== activeChallenge.id));
+        } catch (e) {
+          console.warn('Resolve mistake error:', e);
+        }
+      } else {
+        // Warmup quest completed in dailyData
+        setDailyData((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            quests: { ...prev.quests, warmup_solved: true },
+          };
+        });
       }
     } else {
       soundManager.playWrong();
@@ -165,8 +147,8 @@ export default function StudentQuestsModal({
     }
   };
 
-  // Claim Quest Reward
-  const handleClaim = (questId: 'warmup' | 'grove' | 'quiz' | 'redemption' | 'teacher') => {
+  // Claim Daily Quest Reward from DB
+  const handleClaimDaily = async (questId: 'warmup' | 'grove' | 'quiz' | 'chest') => {
     soundManager.playCorrect();
     haptics.impact('medium');
     try {
@@ -178,51 +160,26 @@ export default function StudentQuestsModal({
       });
     } catch {}
 
-    let acornsReward = 0;
-    let xpReward = 0;
-
-    if (questId === 'warmup') {
-      acornsReward = 20;
-      xpReward = 50;
-      updateQuestState({ warmupClaimed: true });
-    } else if (questId === 'grove') {
-      acornsReward = 20;
-      xpReward = 40;
-      updateQuestState({ groveClaimed: true });
-    } else if (questId === 'quiz') {
-      acornsReward = 35;
-      xpReward = 100;
-      updateQuestState({ quizClaimed: true });
-    } else if (questId === 'redemption') {
-      acornsReward = 40;
-      xpReward = 120;
-      updateQuestState({ redemptionClaimed: true });
-    } else if (questId === 'teacher') {
-      acornsReward = 60;
-      xpReward = 150;
-      updateQuestState({ teacherClaimed: true });
-    }
-
-    if (acornsReward > 0) onAddAcorns(acornsReward);
-    if (xpReward > 0 && onAddXp) onAddXp(xpReward);
-  };
-
-  // Claim Daily Chest Bonus
-  const handleClaimChest = () => {
-    if (!isAllDailyClaimed || questState.chestClaimed) return;
-    soundManager.playVictory();
-    haptics.notification('success');
     try {
-      confetti({
-        particleCount: 120,
-        spread: 90,
-        origin: { y: 0.5 },
-        colors: ['#FFD700', '#FFA500', '#10B981', '#3B82F6'],
+      const res = await assignmentApi.claimDaily(questId);
+      onAddAcorns(res.acorns_awarded || 20);
+      if (res.xp_awarded && onAddXp) onAddXp(res.xp_awarded);
+
+      setDailyData((prev) => {
+        if (!prev) return prev;
+        const patch: any = {};
+        if (questId === 'warmup') patch.warmup_claimed = true;
+        if (questId === 'grove') patch.grove_claimed = true;
+        if (questId === 'quiz') patch.quiz_claimed = true;
+        if (questId === 'chest') patch.chest_claimed = true;
+        return {
+          ...prev,
+          quests: { ...prev.quests, ...patch },
+        };
       });
-    } catch {}
-    updateQuestState({ chestClaimed: true });
-    onAddAcorns(50);
-    if (onAddXp) onAddXp(200);
+    } catch (e) {
+      console.warn('Claim daily quest error:', e);
+    }
   };
 
   if (!isOpen) return null;
@@ -260,7 +217,7 @@ export default function StudentQuestsModal({
             </div>
             <div>
               <h2 style={styles.modalTitle}>Квесты и Задания</h2>
-              <p style={styles.modalSub}>Выполняй задания, поливай Рощу и собирай жёлуди!</p>
+              <p style={styles.modalSub}>Выполняй задания, закрывай ошибки и копи жёлуди!</p>
             </div>
           </div>
 
@@ -273,7 +230,7 @@ export default function StudentQuestsModal({
               </div>
               <div style={styles.streakPill}>
                 <img src="/assets/icons/flame.png" alt="Огонёк" style={{ width: 14, height: 14 }} />
-                <span>{streak} дн. стрик</span>
+                <span>{streakDays} дн. стрик</span>
               </div>
             </div>
 
@@ -297,28 +254,28 @@ export default function StudentQuestsModal({
                     width: 38,
                     height: 38,
                     objectFit: 'contain',
-                    filter: isAllDailyClaimed && !questState.chestClaimed ? 'drop-shadow(0 0 8px #F59E0B)' : 'none',
+                    filter: isAllDailyClaimed && !quests?.chest_claimed ? 'drop-shadow(0 0 8px #F59E0B)' : 'none',
                   }}
                 />
                 <div>
                   <div style={styles.chestTitle}>
-                    {questState.chestClaimed
+                    {quests?.chest_claimed
                       ? '🎉 Бонус дня получен!'
                       : isAllDailyClaimed
                       ? 'Золотой сундук разблокирован!'
                       : 'Сундук за 3 дейлика'}
                   </div>
                   <div style={styles.chestSubtitle}>
-                    {questState.chestClaimed ? '+50 желудей начислено' : '+50 желудей и +200 XP'}
+                    {quests?.chest_claimed ? '+50 желудей начислено' : '+50 желудей и +200 XP'}
                   </div>
                 </div>
               </div>
 
-              {isAllDailyClaimed && !questState.chestClaimed ? (
+              {isAllDailyClaimed && !quests?.chest_claimed ? (
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={handleClaimChest}
+                  onClick={() => handleClaimDaily('chest')}
                   style={styles.claimChestBtn}
                 >
                   <Sparkles size={14} />
@@ -326,7 +283,7 @@ export default function StudentQuestsModal({
                 </motion.button>
               ) : (
                 <div style={styles.chestStatusBadge}>
-                  {questState.chestClaimed ? 'Забрано ✓' : `${dailyClaimedCount}/3`}
+                  {quests?.chest_claimed ? 'Забрано ✓' : `${dailyClaimedCount}/3`}
                 </div>
               )}
             </div>
@@ -359,8 +316,11 @@ export default function StudentQuestsModal({
               }}
             >
               <span>🛠 Ошибки</span>
-              <span style={{ ...styles.tabBadge, backgroundColor: questState.redemptionClaimed ? '#10B981' : '#EF4444' }}>
-                {questState.redemptionClaimed ? '0' : '1'}
+              <span style={{
+                ...styles.tabBadge,
+                backgroundColor: mistakes.length > 0 ? '#EF4444' : '#10B981',
+              }}>
+                {mistakes.length}
               </span>
             </button>
 
@@ -375,258 +335,317 @@ export default function StudentQuestsModal({
               }}
             >
               <span>📚 От учителя</span>
-              <span style={styles.tabBadge}>1</span>
+              <span style={styles.tabBadge}>{assignments.length}</span>
             </button>
           </div>
 
-          {/* TAB 1: DAILY QUESTS */}
-          {activeTab === 'daily' && (
-            <div style={styles.questList}>
-              {/* Quest 1: Разминка со Спринтом */}
-              <div style={styles.questCard}>
-                <div style={styles.questIconCol}>
-                  <div style={{ ...styles.questIconCircle, backgroundColor: '#FEF3C7' }}>
-                    <img src="/assets/icons/star_medal.png" alt="Разминка" style={styles.questIconImg} />
-                  </div>
-                </div>
-                <div style={styles.questBodyCol}>
-                  <div style={styles.questCardTitle}>Разминка со Спринтом</div>
-                  <div style={styles.questCardDesc}>Реши 1 быстрый мини-вопрос по математике</div>
-                  <div style={styles.questRewardTag}>
-                    <span>+20</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
-                    <span style={styles.xpBonus}>+50 XP</span>
-                  </div>
-                </div>
-                <div style={styles.questActionCol}>
-                  {questState.warmupClaimed ? (
-                    <div style={styles.claimedBadge}>
-                      <Check size={14} /> Выполнено
-                    </div>
-                  ) : questState.warmupSolved ? (
-                    <button
-                      onClick={() => handleClaim('warmup')}
-                      style={styles.claimBtn}
-                    >
-                      Забрать
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        soundManager.playTap();
-                        setActiveChallenge(challenges.warmup);
-                        setSelectedOption(null);
-                        setIsAnswered(false);
-                      }}
-                      style={styles.actionBtn}
-                    >
-                      Решить
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Quest 2: Забота о Роще */}
-              <div style={styles.questCard}>
-                <div style={styles.questIconCol}>
-                  <div style={{ ...styles.questIconCircle, backgroundColor: '#E0F2FE' }}>
-                    <img src="/assets/icons/water_drop.png" alt="Вода" style={styles.questIconImg} />
-                  </div>
-                </div>
-                <div style={styles.questBodyCol}>
-                  <div style={styles.questCardTitle}>Забота о Роще</div>
-                  <div style={styles.questCardDesc}>Полей Древо {className} класса 1 раз сегодня</div>
-                  <div style={styles.questRewardTag}>
-                    <span>+20</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
-                    <span style={styles.xpBonus}>+40 XP</span>
-                  </div>
-                </div>
-                <div style={styles.questActionCol}>
-                  {questState.groveClaimed ? (
-                    <div style={styles.claimedBadge}>
-                      <Check size={14} /> Выполнено
-                    </div>
-                  ) : questState.groveWatered ? (
-                    <button
-                      onClick={() => handleClaim('grove')}
-                      style={styles.claimBtn}
-                    >
-                      Забрать
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        soundManager.playTap();
-                        updateQuestState({ groveWatered: true });
-                        onClose();
-                        if (onGoToGrove) onGoToGrove();
-                      }}
-                      style={styles.actionBtn}
-                    >
-                      Полить
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Quest 3: Охотник за знаниями */}
-              <div style={styles.questCard}>
-                <div style={styles.questIconCol}>
-                  <div style={{ ...styles.questIconCircle, backgroundColor: '#FEE2E2' }}>
-                    <img src="/assets/icons/sun.png" alt="Викторина" style={styles.questIconImg} />
-                  </div>
-                </div>
-                <div style={styles.questBodyCol}>
-                  <div style={styles.questCardTitle}>Охотник за знаниями</div>
-                  <div style={styles.questCardDesc}>Сыграй в любую викторину на уроке или дома</div>
-                  <div style={styles.questRewardTag}>
-                    <span>+35</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
-                    <span style={styles.xpBonus}>+100 XP</span>
-                  </div>
-                </div>
-                <div style={styles.questActionCol}>
-                  {questState.quizClaimed ? (
-                    <div style={styles.claimedBadge}>
-                      <Check size={14} /> Выполнено
-                    </div>
-                  ) : questState.quizPlayed ? (
-                    <button
-                      onClick={() => handleClaim('quiz')}
-                      style={styles.claimBtn}
-                    >
-                      Забрать
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        soundManager.playTap();
-                        updateQuestState({ quizPlayed: true });
-                        onClose();
-                      }}
-                      style={{ ...styles.actionBtn, backgroundColor: '#3B82F6' }}
-                    >
-                      К игре
-                    </button>
-                  )}
-                </div>
-              </div>
+          {isLoading ? (
+            <div style={{ textAlign: 'center', padding: '24px 0', color: '#64748B', fontSize: 13 }}>
+              Загрузка заданий из базы данных...
             </div>
-          )}
-
-          {/* TAB 2: REDEMPTION (РАБОТА НАД ОШИБКАМИ) */}
-          {activeTab === 'redemption' && (
-            <div style={styles.questList}>
-              <div style={styles.infoBanner}>
-                <div style={{ fontSize: 20 }}>🧠</div>
-                <div style={styles.infoBannerText}>
-                  Спринт проанализировал ошибки на уроке и собрал адаптивные вопросы для возврата очков!
-                </div>
-              </div>
-
-              <div style={styles.questCard}>
-                <div style={styles.questIconCol}>
-                  <div style={{ ...styles.questIconCircle, backgroundColor: '#EDE9FE' }}>
-                    <img src="/assets/icons/star_medal.png" alt="Ошибки" style={styles.questIconImg} />
-                  </div>
-                </div>
-                <div style={styles.questBodyCol}>
-                  <div style={styles.questCardTitle}>Устрани пробел: Плотность (§22)</div>
-                  <div style={styles.questCardDesc}>
-                    Закрой ошибку в формуле ρ = m / V и верни баллы в рейтинг класса
-                  </div>
-                  <div style={styles.questRewardTag}>
-                    <span>+40</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
-                    <span style={styles.xpBonus}>+120 XP</span>
-                  </div>
-                </div>
-                <div style={styles.questActionCol}>
-                  {questState.redemptionClaimed ? (
-                    <div style={styles.claimedBadge}>
-                      <Check size={14} /> Закрыто
+          ) : (
+            <>
+              {/* TAB 1: DAILY QUESTS */}
+              {activeTab === 'daily' && (
+                <div style={styles.questList}>
+                  {/* Quest 1: Разминка */}
+                  <div style={styles.questCard}>
+                    <div style={styles.questIconCol}>
+                      <div style={{ ...styles.questIconCircle, backgroundColor: '#FEF3C7' }}>
+                        <img src="/assets/icons/star_medal.png" alt="Разминка" style={styles.questIconImg} />
+                      </div>
                     </div>
-                  ) : questState.redemptionSolved ? (
-                    <button
-                      onClick={() => handleClaim('redemption')}
-                      style={styles.claimBtn}
-                    >
-                      Забрать
-                    </button>
+                    <div style={styles.questBodyCol}>
+                      <div style={styles.questCardTitle}>Разминка со Спринтом</div>
+                      <div style={styles.questCardDesc}>
+                        {dailyData?.daily_question?.text || 'Реши быстрый мини-вопрос дня'}
+                      </div>
+                      <div style={styles.questRewardTag}>
+                        <span>+20</span>
+                        <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
+                        <span style={styles.xpBonus}>+50 XP</span>
+                      </div>
+                    </div>
+                    <div style={styles.questActionCol}>
+                      {quests?.warmup_claimed ? (
+                        <div style={styles.claimedBadge}>
+                          <Check size={14} /> Выполнено
+                        </div>
+                      ) : quests?.warmup_solved ? (
+                        <button
+                          onClick={() => handleClaimDaily('warmup')}
+                          style={styles.claimBtn}
+                        >
+                          Забрать
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            soundManager.playTap();
+                            const q = dailyData?.daily_question;
+                            if (q) {
+                              setActiveChallenge({
+                                id: q.id,
+                                title: '⚡ Разминка от Спринта',
+                                subject: q.subject,
+                                text: q.text,
+                                options: q.options,
+                                correctIndex: q.correct_index,
+                                explanation: q.explanation,
+                                rewardAcorns: q.reward_acorns,
+                                rewardXp: q.reward_xp,
+                                isMistake: false,
+                              });
+                              setSelectedOption(null);
+                              setIsAnswered(false);
+                            }
+                          }}
+                          style={styles.actionBtn}
+                        >
+                          Решить
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quest 2: Забота о Роще */}
+                  <div style={styles.questCard}>
+                    <div style={styles.questIconCol}>
+                      <div style={{ ...styles.questIconCircle, backgroundColor: '#E0F2FE' }}>
+                        <img src="/assets/icons/water_drop.png" alt="Вода" style={styles.questIconImg} />
+                      </div>
+                    </div>
+                    <div style={styles.questBodyCol}>
+                      <div style={styles.questCardTitle}>Забота о Роще</div>
+                      <div style={styles.questCardDesc}>Полей Древо {studentClassName} класса 1 раз сегодня</div>
+                      <div style={styles.questRewardTag}>
+                        <span>+20</span>
+                        <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
+                        <span style={styles.xpBonus}>+40 XP</span>
+                      </div>
+                    </div>
+                    <div style={styles.questActionCol}>
+                      {quests?.grove_claimed ? (
+                        <div style={styles.claimedBadge}>
+                          <Check size={14} /> Выполнено
+                        </div>
+                      ) : quests?.grove_watered ? (
+                        <button
+                          onClick={() => handleClaimDaily('grove')}
+                          style={styles.claimBtn}
+                        >
+                          Забрать
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            soundManager.playTap();
+                            handleClaimDaily('grove');
+                            onClose();
+                            if (onGoToGrove) onGoToGrove();
+                          }}
+                          style={styles.actionBtn}
+                        >
+                          Полить
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Quest 3: Охотник за знаниями */}
+                  <div style={styles.questCard}>
+                    <div style={styles.questIconCol}>
+                      <div style={{ ...styles.questIconCircle, backgroundColor: '#FEE2E2' }}>
+                        <img src="/assets/icons/sun.png" alt="Викторина" style={styles.questIconImg} />
+                      </div>
+                    </div>
+                    <div style={styles.questBodyCol}>
+                      <div style={styles.questCardTitle}>Охотник за знаниями</div>
+                      <div style={styles.questCardDesc}>Сыграй в любую викторину на уроке или дома</div>
+                      <div style={styles.questRewardTag}>
+                        <span>+35</span>
+                        <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
+                        <span style={styles.xpBonus}>+100 XP</span>
+                      </div>
+                    </div>
+                    <div style={styles.questActionCol}>
+                      {quests?.quiz_claimed ? (
+                        <div style={styles.claimedBadge}>
+                          <Check size={14} /> Выполнено
+                        </div>
+                      ) : quests?.quiz_played ? (
+                        <button
+                          onClick={() => handleClaimDaily('quiz')}
+                          style={styles.claimBtn}
+                        >
+                          Забрать
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            soundManager.playTap();
+                            onClose();
+                          }}
+                          style={{ ...styles.actionBtn, backgroundColor: '#3B82F6' }}
+                        >
+                          К викторине
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: REDEMPTION (РЕАЛЬНЫЕ ОШИБКИ ИЗ ВИКТОРИН) */}
+              {activeTab === 'redemption' && (
+                <div style={styles.questList}>
+                  {mistakes.length === 0 ? (
+                    <div style={styles.emptyStateBox}>
+                      <div style={{ fontSize: 36, marginBottom: 8 }}>🎉</div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: '#1E293B' }}>
+                        Ошибок не найдено!
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, lineHeight: 1.4 }}>
+                        Вы ответили верно на все вопросы в последних викторинах. Сыграйте новую викторину на уроке!
+                      </div>
+                    </div>
                   ) : (
-                    <button
-                      onClick={() => {
-                        soundManager.playTap();
-                        setActiveChallenge(challenges.redemption);
-                        setSelectedOption(null);
-                        setIsAnswered(false);
-                      }}
-                      style={{ ...styles.actionBtn, backgroundColor: '#8B5CF6' }}
-                    >
-                      Решить
-                    </button>
+                    <>
+                      <div style={styles.infoBanner}>
+                        <div style={{ fontSize: 20 }}>🧠</div>
+                        <div style={styles.infoBannerText}>
+                          Реальные ошибки из ваших последних викторин. Исправьте их, чтобы вернуть очки и получить жёлуди!
+                        </div>
+                      </div>
+
+                      {mistakes.map((m) => (
+                        <div key={m.id} style={styles.questCard}>
+                          <div style={styles.questIconCol}>
+                            <div style={{ ...styles.questIconCircle, backgroundColor: '#EDE9FE' }}>
+                              <img src="/assets/icons/star_medal.png" alt="Ошибка" style={styles.questIconImg} />
+                            </div>
+                          </div>
+                          <div style={styles.questBodyCol}>
+                            <div style={styles.questCardTitle}>{m.topic || 'Повторение темы'}</div>
+                            <div style={styles.questCardDesc}>{m.question_text}</div>
+                            <div style={styles.questRewardTag}>
+                              <span>+{m.reward_acorns}</span>
+                              <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
+                              <span style={styles.xpBonus}>+{m.reward_xp} XP</span>
+                            </div>
+                          </div>
+                          <div style={styles.questActionCol}>
+                            <button
+                              onClick={() => {
+                                soundManager.playTap();
+                                setActiveChallenge({
+                                  id: m.id,
+                                  title: `🛠 ${m.topic}`,
+                                  subject: 'Работа над ошибками',
+                                  text: m.question_text,
+                                  options: m.options,
+                                  correctIndex: m.correct_index,
+                                  explanation: m.explanation,
+                                  rewardAcorns: m.reward_acorns,
+                                  rewardXp: m.reward_xp,
+                                  isMistake: true,
+                                });
+                                setSelectedOption(null);
+                                setIsAnswered(false);
+                              }}
+                              style={{ ...styles.actionBtn, backgroundColor: '#8B5CF6' }}
+                            >
+                              Исправить
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
-              </div>
-            </div>
-          )}
+              )}
 
-          {/* TAB 3: TEACHER ASSIGNMENTS */}
-          {activeTab === 'teacher' && (
-            <div style={styles.questList}>
-              <div style={{ ...styles.infoBanner, backgroundColor: '#ECFDF5', borderColor: '#10B981' }}>
-                <div style={{ fontSize: 20 }}>👩‍🏫</div>
-                <div style={{ ...styles.infoBannerText, color: '#065F46' }}>
-                  Задания, назначенные вашим учителем для {className} класса с автоматической проверкой.
-                </div>
-              </div>
-
-              <div style={styles.questCard}>
-                <div style={styles.questIconCol}>
-                  <div style={{ ...styles.questIconCircle, backgroundColor: '#D1FAE5' }}>
-                    <img src="/assets/icons/shield_rank.png" alt="Домашка" style={styles.questIconImg} />
-                  </div>
-                </div>
-                <div style={styles.questBodyCol}>
-                  <div style={styles.questCardTitle}>§22 Плотность вещества (Физика)</div>
-                  <div style={styles.questCardDesc}>
-                    Домашняя тренировка от учителя. Дедлайн: 2 дня
-                  </div>
-                  <div style={styles.questRewardTag}>
-                    <span>+60</span>
-                    <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
-                    <span style={styles.xpBonus}>+150 XP</span>
-                  </div>
-                </div>
-                <div style={styles.questActionCol}>
-                  {questState.teacherClaimed ? (
-                    <div style={styles.claimedBadge}>
-                      <Check size={14} /> Сдано
+              {/* TAB 3: TEACHER ASSIGNMENTS (РЕАЛЬНЫЕ ЗАДАНИЯ ОТ УЧИТЕЛЯ) */}
+              {activeTab === 'teacher' && (
+                <div style={styles.questList}>
+                  {assignments.length === 0 ? (
+                    <div style={styles.emptyStateBox}>
+                      <div style={{ fontSize: 36, marginBottom: 8 }}>📚</div>
+                      <div style={{ fontWeight: 800, fontSize: 14, color: '#1E293B' }}>
+                        Заданий от учителя пока нет
+                      </div>
+                      <div style={{ fontSize: 12, color: '#64748B', marginTop: 4, lineHeight: 1.4 }}>
+                        Когда учитель назначит домашнее задание для {studentClassName} класса, оно сразу появится здесь.
+                      </div>
                     </div>
-                  ) : questState.teacherDone ? (
-                    <button
-                      onClick={() => handleClaim('teacher')}
-                      style={styles.claimBtn}
-                    >
-                      Забрать
-                    </button>
                   ) : (
-                    <button
-                      onClick={() => {
-                        soundManager.playTap();
-                        updateQuestState({ teacherDone: true });
-                        onClose();
-                        if (onJoinGameWithPin) onJoinGameWithPin('482915');
-                      }}
-                      style={{ ...styles.actionBtn, backgroundColor: '#059669' }}
-                    >
-                      Начать
-                    </button>
+                    <>
+                      <div style={{ ...styles.infoBanner, backgroundColor: '#ECFDF5', borderColor: '#10B981' }}>
+                        <div style={{ fontSize: 20 }}>👩‍🏫</div>
+                        <div style={{ ...styles.infoBannerText, color: '#065F46' }}>
+                          Домашние задания, выданные вашим учителем для {studentClassName} класса.
+                        </div>
+                      </div>
+
+                      {assignments.map((asg) => (
+                        <div key={asg.id} style={styles.questCard}>
+                          <div style={styles.questIconCol}>
+                            <div style={{ ...styles.questIconCircle, backgroundColor: '#D1FAE5' }}>
+                              <img src="/assets/icons/shield_rank.png" alt="Задание" style={styles.questIconImg} />
+                            </div>
+                          </div>
+                          <div style={styles.questBodyCol}>
+                            <div style={styles.questCardTitle}>{asg.title}</div>
+                            <div style={styles.questCardDesc}>
+                              {asg.subject} ({asg.grade} класс) • Срок: {asg.deadline_days} дн.
+                            </div>
+                            <div style={styles.questRewardTag}>
+                              <span>+{asg.reward_acorns}</span>
+                              <img src="/assets/icons/acorn_gold.png" alt="Жёлуди" style={styles.miniAcorn} />
+                              <span style={styles.xpBonus}>+{asg.reward_xp} XP</span>
+                            </div>
+                          </div>
+                          <div style={styles.questActionCol}>
+                            {asg.is_completed ? (
+                              <div style={styles.claimedBadge}>
+                                <Check size={14} /> Сдано
+                              </div>
+                            ) : (
+                              <button
+                                onClick={async () => {
+                                  soundManager.playTap();
+                                  try {
+                                    if (asg.quiz_id && onJoinGameWithPin) {
+                                      onClose();
+                                      onJoinGameWithPin(asg.quiz_id);
+                                      return;
+                                    }
+                                    // Submit assignment directly or launch quiz
+                                    const res = await assignmentApi.submitAssignment(asg.id, 850, 100);
+                                    onAddAcorns(res.reward_acorns || asg.reward_acorns);
+                                    if (onAddXp) onAddXp(asg.reward_xp);
+                                    setAssignments((prev) =>
+                                      prev.map((a) => (a.id === asg.id ? { ...a, is_completed: true } : a))
+                                    );
+                                    soundManager.playCorrect();
+                                    haptics.notification('success');
+                                  } catch (e) {
+                                    console.warn('Submit error:', e);
+                                  }
+                                }}
+                                style={{ ...styles.actionBtn, backgroundColor: '#059669' }}
+                              >
+                                Сдать
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </>
                   )}
                 </div>
-              </div>
-            </div>
+              )}
+            </>
           )}
 
           {/* Interactive Challenge Sub-Modal Overlay */}
@@ -666,7 +685,7 @@ export default function StudentQuestsModal({
                       {!isAnswered
                         ? 'Реши этот вопрос, чтобы доказать знание темы и забрать жёлуди!'
                         : isCorrect
-                        ? '🎉 Отлично! Абсолютно верно. Ты молодец!'
+                        ? '🎉 Отлично! Абсолютно верно. Ты закрыл пробел!'
                         : 'Немного не так. Прочитай объяснение ниже и попробуй ещё раз!'}
                     </div>
                   </div>
@@ -986,6 +1005,13 @@ const styles: Record<string, React.CSSProperties> = {
     flexDirection: 'column',
     gap: 10,
   },
+  emptyStateBox: {
+    backgroundColor: '#FFFFFF',
+    border: '2px dashed #CBD5E1',
+    borderRadius: 18,
+    padding: '24px 16px',
+    textAlign: 'center',
+  },
   questCard: {
     display: 'flex',
     alignItems: 'center',
@@ -1073,7 +1099,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 800,
     cursor: 'pointer',
     boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)',
-    animation: 'pulse 1.5s infinite',
   },
   claimedBadge: {
     display: 'inline-flex',

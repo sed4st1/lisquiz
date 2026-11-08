@@ -48,7 +48,9 @@ async def _ensure_sqlite_columns():
         return
     _sqlite_migrated = True
     try:
+        from . import models as _m  # noqa: F401
         async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
             res = await conn.exec_driver_sql("PRAGMA table_info(users)")
             cols = [row[1] for row in res.fetchall()]
             if cols:
@@ -56,6 +58,16 @@ async def _ensure_sqlite_columns():
                     await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN streak_days INTEGER NOT NULL DEFAULT 1")
                 if "last_active_date" not in cols:
                     await conn.exec_driver_sql("ALTER TABLE users ADD COLUMN last_active_date VARCHAR(10)")
+            # Проверка столбцов в spaced_repetition_queue
+            res_sr = await conn.exec_driver_sql("PRAGMA table_info(spaced_repetition_queue)")
+            cols_sr = [row[1] for row in res_sr.fetchall()]
+            if cols_sr:
+                if "question_text" not in cols_sr:
+                    await conn.exec_driver_sql("ALTER TABLE spaced_repetition_queue ADD COLUMN question_text TEXT")
+                if "explanation" not in cols_sr:
+                    await conn.exec_driver_sql("ALTER TABLE spaced_repetition_queue ADD COLUMN explanation TEXT")
+                if "options_json" not in cols_sr:
+                    await conn.exec_driver_sql("ALTER TABLE spaced_repetition_queue ADD COLUMN options_json JSON")
     except Exception:
         pass
 

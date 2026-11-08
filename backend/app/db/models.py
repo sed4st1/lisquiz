@@ -275,13 +275,16 @@ class SpacedRepetitionModel(Base):
     """Модель очереди задач интервального повторения ошибок (24ч / 72ч)."""
     __tablename__ = "spaced_repetition_queue"
 
-    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     pseudonym_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     question_id: Mapped[int] = mapped_column(Integer, ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
     topic: Mapped[str] = mapped_column(String(255), nullable=False)
     step_interval: Mapped[int] = mapped_column(Integer, default=1, nullable=False)  # 1 = 24h, 2 = 72h
     trigger_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    question_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    options_json: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -321,3 +324,70 @@ class AuthTicketModel(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     is_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class ClassAssignmentModel(Base):
+    """Модель задания / домашней викторины, назначенной учителем классу."""
+    __tablename__ = "class_assignments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: f"asg_{uuid.uuid4().hex[:8]}")
+    class_id: Mapped[str] = mapped_column(String(36), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False, index=True)
+    teacher_pseudonym_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    quiz_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("quizzes.id", ondelete="SET NULL"), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    subject: Mapped[str] = mapped_column(String(100), nullable=False)
+    grade: Mapped[int] = mapped_column(Integer, nullable=False)
+    deadline_days: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
+    reward_acorns: Mapped[int] = mapped_column(Integer, default=50, nullable=False)
+    reward_xp: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Связи
+    class_group: Mapped["ClassModel"] = relationship("ClassModel")
+    quiz: Mapped[Optional["QuizModel"]] = relationship("QuizModel")
+    submissions: Mapped[List["StudentAssignmentSubmissionModel"]] = relationship(
+        "StudentAssignmentSubmissionModel",
+        back_populates="assignment",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class StudentAssignmentSubmissionModel(Base):
+    """Модель выполнения / сдачи домашнего задания учеником."""
+    __tablename__ = "student_assignment_submissions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: f"sub_{uuid.uuid4().hex[:8]}")
+    assignment_id: Mapped[str] = mapped_column(String(36), ForeignKey("class_assignments.id", ondelete="CASCADE"), nullable=False, index=True)
+    pseudonym_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    accuracy_percent: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    # Связи
+    assignment: Mapped["ClassAssignmentModel"] = relationship("ClassAssignmentModel", back_populates="submissions")
+
+
+Index("uq_asg_student", StudentAssignmentSubmissionModel.assignment_id, StudentAssignmentSubmissionModel.pseudonym_id, unique=True)
+
+
+class UserDailyQuestModel(Base):
+    """Модель состояния ежедневных квестов ученика по датам."""
+    __tablename__ = "user_daily_quests"
+
+    id: Mapped[int] = mapped_column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
+    pseudonym_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    date_str: Mapped[str] = mapped_column(String(10), nullable=False, index=True)  # YYYY-MM-DD
+    warmup_solved: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    warmup_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    grove_watered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    grove_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    quiz_played: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    quiz_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    chest_claimed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+Index("uq_user_daily_quest", UserDailyQuestModel.pseudonym_id, UserDailyQuestModel.date_str, unique=True)
+

@@ -721,6 +721,7 @@ class RoomStateEngine:
                 ClassModel,
                 ClassStudentModel,
                 UserModel,
+                SpacedRepetitionModel,
             )
             from sqlalchemy import select, func, desc
             from datetime import datetime, timezone
@@ -923,6 +924,25 @@ class RoomStateEngine:
                                     tab_blurred=bool(ans.tab_blurred),
                                     points_awarded=int(getattr(ans, "points_awarded", 0)),
                                 ))
+                                if not ans.is_correct:
+                                    p_obj = room.players.get(ans.player_id)
+                                    s_pid = getattr(p_obj, "pseudonym_id", None) or ans.player_id
+                                    q_item = next((q for q in (room.quiz.questions if room.quiz else []) if q.id == ans.question_id), None)
+                                    opts_list = [
+                                        {"id": getattr(o, "id", idx), "text": getattr(o, "text", ""), "is_correct": bool(getattr(o, "is_correct", False))}
+                                        for idx, o in enumerate(q_item.options if q_item else [])
+                                    ]
+                                    db.add(SpacedRepetitionModel(
+                                        pseudonym_id=s_pid,
+                                        question_id=mapped_qid if isinstance(mapped_qid, int) else 1,
+                                        topic=getattr(q_item, "topic", None) or getattr(room.quiz, "topic", "Повторение темы"),
+                                        step_interval=1,
+                                        trigger_at=now_utc,
+                                        is_completed=False,
+                                        question_text=getattr(q_item, "text", "Задача из викторины"),
+                                        explanation=getattr(q_item, "explanation", None),
+                                        options_json=opts_list,
+                                    ))
             except Exception as dbe:
                 logger.error(f"Database persist error on room finish {room_code}: {dbe}", exc_info=True)
 

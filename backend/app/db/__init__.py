@@ -13,6 +13,9 @@ from .models import (
     SpacedRepetitionModel,
     UserModel,
     AuthTicketModel,
+    ClassAssignmentModel,
+    StudentAssignmentSubmissionModel,
+    UserDailyQuestModel,
 )
 
 __all__ = [
@@ -33,4 +36,7 @@ __all__ = [
     "SpacedRepetitionModel",
     "UserModel",
     "AuthTicketModel",
+    "ClassAssignmentModel",
+    "StudentAssignmentSubmissionModel",
+    "UserDailyQuestModel",
 ]

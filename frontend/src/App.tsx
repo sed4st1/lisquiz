@@ -295,7 +295,14 @@ export default function App() {
       return 'fox_smart';
     }
   });
-  const [currentQuestionData, setCurrentQuestionData] = useState<any>(null);
+  const [currentQuestionData, setCurrentQuestionData] = useState<any>(() => {
+    try {
+      const saved = localStorage.getItem('lisquiz_current_question_data');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
   const [personalAnswerResult, setPersonalAnswerResult] = useState<any>(null);
   const [quizFinishData, setQuizFinishData] = useState<any>(null);
   const [quizSubject, setQuizSubject] = useState<string>('Математика');
@@ -321,10 +328,55 @@ export default function App() {
       if (data?.class_name) setQuizClass(data.class_name);
       if (data?.class_students_count != null) setQuizClassStudentsCount(data.class_students_count);
       if (data?.quiz_title) setQuizTitle(data.quiz_title);
+
+      const status = data?.status || data?.room_status;
+      if (data?.current_question) {
+        const timeLimitSec = Math.max(5, Math.ceil((data.remaining_time_ms || 25000) / 1000));
+        const questionPayload = {
+          question_index: data.current_question_index ?? 0,
+          total_questions: data.total_questions || 5,
+          question: data.current_question,
+          questions: data.questions || [data.current_question],
+          tier: data.current_question?.tier || 2,
+          is_boss: data.current_question?.is_boss || false,
+          time_limit_sec: timeLimitSec,
+          total_players: data.players?.length || 1,
+          answered_count: data.answered_count ?? 0,
+          subject: data.subject || quizSubject,
+          grade: data.grade || quizGrade,
+          class_name: data.class_name || quizClass,
+          quiz_title: data.quiz_title || quizTitle,
+        };
+        setCurrentQuestionData(questionPayload);
+        try {
+          localStorage.setItem('lisquiz_current_question_data', JSON.stringify(questionPayload));
+        } catch {}
+      }
+
+      if (status) {
+        const isGameActive = ['question', 'countdown', 'reveal_results', 'leaderboard', 'playing'].includes(status);
+        if (isGameActive) {
+          if (role === 'teacher') {
+            setSubScreen('teacher_game');
+          } else {
+            setSubScreen('student_game');
+          }
+        } else if (status === 'lobby') {
+          if (role === 'teacher') {
+            setTab('leaderboard');
+            setSubScreen(null);
+          } else {
+            setSubScreen('student_waiting');
+          }
+        }
+      }
     };
 
     const handleQuestionStart = (data: any) => {
       setCurrentQuestionData(data);
+      try {
+        localStorage.setItem('lisquiz_current_question_data', JSON.stringify(data));
+      } catch {}
       setPersonalAnswerResult(null);
       if (data?.subject) setQuizSubject(data.subject);
       if (data?.class_name) setQuizClass(data.class_name);
@@ -406,6 +458,9 @@ export default function App() {
         setTimeout(() => {
           socketService.disconnect();
           setActivePin('');
+          try {
+            localStorage.removeItem('lisquiz_current_question_data');
+          } catch {}
         }, 800);
       }
     };
@@ -427,6 +482,7 @@ export default function App() {
           localStorage.removeItem('lisquiz_student_token');
           localStorage.removeItem('lisquiz_student_player_id');
           localStorage.removeItem('lisquiz_sub_screen');
+          localStorage.removeItem('lisquiz_current_question_data');
         } catch {}
         setAuthFeedback(data?.reason || 'Викторина завершена учителем');
       }
@@ -592,21 +648,26 @@ export default function App() {
           return;
         }
 
+        const isGameActive = ['question', 'countdown', 'reveal_results', 'leaderboard', 'playing'].includes(info.status);
+
         // Комната активна! Восстанавливаем соединение, если сокет отключился в фоне
         if (savedRole === 'teacher' && savedTeacherToken) {
           if (!socketService.isConnected()) {
             await socketService.connect(savedPin, savedTeacherToken).catch(() => {});
           }
-          if (info.status === 'playing' && savedSubScreen === 'teacher_game') {
+          if (isGameActive) {
             setSubScreen('teacher_game');
+          } else if (info.status === 'lobby') {
+            setTab('leaderboard');
+            setSubScreen(null);
           }
         } else if (savedStudentToken) {
           if (!socketService.isConnected()) {
             await socketService.connect(savedPin, savedStudentToken).catch(() => {});
           }
-          if (info.status === 'playing' && savedSubScreen !== 'student_quiz_finish' && savedSubScreen !== 'student_leaderboard') {
+          if (isGameActive && savedSubScreen !== 'student_quiz_finish' && savedSubScreen !== 'student_leaderboard') {
             setSubScreen('student_game');
-          } else if (info.status === 'lobby' && !savedSubScreen) {
+          } else if (info.status === 'lobby') {
             setSubScreen('student_waiting');
           }
         }
