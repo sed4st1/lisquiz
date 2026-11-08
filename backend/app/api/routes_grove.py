@@ -47,6 +47,32 @@ class CardPullRequest(BaseModel):
 # ENDPOINTS
 # =============================================================================
 
+from ..db.session import async_session_maker
+from ..services.class_service import get_class_by_id
+
+
+async def resolve_grove_target_ids(class_id: str) -> List[str]:
+    """Возвращает список возможных идентификаторов класса (UUID, название, транслит) для поиска прогресса Рощи."""
+    candidates = [class_id]
+    try:
+        clean = class_id.replace("класс", "").strip()
+        if clean and clean not in candidates:
+            candidates.append(clean)
+        async with async_session_maker() as db:
+            cls = await get_class_by_id(db, class_id)
+            if cls:
+                if cls.id not in candidates:
+                    candidates.append(cls.id)
+                if cls.name not in candidates:
+                    candidates.append(cls.name)
+                g_alias = f"class_{cls.grade}a"
+                if g_alias not in candidates:
+                    candidates.append(g_alias)
+    except Exception:
+        pass
+    return candidates
+
+
 @router.get("/{class_id}")
 async def get_grove_state(class_id: str):
     """
@@ -57,7 +83,17 @@ async def get_grove_state(class_id: str):
     - Совет от маскота Спринта
     - Стрик дней и статус гибернации
     """
-    grove_data = grove_service.get_or_create_grove(class_id)
+    candidates = await resolve_grove_target_ids(class_id)
+    best_grove = None
+    best_xp = -1
+    for c_id in candidates:
+        g = grove_service.get_or_create_grove(c_id)
+        xp = g.get("total_xp", 0)
+        if xp > best_xp:
+            best_xp = xp
+            best_grove = g
+
+    grove_data = best_grove or grove_service.get_or_create_grove(class_id)
     # Проверка гибернации при запросе
     hibernation_info = grove_service.check_and_update_hibernation(class_id)
     grove_data["is_hibernating"] = hibernation_info["is_hibernating"]
@@ -89,7 +125,17 @@ async def get_weekly_leaderboard(class_id: str):
     - 🥈/🥉 Топ-2 и Топ-3 призёры
     - 🌟 Номинация «Прорыв недели» (Most Improved)
     """
-    return grove_service.get_weekly_leaderboard(class_id)
+    candidates = await resolve_grove_target_ids(class_id)
+    best_lb = None
+    best_students = -1
+    for c_id in candidates:
+        lb = grove_service.get_weekly_leaderboard(c_id)
+        st_count = lb.get("total_students", 0)
+        if st_count > best_students:
+            best_students = st_count
+            best_lb = lb
+
+    return best_lb or grove_service.get_weekly_leaderboard(class_id)
 
 
 @router.post("/{class_id}/reset-week")

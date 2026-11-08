@@ -311,6 +311,17 @@ export default function StudentGameQuestion({
     };
   }, []);
 
+  // Auto-advance to finish screen after receiving GAME_FINISHED
+  useEffect(() => {
+    if (finishPayload && onGameFinished) {
+      const timer = setTimeout(() => {
+        haptics.notification('success');
+        onGameFinished(finishPayload);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [finishPayload, onGameFinished]);
+
   // Live timer for current question
   const currentQ = activeQuestionsList[currentQIndex] || activeQuestionsList[0]!;
   const effectiveTotalQ = activeQuestionsList.length || totalQuestions || 1;

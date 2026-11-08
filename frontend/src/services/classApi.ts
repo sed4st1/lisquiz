@@ -133,7 +133,8 @@ export const classApi = {
    * Получение текущего класса ученика.
    */
   async getStudentClass(pseudonymId?: string): Promise<ClassItem | null> {
-    const pid = pseudonymId || localStorage.getItem('lisquiz_student_pseudo_id') || 'student_guest';
+    const cachedUser = authService.getCachedUser();
+    const pid = pseudonymId || cachedUser?.pseudonym_id || localStorage.getItem('lisquiz_student_pseudo_id') || 'student_guest';
     const res = await fetch(`/api/classes/student/${encodeURIComponent(pid)}`, {
       headers: {
         ...authService.getAuthHeaders(),
@@ -157,8 +158,10 @@ export const classApi = {
     studentName?: string,
     avatar?: string
   ): Promise<{ class_id: string; name: string; students_count: number }> {
-    const sName = studentName || localStorage.getItem('lisquiz_student_name') || sessionStorage.getItem('lisquiz_student_name') || undefined;
-    const sAvatar = avatar || localStorage.getItem('lisquiz_student_avatar') || undefined;
+    const cachedUser = authService.getCachedUser();
+    const pid = pseudonymId || cachedUser?.pseudonym_id || localStorage.getItem('lisquiz_student_pseudo_id');
+    const sName = studentName || cachedUser?.display_name || localStorage.getItem('lisquiz_student_name') || sessionStorage.getItem('lisquiz_student_name') || undefined;
+    const sAvatar = avatar || cachedUser?.avatar || localStorage.getItem('lisquiz_student_avatar') || undefined;
     const res = await fetch('/api/classes/join', {
       method: 'POST',
       headers: {
@@ -167,7 +170,7 @@ export const classApi = {
       },
       body: JSON.stringify({
         invite_code: inviteCode,
-        pseudonym_id: pseudonymId,
+        pseudonym_id: pid,
         student_name: sName,
         avatar: sAvatar,
       }),

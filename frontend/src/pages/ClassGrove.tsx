@@ -26,6 +26,7 @@ import {
   mockDefaultLeaderboard,
 } from '../services/groveApi';
 import { classApi } from '../services/classApi';
+import { authService } from '../services/authService';
 
 export function formatDays(n: number): string {
   const mod10 = n % 10;
@@ -70,10 +71,11 @@ export default function ClassGrove({
   const [leaderboard, setLeaderboard] = useState<GroveLeaderboardResponse>(mockDefaultLeaderboard);
   const [inventory, setInventory] = useState<StudentInventoryResponse>(() => {
     try {
+      const cached = authService.getCachedUser();
       const savedAcorns = sessionStorage.getItem('lisquiz_user_acorns');
-      const acorns = savedAcorns !== null ? parseInt(savedAcorns, 10) : (isDevMode ? 100 : 0);
+      const acorns = cached?.acorns ?? (savedAcorns !== null ? parseInt(savedAcorns, 10) : (isDevMode ? 100 : 0));
       return {
-        student_id: 'current_student',
+        student_id: cached?.pseudonym_id || 'current_student',
         acorns_balance: isNaN(acorns) ? 0 : acorns,
         collection_progress: isDevMode ? '1/16 (6.2%)' : '0/16 (0%)',
         unique_cards_count: isDevMode ? 1 : 0,
@@ -98,8 +100,6 @@ export default function ClassGrove({
   const [points, setPoints] = useState<number>(0);
   const maxPoints = 500;
   const [waterCount, setWaterCount] = useState<number>(0);
-  const soilCount = 0;
-  const sunCount = 0;
   const [isWatering, setIsWatering] = useState<boolean>(false);
   const [bubbleMessage, setBubbleMessage] = useState<string | null>(null);
 
@@ -112,45 +112,21 @@ export default function ClassGrove({
 
   // Real class metadata
   const [realClassData, setRealClassData] = useState<{
+    id?: string;
     name: string;
     studentsCount: number;
     quizzesCount: number;
   } | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    if (classId && classId !== '7А') {
-      classApi.getClass(classId).then((c) => {
-        if (isMounted && c) {
-          setRealClassData({
-            name: c.name,
-            studentsCount: c.students_count,
-            quizzesCount: c.rooms_count,
-          });
-        }
-      }).catch(() => {});
-    } else {
-      classApi.getStudentClass().then((c) => {
-        if (isMounted && c) {
-          setRealClassData({
-            name: c.name,
-            studentsCount: c.students_count,
-            quizzesCount: c.rooms_count,
-          });
-        }
-      }).catch(() => {});
-    }
-    return () => { isMounted = false; };
-  }, [classId]);
-
   // Load Data
-  const loadGroveData = useCallback(async () => {
+  const loadGroveData = useCallback(async (explicitTargetId?: string) => {
     try {
-      const targetId = classId || '7А';
+      const studentPid = authService.getCachedUser()?.pseudonym_id || 'current_student';
+      const targetId = explicitTargetId || realClassData?.name || realClassData?.id || (classId && classId !== '7А' ? classId : '') || '7А';
       const [stateData, lbData, invData] = await Promise.all([
         fetchGroveState(targetId),
         fetchGroveLeaderboard(targetId),
-        fetchStudentInventory('current_student'),
+        fetchStudentInventory(studentPid),
       ]);
       setGrove(stateData);
       setLeaderboard(lbData);
@@ -158,11 +134,37 @@ export default function ClassGrove({
     } catch (err) {
       console.warn('[ClassGrove] Failed to load grove data', err);
     }
-  }, [classId]);
+  }, [classId, realClassData]);
 
   useEffect(() => {
-    loadGroveData();
-  }, [loadGroveData]);
+    let isMounted = true;
+    const resolveAndLoad = async () => {
+      let resolved: any = null;
+      if (classId && classId !== '7А' && classId.length > 2) {
+        try {
+          resolved = await classApi.getClass(classId);
+        } catch {}
+      }
+      if (!resolved) {
+        try {
+          resolved = await classApi.getStudentClass();
+        } catch {}
+      }
+      if (isMounted && resolved) {
+        setRealClassData({
+          id: resolved.id,
+          name: resolved.name,
+          studentsCount: resolved.students_count,
+          quizzesCount: resolved.rooms_count,
+        });
+        loadGroveData(resolved.name || resolved.id);
+      } else {
+        loadGroveData();
+      }
+    };
+    resolveAndLoad();
+    return () => { isMounted = false; };
+  }, [classId, loadGroveData]);
 
   // Ambient BGM for Class Grove
   useEffect(() => {
@@ -203,8 +205,10 @@ export default function ClassGrove({
       setBubbleMessage(null);
     }, 3200);
 
-    // Push to backend
-    await applyWaterContribution(classId, 'current_student');
+    // Push to backend with real class and student PID
+    const targetClassId = realClassData?.name || realClassData?.id || classId || '7А';
+    const studentPid = authService.getCachedUser()?.pseudonym_id || 'current_student';
+    await applyWaterContribution(targetClassId, studentPid);
   };
 
   // Click on mascot Sprint (playful tap reaction)
@@ -242,6 +246,10 @@ export default function ClassGrove({
       : activeDivisionTab === 'guardians'
       ? leaderboard.divisions.forest_guardians
       : leaderboard.divisions.sprout_keepers;
+
+  const displayWater = Math.round(grove.water_pool ?? 0) + waterCount;
+  const displaySoil = Math.round(grove.humus_pool ?? 0);
+  const displaySun = Math.round(grove.light_pool ?? 0);
 
   return (
     <div
@@ -347,7 +355,7 @@ export default function ClassGrove({
               textAlign: 'center',
             }}
           >
-            {waterCount}
+            {displayWater}
           </div>
         </motion.div>
 
@@ -385,7 +393,7 @@ export default function ClassGrove({
               textAlign: 'center',
             }}
           >
-            {soilCount}
+            {displaySoil}
           </div>
         </motion.div>
 
@@ -423,7 +431,7 @@ export default function ClassGrove({
               textAlign: 'center',
             }}
           >
-            {sunCount}
+            {displaySun}
           </div>
         </motion.div>
       </div>

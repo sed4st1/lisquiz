@@ -135,14 +135,23 @@ async def get_class_by_id(
     db: AsyncSession,
     class_id: str,
 ) -> Optional[ClassModel]:
-    """Возвращает класс по идентификатору."""
+    """Возвращает класс по идентификатору, названию (например, '11А') или инвайт-коду."""
+    if not class_id:
+        return None
+    clean_name = class_id.replace("класс", "").strip()
+    norm_id = class_id.strip()
     stmt = (
         select(ClassModel)
-        .where(ClassModel.id == class_id)
+        .where(
+            (ClassModel.id == norm_id) |
+            (func.lower(ClassModel.name) == norm_id.lower()) |
+            (func.lower(ClassModel.name) == clean_name.lower()) |
+            (func.upper(ClassModel.invite_code) == norm_id.upper())
+        )
         .options(selectinload(ClassModel.students), selectinload(ClassModel.rooms))
     )
     result = await db.execute(stmt)
-    return result.scalar_one_or_none()
+    return result.scalars().first()
 
 
 async def get_class_by_student(

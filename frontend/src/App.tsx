@@ -319,6 +319,11 @@ export default function App() {
   const [liveGameStudents, setLiveGameStudents] = useState<Array<{ id: string; name: string; avatar: string }>>([]);
   const studentQuizStatsRef = useRef<{ correct: number; wrong: number; total: number; score: number }>({ correct: 0, wrong: 0, total: 3, score: 0 });
   const isFinishingQuizRef = useRef<boolean>(false);
+  const [enrolledClass, setEnrolledClass] = useState<{ id: string; name: string; students_count: number; rooms_count: number } | null>(null);
+  const subScreenRef = useRef(subScreen);
+  useEffect(() => {
+    subScreenRef.current = subScreen;
+  }, [subScreen]);
 
   // Listen to incoming WebSocket events
   useEffect(() => {
@@ -417,8 +422,8 @@ export default function App() {
         setSubScreen(null);
         setTab('stats');
       } else {
-        // Ученик: если он всё ещё в лобби ожидания, немедленно выкидываем его из комнаты
-        if (subScreen === 'student_waiting' || !subScreen) {
+        // Ученик: если он всё ещё в лобби ожидания и игра даже не началась, выкидываем его из комнаты
+        if (subScreenRef.current === 'student_waiting') {
           socketService.disconnect();
           setActivePin('');
           setSubScreen(null);
@@ -441,7 +446,7 @@ export default function App() {
         );
         const totalQ = currentQuestionData?.total_questions || studentQuizStatsRef.current.total || 3;
         const correctQ = studentQuizStatsRef.current.correct;
-        const wrongQ = Math.max(studentQuizStatsRef.current.wrong, totalQ - correctQ);
+        const wrongQ = Math.max(0, totalQ - correctQ);
         
         isFinishingQuizRef.current = true;
         setQuizFinishData({
@@ -466,8 +471,9 @@ export default function App() {
     };
 
     const handleStudentKickOrClose = (data: any) => {
-      if (role === 'student' && subScreen) {
-        if (subScreen === 'student_quiz_finish' || subScreen === 'student_leaderboard' || isFinishingQuizRef.current) {
+      if (role === 'student') {
+        const cur = subScreenRef.current;
+        if (cur === 'student_quiz_finish' || cur === 'student_leaderboard' || isFinishingQuizRef.current) {
           return;
         }
         socketService.disconnect();
@@ -545,6 +551,7 @@ export default function App() {
         .then((res) => {
           haptics.notification('success');
           localStorage.setItem('lisquiz_student_class_id', res.class_id);
+          setEnrolledClass({ id: res.class_id, name: res.name, students_count: 1, rooms_count: 0 });
           setAuthFeedback(`🎉 Вы успешно привязаны к классу ${res.name}! Ваши результаты теперь идут в общий зачет.`);
           if (role === 'student') {
             setSubScreen('student_class');
@@ -586,6 +593,7 @@ export default function App() {
           try {
             const studentCls = await classApi.getStudentClass();
             if (studentCls) {
+              setEnrolledClass(studentCls);
               setQuizClass(studentCls.name);
               setQuizClassId(studentCls.id);
             }
@@ -600,6 +608,7 @@ export default function App() {
             try {
               const studentCls = await classApi.getStudentClass();
               if (studentCls) {
+                setEnrolledClass(studentCls);
                 setQuizClass(studentCls.name);
                 setQuizClassId(studentCls.id);
               }
@@ -959,6 +968,7 @@ export default function App() {
           totalStudents={currentQuestionData?.total_players ?? 0}
           onBack={() => setSubScreen(null)}
           onGameFinished={(finishData) => {
+            isFinishingQuizRef.current = true;
             haptics.notification('success');
             const topPlayers = finishData?.top_players || [];
             const myPlayer = topPlayers.find((p: any) =>
@@ -1105,10 +1115,12 @@ export default function App() {
             setLeaderboardBoostPoints(earnedPoints || quizFinishData?.myScore || 150);
             setLeaderboardBoostRank(rank || quizFinishData?.myRank || null);
             setSubScreen('student_leaderboard');
+            authService.getMe().then((u) => { if (u) setCurrentUser(u); }).catch(() => {});
           }}
           onBackToHome={() => {
             isFinishingQuizRef.current = false;
             setSubScreen(null);
+            authService.getMe().then((u) => { if (u) setCurrentUser(u); }).catch(() => {});
           }}
         />
       );
@@ -1123,7 +1135,7 @@ export default function App() {
           currentScore={quizFinishData?.myScore || 750}
           currentRank={quizFinishData?.myRank || 4}
           quizPlayers={quizFinishData?.top_players || []}
-          classId={quizClassId}
+          classId={enrolledClass?.id || quizClassId}
           onBack={() => setSubScreen('student_quiz_finish')}
           onClearBoost={() => {
             setLeaderboardBoostPoints(null);
@@ -1172,8 +1184,8 @@ export default function App() {
               onGoToClasses={() => setSubScreen('student_class')}
               onSwitchToTeacher={() => setSubScreen('role_select')}
               appMode={appMode}
-              className={quizClass}
-              classId={quizClassId}
+              className={enrolledClass?.name || quizClass}
+              classId={enrolledClass?.id || quizClassId}
               initialStudentName={studentName}
               initialStudentAvatar={studentAvatar}
               onUpdateProfile={(p) => {
@@ -1193,9 +1205,10 @@ export default function App() {
           return (
             <ClassGrove
               appMode={appMode}
-              classId={quizClassId || quizClass || ''}
-              className={quizClass || ''}
-              studentsCount={quizClassStudentsCount}
+              classId={enrolledClass?.id || enrolledClass?.name || quizClassId || quizClass || ''}
+              className={enrolledClass?.name || quizClass || ''}
+              studentsCount={enrolledClass?.students_count ?? quizClassStudentsCount}
+              quizzesCount={enrolledClass?.rooms_count}
               onBack={() => handleTabChange('home')}
               onStartQuiz={() => setSubScreen('student_game')}
               onOpenLeaderboard={() => handleTabChange('leaderboard')}

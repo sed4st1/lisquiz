@@ -446,15 +446,35 @@ class MaxBotService:
         
         return await self.send_message(chat_id, text, buttons)
 
+    @staticmethod
+    def clean_for_max(text: str) -> str:
+        """
+        Очистка markdown-разметки (**, *, `) для чатов MAX/Сферума.
+        В мессенджере MAX markdown не парсится и выводится сырыми звёздочками,
+        поэтому текст форматируется в чистый и аккуратный вид.
+        """
+        if not text:
+            return ""
+        import re
+        # Убираем двойные звездочки жирного текста: **текст** -> текст
+        cleaned = text.replace("**", "")
+        # Убираем обратные кавычки моноширинного кода: `код` -> код
+        cleaned = cleaned.replace("`", "")
+        # Убираем одиночные звездочки курсива: *текст* -> текст
+        cleaned = re.sub(r'(?<!\w)\*([^*\n]+)\*(?!\w)', r'\1', cleaned)
+        return cleaned.strip()
+
     async def send_message(self, chat_id: str, text: str, buttons: Optional[List[List[Dict[str, Any]]]] = None) -> bool:
         """
         Отправка сообщения пользователю/чату через MAX Bot API.
         При отсутствии токена работает в mock-режиме с подробным логированием.
         """
+        cleaned_text = self.clean_for_max(text)
+
         if not self.is_configured():
             logger.info(
                 f"[MAX MOCK SEND] To chat_id={chat_id}\n"
-                f"Text: {text[:100]}...\n"
+                f"Text: {cleaned_text[:100]}...\n"
                 f"Buttons: {buttons}"
             )
             return True
@@ -472,7 +492,7 @@ class MaxBotService:
                 params["chat_id"] = str(chat_id)
 
         body: Dict[str, Any] = {
-            "text": text,
+            "text": cleaned_text,
         }
 
         if buttons:

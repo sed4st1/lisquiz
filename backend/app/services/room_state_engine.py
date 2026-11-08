@@ -834,6 +834,7 @@ class RoomStateEngine:
                         await db.flush()
 
                         # 2c. Сохраняем участников room_participants
+                        room_answers = self.answers.get(room_code, [])
                         for p in room.players.values():
                             p_pseudonym = p.pseudonym_id or f"anon_{p.id}"
                             existing_part = await db.scalar(
@@ -949,7 +950,8 @@ class RoomStateEngine:
             # 3. Применение результатов к Классной Роще 2.0 (Class Grove & Liebig Balance)
             try:
                 from .grove_service import grove_service
-                target_grove_id = room.class_id or f"class_{room.quiz.grade}a"
+                from .class_service import get_class_by_student
+                target_grove_id = room.class_id or (class_name_for_grove if class_name_for_grove else f"class_{room.quiz.grade}a")
                 room_answers = self.answers.get(room_code, [])
                 student_results = []
                 for p in room.players.values():
@@ -965,15 +967,31 @@ class RoomStateEngine:
                         "tier1_correct": t1_corr,
                         "tier2_correct": t2_corr,
                         "tier3_correct": t3_corr,
-                        "total_questions": len(room.quiz.questions),
+                        "total_questions": len(room.quiz.questions) if room.quiz and room.quiz.questions else 5,
                     })
                 if student_results:
+                    # Применяем к целевой Роще комнаты
                     grove_service.apply_quiz_session(class_id=target_grove_id, student_results=student_results)
                     if class_name_for_grove and class_name_for_grove != target_grove_id:
                         try:
                             grove_service.apply_quiz_session(class_id=class_name_for_grove, student_results=student_results)
                         except Exception:
                             pass
+
+                    # Также начисляем в индивидуальную Рощу класса каждого зарегистрированного ученика
+                    for s_res in student_results:
+                        s_pid = s_res["student_id"]
+                        if s_pid:
+                            try:
+                                async with async_session_maker() as s_db:
+                                    s_cls = await get_class_by_student(s_db, s_pid)
+                                    if s_cls:
+                                        if s_cls.id != target_grove_id and s_cls.name != target_grove_id:
+                                            grove_service.apply_quiz_session(class_id=s_cls.id, student_results=[s_res])
+                                        if s_cls.name != target_grove_id:
+                                            grove_service.apply_quiz_session(class_id=s_cls.name, student_results=[s_res])
+                            except Exception as s_err:
+                                logger.warning(f"Error applying grove to student class: {s_err}")
             except Exception as ge:
                 logger.warning("Grove service integration error on FINISHED: %s", ge, exc_info=True)
 
